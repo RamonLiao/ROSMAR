@@ -1,0 +1,163 @@
+syntax = "proto3";
+package crm.core;
+
+service ProfileService {
+  rpc ListProfiles(ListProfilesRequest) returns (ListProfilesResponse);
+  rpc GetProfile(GetProfileRequest) returns (ProfileDetail);
+  rpc GetActivityFeed(ActivityFeedRequest) returns (stream ActivityEvent);
+  rpc Search(SearchRequest) returns (SearchResponse);
+}
+
+service SegmentService {
+  rpc EvaluateSegment(EvaluateRequest) returns (EvaluateResponse);
+  rpc GetSegmentMembers(SegmentMembersRequest) returns (SegmentMembersResponse);
+}
+
+service AnalyticsService {
+  rpc GetDashboardOverview(DashboardRequest) returns (DashboardResponse);
+  rpc RecalculateScores(ScoreRequest) returns (ScoreResponse);
+  rpc CheckWhaleAlert(WhaleAlertRequest) returns (stream WhaleAlert);
+}
+
+message ListProfilesRequest {
+  string workspace_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  string sort_by = 4;
+  string sort_order = 5;
+  ProfileFilter filter = 6;
+}
+
+message ProfileFilter {
+  repeated int32 tiers = 1;
+  repeated string tags = 2;
+  optional int64 min_score = 3;
+  optional int64 max_score = 4;
+  optional string last_active_after = 5;
+  optional string last_active_before = 6;
+  optional string search_query = 7;
+}
+
+message ListProfilesResponse {
+  repeated ProfileSummary profiles = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message ProfileSummary {
+  string id = 1;
+  string primary_address = 2;
+  string suins_name = 3;
+  int32 tier = 4;
+  int64 engagement_score = 5;
+  repeated string tags = 6;
+  string display_name = 7;
+  string last_active_at = 8;
+}
+
+message GetProfileRequest {
+  string id = 1;
+}
+
+message ProfileDetail {
+  ProfileSummary summary = 1;
+  string sui_object_id = 2;
+  string avatar_url = 3;
+  string source = 4;
+  string created_at = 5;
+  string updated_at = 6;
+  int64 version = 7;
+  bool is_archived = 8;
+}
+
+message ActivityFeedRequest {
+  string profile_id = 1;
+  int32 limit = 2;
+  string before = 3;
+}
+
+message ActivityEvent {
+  string time = 1;
+  string event_type = 2;
+  string contract_address = 3;
+  string collection = 4;
+  string token = 5;
+  int64 amount = 6;
+  string tx_digest = 7;
+}
+
+message SearchRequest {
+  string workspace_id = 1;
+  string query = 2;
+  int32 limit = 3;
+}
+
+message SearchResponse {
+  repeated SearchResult results = 1;
+}
+
+message SearchResult {
+  string id = 1;
+  string type = 2;
+  string title = 3;
+  string subtitle = 4;
+}
+
+message EvaluateRequest {
+  string segment_id = 1;
+}
+
+message EvaluateResponse {
+  int32 member_count = 1;
+  repeated string profile_ids = 2;
+}
+
+message SegmentMembersRequest {
+  string segment_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+
+message SegmentMembersResponse {
+  repeated ProfileSummary members = 1;
+  int32 total = 2;
+}
+
+message DashboardRequest {
+  string workspace_id = 1;
+}
+
+message DashboardResponse {
+  int64 total_profiles = 1;
+  int64 active_profiles_30d = 2;
+  int64 total_deals_value = 3;
+  int32 open_tickets = 4;
+  repeated TierDistribution tier_distribution = 5;
+}
+
+message TierDistribution {
+  int32 tier = 1;
+  int64 count = 2;
+}
+
+message ScoreRequest {
+  string workspace_id = 1;
+}
+
+message ScoreResponse {
+  int32 profiles_updated = 1;
+  int32 tier_changes = 2;
+}
+
+message WhaleAlertRequest {
+  string workspace_id = 1;
+}
+
+message WhaleAlert {
+  string profile_id = 1;
+  string address = 2;
+  string event_type = 3;
+  int64 amount = 4;
+  string timestamp = 5;
+}

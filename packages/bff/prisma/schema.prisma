@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Workspace {
+  id            String   @id @default(uuid())
+  suiObjectId   String?  @map("sui_object_id")
+  name          String
+  ownerAddress  String   @map("owner_address")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  members       WorkspaceMember[]
+  profiles      Profile[]
+  organizations Organization[]
+  deals         Deal[]
+  segments      Segment[]
+  campaigns     Campaign[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  workspaceId String   @map("workspace_id")
+  address     String
+  roleLevel   Int      @map("role_level")
+  permissions Int
+  joinedAt    DateTime @default(now()) @map("joined_at")
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@id([workspaceId, address])
+  @@map("workspace_members")
+}
+
+model Profile {
+  id              String   @id
+  workspaceId     String   @map("workspace_id")
+  primaryAddress  String   @map("primary_address")
+  suinsName       String?  @map("suins_name")
+  tags            String[] @default([])
+  tier            Int      @default(0)
+  engagementScore Int      @default(0) @map("engagement_score")
+  version         Int      @default(1)
+  isArchived      Boolean  @default(false) @map("is_archived")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  workspace       Workspace @relation(fields: [workspaceId], references: [id])
+  organizations   ProfileOrganization[]
+  segmentMemberships SegmentMembership[]
+  deals           Deal[]
+
+  @@map("profiles")
+}
+
+model Organization {
+  id          String   @id
+  workspaceId String   @map("workspace_id")
+  name        String
+  domain      String?
+  tags        String[] @default([])
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  profiles    ProfileOrganization[]
+
+  @@map("organizations")
+}
+
+model Deal {
+  id          String   @id
+  workspaceId String   @map("workspace_id")
+  profileId   String   @map("profile_id")
+  title       String
+  amountUsd   Decimal  @map("amount_usd") @db.Decimal(18, 2)
+  stage       String
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  profile     Profile   @relation(fields: [profileId], references: [id])
+
+  @@map("deals")
+}
+
+model Segment {
+  id              String    @id
+  workspaceId     String    @map("workspace_id")
+  name            String
+  description     String?
+  rules           Json
+  version         Int       @default(1)
+  lastRefreshedAt DateTime? @map("last_refreshed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  workspace       Workspace @relation(fields: [workspaceId], references: [id])
+  memberships     SegmentMembership[]
+  campaigns       Campaign[]
+
+  @@map("segments")
+}
+
+model ProfileOrganization {
+  profileId      String   @map("profile_id")
+  organizationId String   @map("organization_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  profile        Profile      @relation(fields: [profileId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@id([profileId, organizationId])
+  @@map("profile_organizations")
+}
+
+model Campaign {
+  id            String    @id
+  workspaceId   String    @map("workspace_id")
+  name          String
+  description   String?
+  segmentId     String    @map("segment_id")
+  status        String    @default("draft")
+  workflowSteps Json      @default("[]") @map("workflow_steps")
+  version       Int       @default(1)
+  startedAt     DateTime? @map("started_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+  segment       Segment   @relation(fields: [segmentId], references: [id])
+
+  @@map("campaigns")
+}
+
+model SegmentMembership {
+  segmentId String   @map("segment_id")
+  profileId String   @map("profile_id")
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  segment   Segment @relation(fields: [segmentId], references: [id])
+  profile   Profile @relation(fields: [profileId], references: [id])
+
+  @@id([segmentId, profileId])
+  @@map("segment_memberships")
+}

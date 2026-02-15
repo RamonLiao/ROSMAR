@@ -1,0 +1,10 @@
+[package]
+name = "crm_vault"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+crm_core = { local = "../crm_core" }
+
+[addresses]
+crm_vault = "0x0"

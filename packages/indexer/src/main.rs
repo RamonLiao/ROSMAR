@@ -1,0 +1,62 @@
+mod alerts;
+mod cache;
+mod config;
+mod consumer;
+mod db;
+mod enricher;
+mod handlers;
+mod router;
+mod writer;
+
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize tracing
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "crm_indexer=debug,info".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    tracing::info!("Starting CRM Indexer");
+
+    // Load configuration
+    let config = config::Config::from_env()?;
+    tracing::info!("Loaded configuration for network: {}", config.sui_network);
+
+    // Create database connection pool
+    let pool = db::create_pool(&config.database_url).await?;
+    tracing::info!("Connected to database");
+
+    // Initialize address cache
+    let cache = cache::AddressCache::new();
+
+    // Create enricher and preload cache
+    let enricher = enricher::Enricher::new(cache.clone(), pool.clone());
+    let preloaded = enricher.preload_cache().await?;
+    tracing::info!("Preloaded {} profiles into cache", preloaded);
+
+    // Initialize alert engine
+    let _alert_engine = alerts::AlertEngine::new(config.clone(), pool.clone());
+    tracing::info!("Alert engine initialized");
+
+    // Create event router
+    let _router = router::EventRouter::new(pool.clone());
+    tracing::info!("Event router initialized");
+
+    // Create checkpoint consumer
+    let consumer = consumer::CheckpointConsumer::new(config.clone(), pool.clone());
+
+    // Get starting checkpoint
+    let start_checkpoint = db::get_last_checkpoint(&pool).await?;
+    tracing::info!("Starting from checkpoint: {}", start_checkpoint);
+
+    // Start consumer (this runs forever)
+    tracing::info!("Starting checkpoint consumer...");
+    consumer.start().await?;
+
+    Ok(())
+}

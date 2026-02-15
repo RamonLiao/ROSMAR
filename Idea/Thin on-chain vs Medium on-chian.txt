@@ -1,0 +1,91 @@
+⏺ Thin vs Medium On-chain 比較                                                                                         
+                                                                                                                       
+  具體差異 — 以 Profile 為例              
+                                                                                                                       
+  Thin on-chain：                                                                                                      
+  鏈上 Sui Object:                                                                                                     
+    - owner: address                                                                                                   
+    - workspace_id: ID                                                                                                 
+    - walrus_blob_id: ID (指向加密資料)                                                                                
+    - seal_policy_id: ID                 
+                                                                                                                       
+  鏈下 Postgres:                                                                                                       
+    - name, email, phone, tags, custom_fields
+    - engagement_score, tier, notes
+    - 所有業務邏輯資料
+
+  Medium on-chain：
+  鏈上 Sui Object:
+    - owner: address
+    - workspace_id: ID
+    - walrus_blob_id: ID
+    - seal_policy_id: ID
+    - primary_suins: String        ← 多這些
+    - tier: u8                     ←
+    - tags: vector<String>         ←
+    - engagement_score: u64        ←
+    - created_at: u64              ←
+
+  鏈下 Postgres:
+    - email, phone, custom_fields
+    - notes, 詳細活動歷史
+
+  逐項比較
+
+  ┌──────────────┬─────────────────────────────────────────┬─────────────────────────────────────────────┐
+  │              │                  Thin                   │                   Medium                    │
+  ├──────────────┼─────────────────────────────────────────┼─────────────────────────────────────────────┤
+  │ Gas 成本     │ 低（建立/更新只動 blob ID）             │ 中（每次更 score/tag 都上鏈）               │
+  ├──────────────┼─────────────────────────────────────────┼─────────────────────────────────────────────┤
+  │ 查詢效能     │ 快（全在 PG，SQL 隨便查）               │ 慢（要從鏈上拉 + 鏈下拼）                   │
+  ├──────────────┼─────────────────────────────────────────┼─────────────────────────────────────────────┤
+  │ 可組合性     │ 低（其他 dApp 看不到你的 profile 資料） │ 高（其他合約可直接讀 tier/tags 做邏輯判斷） │
+  ├──────────────┼─────────────────────────────────────────┼─────────────────────────────────────────────┤
+  │ 資料一致性   │ 簡單（PG 是 single source of truth）    │ 複雜（鏈上鏈下要雙向同步）                  │
+  ├──────────────┼─────────────────────────────────────────┼─────────────────────────────────────────────┤
+  │ 開發速度     │ 快（改 schema = alter table）           │ 慢（改欄位 = 合約升級）                     │
+  ├──────────────┼─────────────────────────────────────────┼─────────────────────────────────────────────┤
+  │ 去中心化程度 │ 低（核心資料在中心化 DB）               │ 中（核心 metadata 可鏈上驗證）              │
+  ├──────────────┼─────────────────────────────────────────┼─────────────────────────────────────────────┤
+  │ Audit        │ 靠鏈上 event log 即可                   │ 鏈上 object 本身就是紀錄                    │
+  └──────────────┴─────────────────────────────────────────┴─────────────────────────────────────────────┘
+
+  關鍵問題：你需要「可組合性」嗎？
+
+  Medium 唯一真正優勢是 鏈上可組合性 — 即：
+
+  // 其他 dApp 的合約可以直接讀你的 CRM profile
+  public fun check_vip(profile: &Profile): bool {
+      profile.tier >= VIP_THRESHOLD
+  }
+
+  比如：
+  - ** 合作方的 NFT 合約根據你的 CRM tier 決定 mint 價格
+  - ** DAO 投票合約根據 engagement_score 加權
+  - ** Airdrop 合約直接讀 tags 過濾目標
+
+  如果這些場景是你 Phase 3 (Ecosystem Platform) 的核心賣點，Medium 有戰略價值。
+
+  最優解：Thin 起步，預留 Medium 升級路徑
+
+  Phase 1 (MVP):  Thin on-chain
+    - 鏈上只有 ownership + ACL + blob pointer + events
+    - 所有業務查詢走 PG，開發快、成本低
+
+  Phase 2 (Growth): 選擇性 Medium
+    - 把被外部合約需要的欄位（tier, tags）提升到鏈上
+    - 合約設計預留 dynamic_field 擴展，不用整包升級
+
+  做法：Move 合約一開始就用 dynamic_field
+
+  // 初始結構 (Thin)
+  public struct Profile has key, store {
+      id: UID,
+      owner: address,
+      workspace_id: ID,
+      walrus_blob_id: ID,
+      seal_policy_id: ID,
+      // dynamic_field 預留擴展 — 之後可加 tier, tags 而不用升級合約
+  }
+
+  這樣 MVP 享受 Thin 的速度和低成本，之後需要可組合性時，用 dynamic_field 把關鍵欄位搬上鏈，不需要破壞性升級。
