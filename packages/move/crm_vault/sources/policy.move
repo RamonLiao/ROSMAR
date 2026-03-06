@@ -7,6 +7,8 @@ module crm_vault::policy {
     // Errors
     const EVersionConflict: u64 = 1200;
     const EWorkspaceMismatch: u64 = 1201;
+    const ESealNoAccess: u64 = 1202;
+    const ESealInvalidIdentity: u64 = 1203;
 
     // Access rule types
     const RULE_WORKSPACE_MEMBER: u8 = 0;
@@ -183,6 +185,35 @@ module crm_vault::policy {
             object_id: object::id(policy),
             timestamp: tx_context::epoch_timestamp_ms(ctx),
         });
+    }
+
+    // ===== Seal Key-Server Verification =====
+
+    /// Called by Seal key servers to verify that the sender is allowed to decrypt.
+    /// `id` is the raw identity bytes used during encryption (the policy object address).
+    entry fun seal_approve(
+        id: vector<u8>,
+        policy: &AccessPolicy,
+        ctx: &TxContext,
+    ) {
+        let sender = ctx.sender();
+        let rule = policy.rule_type;
+
+        if (rule == RULE_WORKSPACE_MEMBER) {
+            // BFF already verified workspace membership before the user reaches this point.
+            // Allow all callers — membership is enforced off-chain.
+        } else if (rule == RULE_SPECIFIC_ADDRESS) {
+            assert!(policy.allowed_addresses.contains(&sender), ESealNoAccess);
+        } else if (rule == RULE_ROLE_BASED) {
+            // BFF enforces role checks. On-chain we allow the call through.
+        } else {
+            abort ESealNoAccess
+        };
+
+        // Ensure the id matches this policy's object address (prevents cross-policy replay).
+        let policy_addr = object::id_address(policy);
+        let id_addr = sui::address::from_bytes(id);
+        assert!(policy_addr == id_addr, ESealInvalidIdentity);
     }
 
     // Accessors

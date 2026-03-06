@@ -33,6 +33,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useRouter } from "next/navigation";
 import { useDisconnectWallet } from "@mysten/dapp-kit";
 import { useNotifications, useUnreadCount, useMarkRead, useMarkAllRead } from "@/lib/hooks/use-notifications";
+import { resetSealInstances } from "@/lib/crypto/seal-crypto";
 
 export function Topbar() {
   const router = useRouter();
@@ -79,6 +80,7 @@ export function Topbar() {
     } catch {
       // Best-effort server logout — clear local state regardless
     }
+    resetSealInstances();
     disconnectWallet();
     logout();
     resetWorkspace();

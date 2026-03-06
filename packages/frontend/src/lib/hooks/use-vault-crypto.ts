@@ -1,123 +1,138 @@
-'use client';
+"use client";
 
-import { useCallback, useState } from 'react';
-import { useSignPersonalMessage } from '@mysten/dapp-kit';
-import { encrypt, decrypt, encryptBytes, decryptBytes, toBase64 } from '@/lib/crypto/vault-crypto';
-import { useStoreSecret, useDeleteSecret, type VaultType } from './use-vault';
-import { apiClient } from '@/lib/api/client';
+import { useCallback } from "react";
+import { toBase64, fromBase64 } from "@mysten/sui/utils";
+import { useSealSession } from "./use-seal-session";
+import {
+  sealEncrypt,
+  sealDecrypt,
+  buildSealApproveTx,
+} from "@/lib/crypto/seal-crypto";
+import { SEAL_PACKAGE_ID, CRM_VAULT_PACKAGE_ID } from "@/lib/crypto/seal-config";
+import { apiClient } from "@/lib/api/client";
+import { useSuiClient } from "@mysten/dapp-kit";
 
-const SIGN_MESSAGE = new TextEncoder().encode('ROSMAR Vault Encryption Key');
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+interface StoreResult {
+  blobId: string;
+  url: string;
+}
 
 interface EncryptAndStoreParams {
   profileId: string;
   key: string;
-  data: string | ArrayBuffer;
-  vaultType: VaultType;
-  fileName?: string;
-  mimeType?: string;
-  fileSize?: number;
+  plaintext: Uint8Array;
+  sealPolicyId: string;
 }
 
-interface DecryptResult {
-  text?: string;
-  bytes?: Uint8Array;
-  vaultType: VaultType;
-  fileName?: string;
-  mimeType?: string;
+interface DecryptSecretParams {
+  profileId: string;
+  key: string;
+  sealPolicyId: string;
 }
 
+interface RemoveSecretParams {
+  profileId: string;
+  key: string;
+  expectedVersion: number;
+}
+
+/**
+ * Hook providing Seal-based encrypt, decrypt, and delete operations for vault secrets.
+ */
 export function useVaultCrypto() {
-  const { mutateAsync: signMessage } = useSignPersonalMessage();
-  const storeSecret = useStoreSecret();
-  const deleteSecret = useDeleteSecret();
-  const [signing, setSigning] = useState(false);
+  const { ensureSession, clearSession, isInitializing } = useSealSession();
+  const suiClient = useSuiClient();
 
-  const getSignature = useCallback(async () => {
-    setSigning(true);
-    try {
-      const { signature } = await signMessage({ message: SIGN_MESSAGE });
-      return signature;
-    } finally {
-      setSigning(false);
-    }
-  }, [signMessage]);
-
+  /**
+   * Encrypt data with Seal and store the encrypted blob via BFF -> Walrus.
+   */
   const encryptAndStore = useCallback(
-    async (params: EncryptAndStoreParams) => {
-      if (params.vaultType === 'file' && params.fileSize && params.fileSize > MAX_FILE_SIZE) {
-        throw new Error(`File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB.`);
-      }
+    async ({ profileId, key, plaintext, sealPolicyId }: EncryptAndStoreParams): Promise<StoreResult> => {
+      const { sealClient } = await ensureSession();
 
-      const signature = await getSignature();
+      // Encrypt with Seal using the policy object as identity
+      const { encryptedBytes } = await sealEncrypt(
+        sealClient,
+        SEAL_PACKAGE_ID,
+        sealPolicyId,
+        plaintext,
+      );
 
-      let encrypted: Uint8Array;
-      if (typeof params.data === 'string') {
-        encrypted = await encrypt(params.data, signature);
-      } else {
-        encrypted = await encryptBytes(new Uint8Array(params.data), signature);
-      }
+      // Base64 encode for JSON transport
+      const encryptedB64 = toBase64(encryptedBytes);
 
-      return storeSecret.mutateAsync({
-        profileId: params.profileId,
-        key: params.key,
-        encryptedData: toBase64(encrypted),
-        vaultType: params.vaultType,
-        fileName: params.fileName,
-        mimeType: params.mimeType,
-        fileSize: params.fileSize,
+      // Store via BFF
+      const result = await apiClient.post<StoreResult>("/vault/secrets", {
+        profileId,
+        key,
+        encryptedData: encryptedB64,
+        sealPolicyId,
       });
+
+      return result;
     },
-    [getSignature, storeSecret],
+    [ensureSession],
   );
 
+  /**
+   * Fetch an encrypted blob from BFF/Walrus, then decrypt with Seal.
+   */
   const decryptSecret = useCallback(
-    async (profileId: string, key: string): Promise<DecryptResult> => {
-      // 1. Get secret metadata + download URL
-      const detail = await apiClient.get<{
-        downloadUrl: string;
-        vaultType: VaultType;
-        fileName?: string;
-        mimeType?: string;
-      }>(`/vault/secrets/${profileId}/${key}`);
+    async ({ profileId, key, sealPolicyId }: DecryptSecretParams): Promise<Uint8Array> => {
+      const { sealClient, sessionKey } = await ensureSession();
 
-      // 2. Download encrypted blob from Walrus
-      const response = await fetch(detail.downloadUrl);
-      if (!response.ok) throw new Error('Failed to download encrypted data');
+      // Fetch encrypted blob metadata
+      const meta = await apiClient.get<{ blobId: string; downloadUrl: string; version: number; sealPolicyId?: string }>(
+        `/vault/secrets/${profileId}/${key}`,
+      );
+
+      if (!meta) {
+        throw new Error("Secret not found");
+      }
+
+      const policyId = sealPolicyId || meta.sealPolicyId;
+      if (!policyId) {
+        throw new Error("No sealPolicyId available for this secret");
+      }
+
+      // Download the encrypted blob
+      const response = await fetch(meta.downloadUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to download blob: ${response.status}`);
+      }
       const encryptedBytes = new Uint8Array(await response.arrayBuffer());
 
-      // 3. Sign to get decryption key
-      const signature = await getSignature();
+      // Build the seal_approve PTB for key server verification
+      // The ID extracted from the encrypted object is used by the key servers
+      const txBytes = await buildSealApproveTx(
+        CRM_VAULT_PACKAGE_ID,
+        policyId,
+        suiClient,
+        [policyId],
+      );
 
-      // 4. Decrypt based on type
-      if (detail.vaultType === 'note') {
-        const text = await decrypt(encryptedBytes, signature);
-        return { text, vaultType: 'note' };
-      } else {
-        const bytes = await decryptBytes(encryptedBytes, signature);
-        return {
-          bytes,
-          vaultType: 'file',
-          fileName: detail.fileName,
-          mimeType: detail.mimeType,
-        };
-      }
+      // Decrypt
+      const decrypted = await sealDecrypt(sealClient, encryptedBytes, sessionKey, txBytes);
+      return decrypted;
     },
-    [getSignature],
+    [ensureSession, suiClient],
   );
 
+  /**
+   * Delete a vault secret via BFF.
+   */
   const removeSecret = useCallback(
-    (profileId: string, key: string, expectedVersion: number) =>
-      deleteSecret.mutateAsync({ profileId, key, expectedVersion }),
-    [deleteSecret],
+    async ({ profileId, key, expectedVersion }: RemoveSecretParams) => {
+      return apiClient.delete(`/vault/secrets/${profileId}/${key}?expectedVersion=${expectedVersion}`);
+    },
+    [],
   );
 
   return {
     encryptAndStore,
     decryptSecret,
     removeSecret,
-    signing,
-    isStoring: storeSecret.isPending,
-    isDeleting: deleteSecret.isPending,
+    clearSession,
+    isInitializing,
   };
 }

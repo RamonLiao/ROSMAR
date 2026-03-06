@@ -8,6 +8,7 @@ export interface StoreSecretInput {
   key: string;
   encryptedData: string;
   vaultType: 'note' | 'file';
+  sealPolicyId?: string;
   fileName?: string;
   mimeType?: string;
   fileSize?: number;
@@ -50,6 +51,7 @@ export class VaultService {
         profileId: dto.profileId,
         key: dto.key,
         walrusBlobId: uploadResult.blobId,
+        sealPolicyId: dto.sealPolicyId,
         vaultType: dto.vaultType,
         fileName: dto.fileName,
         mimeType: dto.mimeType,
@@ -58,6 +60,7 @@ export class VaultService {
       },
       update: {
         walrusBlobId: uploadResult.blobId,
+        sealPolicyId: dto.sealPolicyId,
         vaultType: dto.vaultType,
         fileName: dto.fileName,
         mimeType: dto.mimeType,
@@ -95,6 +98,7 @@ export class VaultService {
       downloadUrl: `${aggregatorUrl}/v1/${secret.walrusBlobId}`,
       version: secret.version,
       vaultType: secret.vaultType,
+      sealPolicyId: secret.sealPolicyId,
       fileName: secret.fileName,
       mimeType: secret.mimeType,
       fileSize: secret.fileSize,
@@ -119,6 +123,7 @@ export class VaultService {
         blobId: s.walrusBlobId,
         version: s.version,
         vaultType: s.vaultType,
+        sealPolicyId: s.sealPolicyId,
         fileName: s.fileName,
         mimeType: s.mimeType,
         fileSize: s.fileSize,

@@ -179,6 +179,7 @@ model VaultSecret {
   profileId    String   @map("profile_id")
   key          String
   walrusBlobId String   @map("walrus_blob_id")
+  sealPolicyId String?  @map("seal_policy_id")
   vaultType    String   @default("note") @map("vault_type")
   fileName     String?  @map("file_name")
   mimeType     String?  @map("mime_type")

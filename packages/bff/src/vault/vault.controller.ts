@@ -30,6 +30,10 @@ export class StoreSecretDto {
 
   @IsOptional()
   @IsString()
+  sealPolicyId?: string;
+
+  @IsOptional()
+  @IsString()
   fileName?: string;
 
   @IsOptional()

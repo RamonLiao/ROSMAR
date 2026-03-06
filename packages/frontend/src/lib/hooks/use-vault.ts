@@ -1,16 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api/client';
+"use client";
 
-export type VaultType = 'note' | 'file';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api/client";
 
-export interface VaultSecret {
+// ---------- Types ----------
+
+export interface VaultSecretSummary {
   key: string;
   blobId: string;
+  sealPolicyId?: string;
   version: number;
-  vaultType: VaultType;
-  fileName?: string;
-  mimeType?: string;
-  fileSize?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -18,59 +17,96 @@ export interface VaultSecret {
 export interface VaultSecretDetail {
   blobId: string;
   downloadUrl: string;
+  sealPolicyId?: string;
   version: number;
-  vaultType: VaultType;
-  fileName?: string;
-  mimeType?: string;
-  fileSize?: number;
 }
 
-export function useVaultSecrets(profileId?: string) {
+export interface StoreSecretPayload {
+  profileId: string;
+  key: string;
+  encryptedData: string; // base64
+  sealPolicyId?: string;
+}
+
+export interface StoreSecretResult {
+  blobId: string;
+  url: string;
+}
+
+// ---------- Hooks ----------
+
+/**
+ * List all vault secrets for a profile.
+ */
+export function useVaultSecrets(profileId: string | undefined) {
   return useQuery({
-    queryKey: ['vault', 'secrets', profileId],
-    queryFn: () => apiClient.get<{ secrets: VaultSecret[] }>(`/vault/secrets/${profileId}`),
+    queryKey: ["vault-secrets", profileId],
+    queryFn: () =>
+      apiClient.get<{ secrets: VaultSecretSummary[] }>(
+        `/vault/secrets/${profileId}`,
+      ),
     enabled: !!profileId,
+    select: (data) => data.secrets,
   });
 }
 
-export function useGetSecret(profileId: string, key?: string) {
+/**
+ * Get a single vault secret's metadata (blobId, downloadUrl, sealPolicyId).
+ */
+export function useVaultSecret(
+  profileId: string | undefined,
+  key: string | undefined,
+) {
   return useQuery({
-    queryKey: ['vault', 'secrets', profileId, key],
-    queryFn: () => apiClient.get<VaultSecretDetail>(`/vault/secrets/${profileId}/${key}`),
+    queryKey: ["vault-secret", profileId, key],
+    queryFn: () =>
+      apiClient.get<VaultSecretDetail>(
+        `/vault/secrets/${profileId}/${key}`,
+      ),
     enabled: !!profileId && !!key,
   });
 }
 
+/**
+ * Store (or overwrite) a vault secret.
+ */
 export function useStoreSecret() {
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: {
-      profileId: string;
-      key: string;
-      encryptedData: string;
-      vaultType: VaultType;
-      fileName?: string;
-      mimeType?: string;
-      fileSize?: number;
-    }) => apiClient.post<{ blobId: string; url: string }>('/vault/secrets', data),
-    onSuccess: (_, { profileId }) => {
-      queryClient.invalidateQueries({ queryKey: ['vault', 'secrets', profileId] });
+    mutationFn: (payload: StoreSecretPayload) =>
+      apiClient.post<StoreSecretResult>("/vault/secrets", payload),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({
+        queryKey: ["vault-secrets", variables.profileId],
+      });
     },
   });
 }
 
+/**
+ * Delete a vault secret.
+ */
 export function useDeleteSecret() {
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { profileId: string; key: string; expectedVersion: number }) =>
-      apiClient.delete<{ success: boolean }>(
-        `/vault/secrets/${data.profileId}/${data.key}`,
-        { expectedVersion: data.expectedVersion },
+    mutationFn: ({
+      profileId,
+      key,
+      expectedVersion,
+    }: {
+      profileId: string;
+      key: string;
+      expectedVersion: number;
+    }) =>
+      apiClient.delete(
+        `/vault/secrets/${profileId}/${key}?expectedVersion=${expectedVersion}`,
       ),
-    onSuccess: (_, { profileId }) => {
-      queryClient.invalidateQueries({ queryKey: ['vault', 'secrets', profileId] });
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({
+        queryKey: ["vault-secrets", variables.profileId],
+      });
     },
   });
 }
