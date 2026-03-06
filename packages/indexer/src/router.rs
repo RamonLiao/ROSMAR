@@ -1,15 +1,28 @@
+use crate::enricher::Enricher;
 use crate::handlers::{audit, defi, nft};
 use serde_json::Value;
 use sqlx::PgPool;
+use std::sync::Arc;
 
 /// Event router dispatches events to appropriate handlers based on event type
 pub struct EventRouter {
     pool: PgPool,
+    enricher: Arc<Enricher>,
 }
 
 impl EventRouter {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(pool: PgPool, enricher: Arc<Enricher>) -> Self {
+        Self { pool, enricher }
+    }
+
+    /// Extract the primary address from an event's parsedJson
+    fn extract_address(event: &Value) -> Option<&str> {
+        let data = event.get("parsedJson").unwrap_or(event);
+        data.get("sender")
+            .or_else(|| data.get("user"))
+            .or_else(|| data.get("actor"))
+            .or_else(|| data.get("recipient"))
+            .and_then(|a| a.as_str())
     }
 
     /// Route event to appropriate handler
@@ -47,6 +60,26 @@ impl EventRouter {
             // Unknown event type - log and skip
             _ => {
                 tracing::trace!("Unhandled event type: {}", event_type);
+                return Ok(());
+            }
+        }
+
+        // After handler writes, resolve address -> profile_id for enrichment
+        if let Some(address) = Self::extract_address(event) {
+            match self.enricher.resolve_address(address).await {
+                Ok(Some(profile_id)) => {
+                    tracing::debug!(
+                        "Enriched address {} -> profile {}",
+                        address,
+                        profile_id
+                    );
+                }
+                Ok(None) => {
+                    tracing::trace!("No profile found for address {}", address);
+                }
+                Err(e) => {
+                    tracing::warn!("Enrichment failed for address {}: {}", address, e);
+                }
             }
         }
 
@@ -75,7 +108,9 @@ mod tests {
     async fn test_route_event() {
         let database_url = std::env::var("DATABASE_URL").unwrap();
         let pool = crate::db::create_pool(&database_url).await.unwrap();
-        let router = EventRouter::new(pool);
+        let cache = crate::cache::AddressCache::new();
+        let enricher = Arc::new(crate::enricher::Enricher::new(cache, pool.clone()));
+        let router = EventRouter::new(pool, enricher);
 
         let event = json!({
             "type": "0x123::profile::AuditEventV1",

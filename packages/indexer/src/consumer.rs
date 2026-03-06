@@ -201,7 +201,9 @@ mod tests {
     async fn test_fetch_checkpoint() {
         let config = Config::from_env().unwrap();
         let pool = crate::db::create_pool(&config.database_url).await.unwrap();
-        let router = Arc::new(crate::router::EventRouter::new(pool.clone()));
+        let cache = crate::cache::AddressCache::new();
+        let enricher = Arc::new(crate::enricher::Enricher::new(cache, pool.clone()));
+        let router = Arc::new(crate::router::EventRouter::new(pool.clone(), enricher));
         let consumer = CheckpointConsumer::new(config, pool, router);
 
         let checkpoint = consumer.fetch_checkpoint(0).await.unwrap();

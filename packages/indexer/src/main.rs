@@ -36,7 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cache = cache::AddressCache::new();
 
     // Create enricher and preload cache
-    let enricher = enricher::Enricher::new(cache.clone(), pool.clone());
+    let enricher = Arc::new(enricher::Enricher::new(cache.clone(), pool.clone()));
     let preloaded = enricher.preload_cache().await?;
     tracing::info!("Preloaded {} profiles into cache", preloaded);
 
@@ -45,7 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Alert engine initialized");
 
     // Create event router
-    let router = Arc::new(router::EventRouter::new(pool.clone()));
+    let router = Arc::new(router::EventRouter::new(pool.clone(), enricher.clone()));
     tracing::info!("Event router initialized");
 
     // Create checkpoint consumer
