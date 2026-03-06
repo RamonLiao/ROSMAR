@@ -6,23 +6,51 @@ import {
   Delete,
   Body,
   Param,
-  Query,
   UseGuards,
 } from '@nestjs/common';
+import { IsString, IsOptional, IsInt, IsIn, IsNumber } from 'class-validator';
 import { VaultService } from './vault.service';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { RbacGuard, RequirePermissions, WRITE, DELETE } from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
-import { UserPayload } from '../auth/auth.service';
+import type { UserPayload } from '../auth/auth.service';
 
 export class StoreSecretDto {
+  @IsString()
   profileId: string;
+
+  @IsString()
   key: string;
-  encryptedData: Buffer;
+
+  @IsString()
+  encryptedData: string; // base64
+
+  @IsIn(['note', 'file'])
+  vaultType: 'note' | 'file';
+
+  @IsOptional()
+  @IsString()
+  fileName?: string;
+
+  @IsOptional()
+  @IsString()
+  mimeType?: string;
+
+  @IsOptional()
+  @IsNumber()
+  fileSize?: number;
 }
 
 export class UpdateSecretDto {
-  encryptedData: Buffer;
+  @IsString()
+  encryptedData: string; // base64
+
+  @IsInt()
+  expectedVersion: number;
+}
+
+export class DeleteSecretDto {
+  @IsInt()
   expectedVersion: number;
 }
 
@@ -33,74 +61,48 @@ export class VaultController {
 
   @Post('secrets')
   @RequirePermissions(WRITE)
-  async storeSecret(
-    @User() user: import('../auth/auth.service').UserPayload,
-    @Body() dto: import('./vault.controller').StoreSecretDto,
-  ) {
-    return this.vaultService.storeSecret(
-      user.workspaceId,
-      user.address,
-      dto,
-    );
+  async storeSecret(@User() user: UserPayload, @Body() dto: StoreSecretDto) {
+    return this.vaultService.storeSecret(user.workspaceId, user.address, dto);
   }
 
   @Get('secrets/:profileId/:key')
   async getSecret(
-    @User() user: import('../auth/auth.service').UserPayload,
+    @User() user: UserPayload,
     @Param('profileId') profileId: string,
     @Param('key') key: string,
   ) {
-    return this.vaultService.getSecret(
-      user.workspaceId,
-      user.address,
-      profileId,
-      key,
-    );
+    return this.vaultService.getSecret(user.workspaceId, user.address, profileId, key);
   }
 
   @Get('secrets/:profileId')
   async listSecrets(
-    @User() user: import('../auth/auth.service').UserPayload,
+    @User() user: UserPayload,
     @Param('profileId') profileId: string,
   ) {
-    return this.vaultService.listSecrets(
-      user.workspaceId,
-      user.address,
-      profileId,
-    );
+    return this.vaultService.listSecrets(user.workspaceId, user.address, profileId);
   }
 
   @Put('secrets/:profileId/:key')
   @RequirePermissions(WRITE)
   async updateSecret(
-    @User() user: import('../auth/auth.service').UserPayload,
+    @User() user: UserPayload,
     @Param('profileId') profileId: string,
     @Param('key') key: string,
-    @Body() dto: import('./vault.controller').UpdateSecretDto,
+    @Body() dto: UpdateSecretDto,
   ) {
-    return this.vaultService.updateSecret(
-      user.workspaceId,
-      user.address,
-      profileId,
-      key,
-      dto,
-    );
+    return this.vaultService.updateSecret(user.workspaceId, user.address, profileId, key, dto);
   }
 
   @Delete('secrets/:profileId/:key')
   @RequirePermissions(DELETE)
   async deleteSecret(
-    @User() user: import('../auth/auth.service').UserPayload,
+    @User() user: UserPayload,
     @Param('profileId') profileId: string,
     @Param('key') key: string,
-    @Body('expectedVersion') expectedVersion: number,
+    @Body() dto: DeleteSecretDto,
   ) {
     return this.vaultService.deleteSecret(
-      user.workspaceId,
-      user.address,
-      profileId,
-      key,
-      expectedVersion,
+      user.workspaceId, user.address, profileId, key, dto.expectedVersion,
     );
   }
 }

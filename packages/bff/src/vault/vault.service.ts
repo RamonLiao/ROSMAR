@@ -3,14 +3,18 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalrusClient } from './walrus.client';
 
-export interface StoreSecretDto {
+export interface StoreSecretInput {
   profileId: string;
   key: string;
-  encryptedData: Buffer; // Client-side encrypted blob
+  encryptedData: string;
+  vaultType: 'note' | 'file';
+  fileName?: string;
+  mimeType?: string;
+  fileSize?: number;
 }
 
-export interface UpdateSecretDto {
-  encryptedData: Buffer;
+export interface UpdateSecretInput {
+  encryptedData: string;
   expectedVersion: number;
 }
 
@@ -25,11 +29,13 @@ export class VaultService {
   async storeSecret(
     workspaceId: string,
     callerAddress: string,
-    dto: StoreSecretDto,
-  ): Promise<any> {
+    dto: StoreSecretInput,
+  ) {
     await this.verifyAccess(workspaceId, callerAddress);
 
-    const uploadResult = await this.walrusClient.uploadBlob(dto.encryptedData);
+    const uploadResult = await this.walrusClient.uploadBlob(
+      Buffer.from(dto.encryptedData, 'base64'),
+    );
 
     await this.prisma.vaultSecret.upsert({
       where: {
@@ -44,10 +50,18 @@ export class VaultService {
         profileId: dto.profileId,
         key: dto.key,
         walrusBlobId: uploadResult.blobId,
+        vaultType: dto.vaultType,
+        fileName: dto.fileName,
+        mimeType: dto.mimeType,
+        fileSize: dto.fileSize,
         version: 1,
       },
       update: {
         walrusBlobId: uploadResult.blobId,
+        vaultType: dto.vaultType,
+        fileName: dto.fileName,
+        mimeType: dto.mimeType,
+        fileSize: dto.fileSize,
         version: { increment: 1 },
       },
     });
@@ -60,7 +74,7 @@ export class VaultService {
     callerAddress: string,
     profileId: string,
     key: string,
-  ): Promise<any> {
+  ) {
     await this.verifyAccess(workspaceId, callerAddress);
 
     const secret = await this.prisma.vaultSecret.findUnique({
@@ -71,10 +85,19 @@ export class VaultService {
 
     if (!secret) return null;
 
+    const aggregatorUrl = this.configService.get(
+      'WALRUS_AGGREGATOR_URL',
+      'https://aggregator.walrus-testnet.walrus.space',
+    );
+
     return {
       blobId: secret.walrusBlobId,
-      downloadUrl: `${this.configService.get('WALRUS_AGGREGATOR_URL', 'https://aggregator.walrus-testnet.walrus.space')}/v1/${secret.walrusBlobId}`,
+      downloadUrl: `${aggregatorUrl}/v1/${secret.walrusBlobId}`,
       version: secret.version,
+      vaultType: secret.vaultType,
+      fileName: secret.fileName,
+      mimeType: secret.mimeType,
+      fileSize: secret.fileSize,
     };
   }
 
@@ -82,7 +105,7 @@ export class VaultService {
     workspaceId: string,
     callerAddress: string,
     profileId: string,
-  ): Promise<any> {
+  ) {
     await this.verifyAccess(workspaceId, callerAddress);
 
     const secrets = await this.prisma.vaultSecret.findMany({
@@ -95,6 +118,10 @@ export class VaultService {
         key: s.key,
         blobId: s.walrusBlobId,
         version: s.version,
+        vaultType: s.vaultType,
+        fileName: s.fileName,
+        mimeType: s.mimeType,
+        fileSize: s.fileSize,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
       })),
@@ -106,20 +133,16 @@ export class VaultService {
     callerAddress: string,
     profileId: string,
     key: string,
-    dto: UpdateSecretDto,
-  ): Promise<any> {
+    dto: UpdateSecretInput,
+  ) {
     await this.verifyAccess(workspaceId, callerAddress);
 
-    const uploadResult = await this.walrusClient.uploadBlob(dto.encryptedData);
+    const uploadResult = await this.walrusClient.uploadBlob(
+      Buffer.from(dto.encryptedData, 'base64'),
+    );
 
-    // Optimistic locking via version check
     const updated = await this.prisma.vaultSecret.updateMany({
-      where: {
-        workspaceId,
-        profileId,
-        key,
-        version: dto.expectedVersion,
-      },
+      where: { workspaceId, profileId, key, version: dto.expectedVersion },
       data: {
         walrusBlobId: uploadResult.blobId,
         version: { increment: 1 },
@@ -143,7 +166,7 @@ export class VaultService {
     profileId: string,
     key: string,
     expectedVersion: number,
-  ): Promise<any> {
+  ) {
     await this.verifyAccess(workspaceId, callerAddress);
 
     const deleted = await this.prisma.vaultSecret.deleteMany({
@@ -165,7 +188,6 @@ export class VaultService {
       where: { workspaceId_address: { workspaceId, address: callerAddress } },
     });
 
-    // Require MANAGE permission (bitmask 16)
     if (!member || (member.permissions & 16) === 0) {
       throw new UnauthorizedException('No access to this vault');
     }
