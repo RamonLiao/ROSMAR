@@ -101,7 +101,7 @@ export async function encryptBytes(
   const ciphertext = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
     key,
-    data,
+    data as BufferSource,
   );
 
   const result = new Uint8Array(SALT_BYTES + IV_BYTES + ciphertext.byteLength);
