@@ -1,0 +1,83 @@
+[
+  {
+    "type": "0x2::nft::MintNFTEvent",
+    "id": {
+      "txDigest": "nft_mint_tx_001"
+    },
+    "timestampMs": "1700000000000",
+    "parsedJson": {
+      "sender": "0xnft_minter_001",
+      "collection": "0xcollection_abc",
+      "objectId": "0xnft_object_001"
+    }
+  },
+  {
+    "type": "0x2::nft::TransferObject",
+    "id": {
+      "txDigest": "nft_transfer_tx_002"
+    },
+    "timestampMs": "1700000001000",
+    "parsedJson": {
+      "sender": "0xnft_minter_001",
+      "recipient": "0xnft_receiver_001",
+      "collection": "0xcollection_abc",
+      "objectId": "0xnft_object_002"
+    }
+  },
+  {
+    "type": "0x2::dex::SwapEvent",
+    "id": {
+      "txDigest": "defi_swap_tx_001"
+    },
+    "timestampMs": "1700000002000",
+    "parsedJson": {
+      "sender": "0xdefi_user_001",
+      "pool": "0xpool_sui_usdc",
+      "coinType": "0x2::sui::SUI",
+      "amount": "5000000000"
+    }
+  },
+  {
+    "type": "0x2::staking::StakeEvent",
+    "id": {
+      "txDigest": "defi_stake_tx_001"
+    },
+    "timestampMs": "1700000003000",
+    "parsedJson": {
+      "user": "0xdefi_user_002",
+      "protocol": "0xstaking_protocol",
+      "token": "0x2::sui::SUI",
+      "amount": "10000000000"
+    }
+  },
+  {
+    "type": "0x2::dao::VoteEvent",
+    "id": {
+      "txDigest": "gov_vote_tx_001"
+    },
+    "timestampMs": "1700000004000",
+    "parsedJson": {
+      "voter": "0xgov_voter_001",
+      "proposal_id": "prop_001",
+      "vote_type": "for",
+      "weight": "1000",
+      "protocol": "0xdao_protocol_001",
+      "dao_id": "dao_001"
+    }
+  },
+  {
+    "type": "0x2::governance::ProposalEvent",
+    "id": {
+      "txDigest": "gov_proposal_tx_001"
+    },
+    "timestampMs": "1700000005000",
+    "parsedJson": {
+      "sender": "0xgov_proposer_001",
+      "proposal_id": "prop_002",
+      "vote_type": "create",
+      "weight": "0",
+      "protocol": "0xdao_protocol_001",
+      "dao_id": "dao_001"
+    }
+  }
+]
