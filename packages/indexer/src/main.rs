@@ -6,6 +6,7 @@ mod db;
 mod enricher;
 mod handlers;
 mod router;
+mod webhook;
 mod writer;
 
 use std::sync::Arc;
@@ -44,8 +45,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _alert_engine = alerts::AlertEngine::new(config.clone(), pool.clone());
     tracing::info!("Alert engine initialized");
 
+    // Create webhook dispatcher
+    let webhook_dispatcher = Arc::new(webhook::WebhookDispatcher::new(
+        config.bff_webhook_url.clone(),
+    ));
+    tracing::info!("Webhook dispatcher initialized");
+
     // Create event router
-    let router = Arc::new(router::EventRouter::new(pool.clone(), enricher.clone()));
+    let router = Arc::new(
+        router::EventRouter::new(pool.clone(), enricher.clone())
+            .with_webhook(webhook_dispatcher),
+    );
     tracing::info!("Event router initialized");
 
     // Create checkpoint consumer

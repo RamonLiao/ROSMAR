@@ -1,5 +1,6 @@
 use crate::enricher::Enricher;
 use crate::handlers::{audit, defi, governance, nft};
+use crate::webhook::WebhookDispatcher;
 use serde_json::Value;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -8,11 +9,17 @@ use std::sync::Arc;
 pub struct EventRouter {
     pool: PgPool,
     enricher: Arc<Enricher>,
+    webhook: Option<Arc<WebhookDispatcher>>,
 }
 
 impl EventRouter {
     pub fn new(pool: PgPool, enricher: Arc<Enricher>) -> Self {
-        Self { pool, enricher }
+        Self { pool, enricher, webhook: None }
+    }
+
+    pub fn with_webhook(mut self, webhook: Arc<WebhookDispatcher>) -> Self {
+        self.webhook = Some(webhook);
+        self
     }
 
     /// Check if an event type is a governance event
@@ -81,22 +88,38 @@ impl EventRouter {
         }
 
         // After handler writes, resolve address -> profile_id for enrichment
-        if let Some(address) = Self::extract_address(event) {
-            match self.enricher.resolve_address(address).await {
-                Ok(Some(profile_id)) => {
-                    tracing::debug!(
-                        "Enriched address {} -> profile {}",
-                        address,
-                        profile_id
-                    );
-                }
-                Ok(None) => {
-                    tracing::trace!("No profile found for address {}", address);
-                }
-                Err(e) => {
-                    tracing::warn!("Enrichment failed for address {}: {}", address, e);
-                }
+        let address = Self::extract_address(event)
+            .unwrap_or("0x0")
+            .to_string();
+        let profile_id = match self.enricher.resolve_address(&address).await {
+            Ok(Some(pid)) => {
+                tracing::debug!("Enriched address {} -> profile {}", address, pid);
+                Some(pid)
             }
+            Ok(None) => {
+                tracing::trace!("No profile found for address {}", address);
+                None
+            }
+            Err(e) => {
+                tracing::warn!("Enrichment failed for address {}: {}", address, e);
+                None
+            }
+        };
+
+        // Fire-and-forget webhook dispatch to BFF
+        if let Some(ref webhook) = self.webhook {
+            let indexer_event = WebhookDispatcher::build_event(
+                event,
+                event_type,
+                &address,
+                profile_id,
+            );
+            let wh = webhook.clone();
+            tokio::spawn(async move {
+                if let Err(e) = wh.dispatch(&indexer_event).await {
+                    tracing::warn!("Webhook dispatch error: {}", e);
+                }
+            });
         }
 
         Ok(())
