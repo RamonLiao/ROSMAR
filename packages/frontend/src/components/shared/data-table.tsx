@@ -59,13 +59,13 @@ export function DataTable<T extends Record<string, unknown>>({
               placeholder={searchPlaceholder}
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
-              className="pl-9"
+              className="pl-9 focus:ring-2 focus:ring-primary/30"
             />
           </div>
         </div>
       )}
 
-      <div className="rounded-md border">
+      <div className="rounded-xl border border-border/40 overflow-hidden bg-card/60 dark:bg-card/20 backdrop-blur-xl transition-opacity duration-300">
         <Table>
           <TableHeader>
             <TableRow>

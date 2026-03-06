@@ -2,6 +2,22 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Transaction } from '@mysten/sui/transactions';
 
+/** Map frontend stage strings to on-chain u8 values (crm_core::deal) */
+const STAGE_MAP: Record<string, number> = {
+  prospecting: 0,
+  qualification: 1,
+  proposal: 2,
+  negotiation: 3,
+  closed_won: 4,
+  closed_lost: 5,
+};
+
+export function stageToU8(stage: string): number {
+  const val = STAGE_MAP[stage];
+  if (val === undefined) throw new Error(`Invalid deal stage: "${stage}"`);
+  return val;
+}
+
 @Injectable()
 export class TxBuilderService {
   private crmCorePackageId: string;
@@ -282,15 +298,15 @@ export class TxBuilderService {
     const tx = new Transaction();
 
     tx.moveCall({
-      target: `${this.crmDataPackageId}::deal::create`,
+      target: `${this.crmCorePackageId}::deal::create_deal`,
       arguments: [
         tx.object(globalConfigId),
         tx.object(workspaceId),
         tx.object(adminCapId),
-        tx.object(profileId),
+        tx.pure.address(profileId),
         tx.pure.string(title),
         tx.pure.u64(amountUsd),
-        tx.pure.string(stage),
+        tx.pure.u8(stageToU8(stage)),
       ],
     });
 
@@ -304,25 +320,25 @@ export class TxBuilderService {
     globalConfigId: string,
     workspaceId: string,
     adminCapId: string,
-    dealId: string,
-    title?: string,
-    amountUsd?: number,
-    stage?: string,
-    expectedVersion?: number,
+    dealObjectId: string,
+    expectedVersion: number,
+    title: string,
+    amountUsd: number,
+    stage: string,
   ): Transaction {
     const tx = new Transaction();
 
     tx.moveCall({
-      target: `${this.crmDataPackageId}::deal::update`,
+      target: `${this.crmCorePackageId}::deal::update_deal`,
       arguments: [
         tx.object(globalConfigId),
         tx.object(workspaceId),
         tx.object(adminCapId),
-        tx.object(dealId),
-        title ? tx.pure.option('string', title) : tx.pure.option('string', null),
-        amountUsd !== undefined ? tx.pure.option('u64', amountUsd) : tx.pure.option('u64', null),
-        stage ? tx.pure.option('string', stage) : tx.pure.option('string', null),
-        tx.pure.u64(expectedVersion ?? 0),
+        tx.object(dealObjectId),
+        tx.pure.u64(expectedVersion),
+        tx.pure.string(title),
+        tx.pure.u64(amountUsd),
+        tx.pure.u8(stageToU8(stage)),
       ],
     });
 
@@ -330,26 +346,24 @@ export class TxBuilderService {
   }
 
   /**
-   * Build transaction to update deal stage
+   * Build transaction to archive a deal
    */
-  buildUpdateDealStageTx(
+  buildArchiveDealTx(
     globalConfigId: string,
     workspaceId: string,
     adminCapId: string,
-    dealId: string,
-    stage: string,
+    dealObjectId: string,
     expectedVersion: number,
   ): Transaction {
     const tx = new Transaction();
 
     tx.moveCall({
-      target: `${this.crmDataPackageId}::deal::update_stage`,
+      target: `${this.crmCorePackageId}::deal::archive_deal`,
       arguments: [
         tx.object(globalConfigId),
         tx.object(workspaceId),
         tx.object(adminCapId),
-        tx.object(dealId),
-        tx.pure.string(stage),
+        tx.object(dealObjectId),
         tx.pure.u64(expectedVersion),
       ],
     });

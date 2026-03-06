@@ -6,11 +6,27 @@ export interface Deal {
   title: string;
   amountUsd: number;
   stage: string;
+  notes?: string | null;
   profileId: string;
+  suiObjectId?: string | null;
   version: number;
+  isArchived: boolean;
+  archivedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   [key: string]: unknown;
+}
+
+export interface AuditLog {
+  id: string;
+  workspaceId: string;
+  actor: string;
+  action: number;
+  objectType: number;
+  objectId: string;
+  txDigest: string;
+  timestamp: string;
+  createdAt: string;
 }
 
 interface DealFilters {
@@ -50,7 +66,7 @@ export function useCreateDeal() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { profileId: string; title: string; amountUsd: number; stage: string }) =>
+    mutationFn: (data: { profileId: string; title: string; amountUsd: number; stage: string; notes?: string }) =>
       apiClient.post<{ dealId: string; txDigest: string }>('/deals', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deals'] });
@@ -62,7 +78,7 @@ export function useUpdateDeal() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: string; title?: string; amountUsd?: number; stage?: string; expectedVersion: number }) =>
+    mutationFn: ({ id, ...data }: { id: string; title?: string; amountUsd?: number; stage?: string; notes?: string; expectedVersion: number }) =>
       apiClient.put<{ success: boolean; txDigest: string }>(`/deals/${id}`, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['deal', id] });
@@ -81,5 +97,27 @@ export function useUpdateDealStage() {
       queryClient.invalidateQueries({ queryKey: ['deal', id] });
       queryClient.invalidateQueries({ queryKey: ['deals'] });
     },
+  });
+}
+
+export function useArchiveDeal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, expectedVersion }: { id: string; expectedVersion: number }) =>
+      apiClient.put<{ success: boolean; txDigest: string }>(`/deals/${id}/archive`, { expectedVersion }),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['deal', id] });
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+    },
+  });
+}
+
+export function useAuditLogs(objectId: string) {
+  return useQuery({
+    queryKey: ['audit-logs', objectId],
+    queryFn: () => apiClient.get<AuditLog[]>(`/deals/${objectId}/audit`),
+    enabled: !!objectId,
+    staleTime: 30_000,
   });
 }

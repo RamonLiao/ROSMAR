@@ -1,145 +1,203 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScoreDistribution } from "@/components/charts/score-distribution";
+import { ActivityHeatmap } from "@/components/charts/activity-heatmap";
+import { PipelineFunnel } from "@/components/charts/pipeline-funnel";
 import {
-  Line,
-  LineChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  Legend,
-} from "recharts";
+  useScoreDistribution,
+  useActivityHeatmap,
+  usePipelineSummary,
+} from "@/lib/hooks/use-analytics";
+import { Loader2, AlertCircle } from "lucide-react";
 
-// Mock data
-const retentionData = [
-  { collection: "Sui Punks", week1: 85, week4: 72, week12: 58 },
-  { collection: "Capy NFT", week1: 90, week4: 80, week12: 65 },
-  { collection: "Bullshark", week1: 78, week4: 65, week12: 48 },
-  { collection: "SuiFrens", week1: 92, week4: 85, week12: 72 },
-];
+function formatCurrency(amount: number) {
+  if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(1)}M`;
+  if (amount >= 1_000) return `$${(amount / 1_000).toFixed(0)}K`;
+  return `$${amount}`;
+}
 
-const campaignConversion = [
-  { campaign: "Welcome Series", sent: 1250, opened: 875, converted: 234 },
-  { campaign: "Whale Engagement", sent: 450, opened: 380, converted: 125 },
-  { campaign: "NFT Drop Alert", sent: 850, opened: 720, converted: 180 },
-  { campaign: "Re-engagement", sent: 620, opened: 310, converted: 68 },
-];
+function ChartLoader() {
+  return (
+    <div className="flex items-center justify-center h-[300px]">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
 
-const engagementTrend = [
-  { month: "Jan", avgScore: 42, activeUsers: 1200 },
-  { month: "Feb", avgScore: 48, activeUsers: 1450 },
-  { month: "Mar", avgScore: 52, activeUsers: 1680 },
-  { month: "Apr", avgScore: 55, activeUsers: 1820 },
-  { month: "May", avgScore: 58, activeUsers: 1950 },
-  { month: "Jun", avgScore: 62, activeUsers: 2100 },
-];
+function ChartError({ message }: { message?: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-[300px] gap-2 text-muted-foreground">
+      <AlertCircle className="h-5 w-5" />
+      <span className="text-sm">{message ?? "Failed to load data"}</span>
+    </div>
+  );
+}
 
 export default function AnalyticsPage() {
+  const {
+    data: scoreData,
+    isLoading: scoreLoading,
+    error: scoreError,
+  } = useScoreDistribution();
+  const {
+    data: activityData,
+    isLoading: activityLoading,
+    error: activityError,
+  } = useActivityHeatmap();
+  const {
+    data: pipelineData,
+    isLoading: pipelineLoading,
+    error: pipelineError,
+  } = usePipelineSummary();
+
+  // Derived stats from pipeline data
+  const totalDeals = pipelineData?.reduce((sum, s) => sum + s.count, 0) ?? 0;
+  const totalValue = pipelineData?.reduce((sum, s) => sum + s.value, 0) ?? 0;
+  const totalProfiles = scoreData?.reduce((sum, b) => sum + b.count, 0) ?? 0;
+  const avgScore =
+    totalProfiles > 0
+      ? Math.round(
+          (scoreData ?? []).reduce((sum, b) => {
+            // Estimate midpoint of each range for weighted avg
+            const mid = { "0-20": 10, "21-40": 30, "41-60": 50, "61-80": 70, "81-100": 90 }[b.range] ?? 50;
+            return sum + mid * b.count;
+          }, 0) / totalProfiles
+        )
+      : 0;
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Analytics</h1>
-        <p className="text-muted-foreground">
-          Mixed on-chain and CRM analytics
+        <h1 className="text-3xl font-semibold tracking-tight">Analytics</h1>
+        <p className="text-muted-foreground tracking-tight">
+          CRM engagement, activity, and pipeline insights
         </p>
       </div>
 
-      <Tabs defaultValue="retention" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="retention">Retention</TabsTrigger>
-          <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
-          <TabsTrigger value="engagement">Engagement</TabsTrigger>
-        </TabsList>
+      {/* Summary cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total Profiles
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold tabular-nums">
+              {scoreLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : (
+                totalProfiles.toLocaleString()
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
-        <TabsContent value="retention" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Retention by NFT Holding</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={retentionData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="collection" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="week1" fill="hsl(var(--chart-1))" name="Week 1" />
-                  <Bar dataKey="week4" fill="hsl(var(--chart-2))" name="Week 4" />
-                  <Bar dataKey="week12" fill="hsl(var(--chart-3))" name="Week 12" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Avg Engagement Score
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold tabular-nums">
+              {scoreLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : (
+                avgScore
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
-        <TabsContent value="campaigns" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Campaign Conversion Rates</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={campaignConversion}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="campaign" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="sent" fill="hsl(var(--chart-1))" name="Sent" />
-                  <Bar dataKey="opened" fill="hsl(var(--chart-2))" name="Opened" />
-                  <Bar
-                    dataKey="converted"
-                    fill="hsl(var(--chart-3))"
-                    name="Converted"
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Pipeline Value
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold tabular-nums">
+              {pipelineLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : (
+                <>
+                  {formatCurrency(totalValue)}
+                  <span className="text-sm font-normal text-muted-foreground ml-2">
+                    ({totalDeals} deals)
+                  </span>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-        <TabsContent value="engagement" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Engagement Trends Over Time</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={400}>
-                <LineChart data={engagementTrend}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis yAxisId="left" />
-                  <YAxis yAxisId="right" orientation="right" />
-                  <Tooltip />
-                  <Legend />
-                  <Line
-                    yAxisId="left"
-                    type="monotone"
-                    dataKey="avgScore"
-                    stroke="hsl(var(--chart-1))"
-                    strokeWidth={2}
-                    name="Avg Engagement Score"
-                  />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="activeUsers"
-                    stroke="hsl(var(--chart-2))"
-                    strokeWidth={2}
-                    name="Active Users"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {/* Score Distribution */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="tracking-tight">
+            Engagement Score Distribution
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Profile distribution across engagement score ranges
+          </p>
+        </CardHeader>
+        <CardContent>
+          {scoreLoading ? (
+            <ChartLoader />
+          ) : scoreError ? (
+            <ChartError />
+          ) : (
+            <ScoreDistribution data={scoreData ?? []} />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Activity Heatmap */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="tracking-tight">Activity Heatmap</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Profile and deal creation activity by day and hour
+          </p>
+        </CardHeader>
+        <CardContent>
+          {activityLoading ? (
+            <ChartLoader />
+          ) : activityError ? (
+            <ChartError />
+          ) : (
+            <ActivityHeatmap data={activityData ?? []} />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Pipeline Funnel */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="tracking-tight">Deal Pipeline</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Deal count by stage
+          </p>
+        </CardHeader>
+        <CardContent>
+          {pipelineLoading ? (
+            <ChartLoader />
+          ) : pipelineError ? (
+            <ChartError />
+          ) : (
+            <PipelineFunnel
+              data={
+                (pipelineData ?? []).length > 0
+                  ? pipelineData ?? []
+                  : [{ stage: "No deals", count: 0, value: 0 }]
+              }
+            />
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

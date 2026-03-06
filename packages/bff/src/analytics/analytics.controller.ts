@@ -22,4 +22,11 @@ export class AnalyticsController {
   ) {
     return this.analyticsService.getActivityHeatmap(user.workspaceId);
   }
+
+  @Get('pipeline-summary')
+  async pipelineSummary(
+    @User() user: import('../auth/auth.service').UserPayload,
+  ) {
+    return this.analyticsService.getPipelineSummary(user.workspaceId);
+  }
 }

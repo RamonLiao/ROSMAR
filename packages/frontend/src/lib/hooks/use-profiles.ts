@@ -29,6 +29,7 @@ export function useProfiles(filters?: ProfileFilters) {
       const params = new URLSearchParams();
       if (filters?.limit) params.set('limit', filters.limit.toString());
       if (filters?.offset) params.set('offset', filters.offset.toString());
+      if (filters?.search) params.set('search', filters.search);
 
       const query = params.toString();
       return apiClient.get<{ profiles: Profile[]; total: number }>(
@@ -68,5 +69,16 @@ export function useUpdateProfileTags() {
       queryClient.invalidateQueries({ queryKey: ['profile', id] });
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
     },
+  });
+}
+
+export function useProfileOrganizations(profileId: string) {
+  return useQuery({
+    queryKey: ['profile', profileId, 'organizations'],
+    queryFn: () =>
+      apiClient.get<Array<{ id: string; name: string; domain: string | null; tags: string[] }>>(
+        `/profiles/${profileId}/organizations`
+      ),
+    enabled: !!profileId,
   });
 }

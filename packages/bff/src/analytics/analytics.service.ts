@@ -12,6 +12,12 @@ export interface ActivityCell {
   activity: number;
 }
 
+export interface PipelineStage {
+  stage: string;
+  count: number;
+  value: number;
+}
+
 @Injectable()
 export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -22,15 +28,15 @@ export class AnalyticsService {
     >`
       SELECT
         CASE
-          WHEN "engagementScore" <= 20 THEN '0-20'
-          WHEN "engagementScore" <= 40 THEN '21-40'
-          WHEN "engagementScore" <= 60 THEN '41-60'
-          WHEN "engagementScore" <= 80 THEN '61-80'
+          WHEN "engagement_score" <= 20 THEN '0-20'
+          WHEN "engagement_score" <= 40 THEN '21-40'
+          WHEN "engagement_score" <= 60 THEN '41-60'
+          WHEN "engagement_score" <= 80 THEN '61-80'
           ELSE '81-100'
         END AS bucket,
         COUNT(*) AS count
-      FROM "Profile"
-      WHERE "workspaceId" = ${workspaceId} AND "isArchived" = false
+      FROM "profiles"
+      WHERE "workspace_id" = ${workspaceId} AND "is_archived" = false
       GROUP BY bucket
       ORDER BY bucket
     `;
@@ -41,17 +47,16 @@ export class AnalyticsService {
   }
 
   async getActivityHeatmap(workspaceId: string): Promise<ActivityCell[]> {
-    // Aggregate creation timestamps from profiles and deals via DB-side grouping
     const rows = await this.prisma.$queryRaw<
       { dow: number; hour: number; count: bigint }[]
     >`
-      SELECT EXTRACT(DOW FROM "createdAt") AS dow,
-             EXTRACT(HOUR FROM "createdAt") AS hour,
+      SELECT EXTRACT(DOW FROM "created_at") AS dow,
+             EXTRACT(HOUR FROM "created_at") AS hour,
              COUNT(*) AS count
       FROM (
-        SELECT "createdAt" FROM "Profile" WHERE "workspaceId" = ${workspaceId}
+        SELECT "created_at" FROM "profiles" WHERE "workspace_id" = ${workspaceId}
         UNION ALL
-        SELECT "createdAt" FROM "Deal" WHERE "workspaceId" = ${workspaceId}
+        SELECT "created_at" FROM "deals" WHERE "workspace_id" = ${workspaceId}
       ) combined
       GROUP BY dow, hour
       ORDER BY dow, hour
@@ -75,5 +80,26 @@ export class AnalyticsService {
     }
 
     return result;
+  }
+
+  async getPipelineSummary(workspaceId: string): Promise<PipelineStage[]> {
+    const rows = await this.prisma.$queryRaw<
+      { stage: string; count: bigint; total_value: number }[]
+    >`
+      SELECT
+        "stage",
+        COUNT(*) AS count,
+        COALESCE(SUM("amount_usd"), 0) AS total_value
+      FROM "deals"
+      WHERE "workspace_id" = ${workspaceId}
+      GROUP BY "stage"
+      ORDER BY "stage"
+    `;
+
+    return rows.map((row) => ({
+      stage: row.stage,
+      count: Number(row.count),
+      value: Number(row.total_value),
+    }));
   }
 }

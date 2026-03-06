@@ -21,6 +21,7 @@ export interface UpdateSegmentDto {
 @Injectable()
 export class SegmentService {
   private grpcClient: any;
+  private isDryRun: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -28,6 +29,7 @@ export class SegmentService {
     private readonly txBuilder: TxBuilderService,
     private readonly configService: ConfigService,
   ) {
+    this.isDryRun = this.configService.get<string>('SUI_DRY_RUN', 'false') === 'true';
     this.grpcClient = {
       getSegment: () => Promise.resolve({}),
       listSegments: () => Promise.resolve({}),
@@ -35,24 +37,31 @@ export class SegmentService {
     };
   }
 
+  private async execChainTx(buildTx: () => any): Promise<any> {
+    if (this.isDryRun) {
+      return { digest: 'dry-run', events: [] };
+    }
+    const tx = buildTx();
+    return this.suiClient.executeTransaction(tx);
+  }
+
   async create(
     workspaceId: string,
     callerAddress: string,
     dto: CreateSegmentDto,
   ): Promise<any> {
-    const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
-    const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
-
-    const tx = this.txBuilder.buildCreateSegmentTx(
-      globalConfigId,
-      workspaceId,
-      adminCapId,
-      dto.name,
-      dto.description || '',
-      JSON.stringify(dto.rules),
-    );
-
-    const result = await this.suiClient.executeTransaction(tx);
+    const result = await this.execChainTx(() => {
+      const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
+      const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
+      return this.txBuilder.buildCreateSegmentTx(
+        globalConfigId,
+        workspaceId,
+        adminCapId,
+        dto.name,
+        dto.description || '',
+        JSON.stringify(dto.rules),
+      );
+    });
 
     const segmentCreatedEvent = result.events?.find(
       (e: any) => e.type.includes('::segment::SegmentCreated'),
@@ -87,16 +96,25 @@ export class SegmentService {
     workspaceId: string,
     limit: number,
     offset: number,
+    search?: string,
   ): Promise<any> {
+    const where: any = { workspaceId };
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
     const [segments, total] = await Promise.all([
       this.prisma.segment.findMany({
-        where: { workspaceId },
+        where,
         take: limit,
         skip: offset,
         orderBy: { createdAt: 'desc' },
         include: { _count: { select: { memberships: true } } },
       }),
-      this.prisma.segment.count({ where: { workspaceId } }),
+      this.prisma.segment.count({ where }),
     ]);
 
     return { segments, total };
@@ -108,21 +126,20 @@ export class SegmentService {
     segmentId: string,
     dto: UpdateSegmentDto,
   ): Promise<any> {
-    const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
-    const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
-
-    const tx = this.txBuilder.buildUpdateSegmentTx(
-      globalConfigId,
-      workspaceId,
-      adminCapId,
-      segmentId,
-      dto.name,
-      dto.description,
-      dto.rules ? JSON.stringify(dto.rules) : undefined,
-      dto.expectedVersion,
-    );
-
-    const result = await this.suiClient.executeTransaction(tx);
+    const result = await this.execChainTx(() => {
+      const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
+      const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
+      return this.txBuilder.buildUpdateSegmentTx(
+        globalConfigId,
+        workspaceId,
+        adminCapId,
+        segmentId,
+        dto.name,
+        dto.description,
+        dto.rules ? JSON.stringify(dto.rules) : undefined,
+        dto.expectedVersion,
+      );
+    });
 
     const updateData: any = {
       version: { increment: 1 },
@@ -150,6 +167,15 @@ export class SegmentService {
       success: true,
       txDigest: result.digest,
     };
+  }
+
+  async delete(segmentId: string): Promise<any> {
+    // Delete memberships first (FK constraint), then the segment
+    await this.prisma.$transaction([
+      this.prisma.segmentMembership.deleteMany({ where: { segmentId } }),
+      this.prisma.segment.delete({ where: { id: segmentId } }),
+    ]);
+    return { success: true };
   }
 
   async evaluateSegment(

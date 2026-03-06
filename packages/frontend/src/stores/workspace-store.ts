@@ -4,7 +4,6 @@ import { persist } from 'zustand/middleware';
 interface Workspace {
   id: string;
   name: string;
-  slug: string;
 }
 
 interface Member {
@@ -21,6 +20,7 @@ interface WorkspaceState {
   setActiveWorkspace: (workspace: Workspace) => void;
   setWorkspaces: (workspaces: Workspace[]) => void;
   setMembers: (members: Member[]) => void;
+  reset: () => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>()(
@@ -32,6 +32,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       setActiveWorkspace: (workspace) => set({ activeWorkspace: workspace }),
       setWorkspaces: (workspaces) => set({ workspaces }),
       setMembers: (members) => set({ members }),
+      reset: () => set({ activeWorkspace: null, workspaces: [], members: [] }),
     }),
     {
       name: 'workspace-storage',

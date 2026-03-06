@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -7,66 +7,80 @@ export interface SendEmailDto {
   to?: string;
   subject: string;
   body: string;
-  templateId?: string;
-  variables?: Record<string, any>;
 }
 
 @Injectable()
 export class EmailService {
+  private readonly logger = new Logger(EmailService.name);
+  private apiKey: string;
+  private fromEmail: string;
+
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
-  ) {}
-
-  async sendMessage(workspaceId: string, dto: SendEmailDto): Promise<any> {
-    const toEmail = dto.to || (await this.getEmailForProfile(dto.profileId));
-
-    // TODO: Integrate with email provider (SendGrid, AWS SES, etc.)
-    console.log(`Sending email to ${toEmail}:`, dto.subject);
-
-    // In production:
-    // const sgMail = require('@sendgrid/mail');
-    // sgMail.setApiKey(this.configService.get('SENDGRID_API_KEY'));
-    //
-    // const msg = {
-    //   to: toEmail,
-    //   from: this.configService.get('FROM_EMAIL'),
-    //   subject: dto.subject,
-    //   text: dto.body,
-    //   html: dto.body,
-    //   templateId: dto.templateId,
-    //   dynamicTemplateData: dto.variables,
-    // };
-    //
-    // const result = await sgMail.send(msg);
-    // const messageId = result[0].headers['x-message-id'];
-
-    const messageId = `email_${Date.now()}`;
-
-    // Log to database
-    await this.prisma.$executeRaw`
-      INSERT INTO messages (
-        workspace_id, profile_id, channel, subject, body, status, external_id, sent_at
-      ) VALUES (${workspaceId}, ${dto.profileId}, 'email', ${dto.subject}, ${dto.body}, 'sent', ${messageId}, now())
-    `;
-
-    return {
-      messageId,
-      to: toEmail,
-      status: 'sent',
-    };
+  ) {
+    this.apiKey = this.configService.get<string>('RESEND_API_KEY', '');
+    this.fromEmail = this.configService.get<string>('FROM_EMAIL', 'noreply@rosmar.io');
   }
 
-  private async getEmailForProfile(profileId: string): Promise<string> {
-    // TODO: Query profile's email address
-    const result = await this.prisma.$queryRaw<Array<{ email: string }>>`
-      SELECT email FROM profile_contacts WHERE profile_id = ${profileId}
-    `;
+  async sendMessage(workspaceId: string, dto: SendEmailDto): Promise<any> {
+    const profile = await this.prisma.profile.findUniqueOrThrow({
+      where: { id: dto.profileId },
+      select: { email: true },
+    });
 
-    if (result.length === 0 || !result[0].email) {
+    const toEmail = dto.to || profile.email;
+    if (!toEmail) {
       throw new Error('No email address linked to profile');
     }
 
-    return result[0].email;
+    let externalId = `email_mock_${Date.now()}`;
+    let status = 'sent';
+
+    if (this.apiKey) {
+      try {
+        const response = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            from: this.fromEmail,
+            to: [toEmail],
+            subject: dto.subject,
+            html: dto.body,
+          }),
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+          status = 'failed';
+          this.logger.error(`Resend API error: ${JSON.stringify(result)}`);
+        } else {
+          externalId = result.id;
+        }
+      } catch (err: any) {
+        status = 'failed';
+        this.logger.error(`Email send error: ${err.message}`);
+      }
+    } else {
+      this.logger.warn('RESEND_API_KEY not set — email logged but not sent');
+    }
+
+    await this.prisma.message.create({
+      data: {
+        workspaceId,
+        profileId: dto.profileId,
+        channel: 'email',
+        subject: dto.subject,
+        body: dto.body,
+        status,
+        externalId,
+        sentAt: new Date(),
+      },
+    });
+
+    return { messageId: externalId, to: toEmail, status };
   }
 }

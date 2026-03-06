@@ -9,6 +9,7 @@ module crm_core::crm_core_tests {
     use crm_core::profile;
     use crm_core::organization;
     use crm_core::relation;
+    use crm_core::deal;
 
     const ADMIN: address = @0xA;
     const USER1: address = @0xB;
@@ -544,6 +545,143 @@ module crm_core::crm_core_tests {
         test_utils::destroy(workspace);
         test_utils::destroy(admin_cap);
         test_utils::destroy(rel);
+        ts::end(scenario);
+    }
+
+    // ========== Deal Tests ==========
+
+    #[test]
+    fun test_deal_creation() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+
+        let profile_id = object::id_from_address(@0x111);
+
+        let d = deal::create_deal(
+            &config, &workspace, &admin_cap,
+            profile_id,
+            string::utf8(b"Big Deal"),
+            5_000_000_000, // $5000.00
+            deal::stage_qualified(),
+            ctx
+        );
+
+        assert!(deal::deal_profile_id(&d) == profile_id);
+        assert!(deal::deal_amount_usd(&d) == 5_000_000_000);
+        assert!(deal::deal_stage(&d) == deal::stage_qualified());
+        assert!(deal::deal_version(&d) == 0);
+        assert!(!deal::deal_is_archived(&d));
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(admin_cap);
+        test_utils::destroy(d);
+        ts::end(scenario);
+    }
+
+    #[test]
+    fun test_deal_update() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+
+        let profile_id = object::id_from_address(@0x111);
+        let mut d = deal::create_deal(&config, &workspace, &admin_cap, profile_id, string::utf8(b"Old Title"), 1_000_000, deal::stage_lead(), ctx);
+
+        deal::update_deal(&config, &workspace, &admin_cap, &mut d, 0, string::utf8(b"New Title"), 2_000_000, deal::stage_proposal(), ctx);
+
+        assert!(deal::deal_version(&d) == 1);
+        assert!(deal::deal_amount_usd(&d) == 2_000_000);
+        assert!(deal::deal_stage(&d) == deal::stage_proposal());
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(admin_cap);
+        test_utils::destroy(d);
+        ts::end(scenario);
+    }
+
+    #[test]
+    fun test_deal_archive() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+
+        let profile_id = object::id_from_address(@0x111);
+        let mut d = deal::create_deal(&config, &workspace, &admin_cap, profile_id, string::utf8(b"Deal"), 1_000_000, deal::stage_lead(), ctx);
+
+        deal::archive_deal(&config, &workspace, &admin_cap, &mut d, 0, ctx);
+
+        assert!(deal::deal_is_archived(&d));
+        assert!(deal::deal_version(&d) == 1);
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(admin_cap);
+        test_utils::destroy(d);
+        ts::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = deal::EVersionConflict)]
+    fun test_deal_version_conflict() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+
+        let profile_id = object::id_from_address(@0x111);
+        let mut d = deal::create_deal(&config, &workspace, &admin_cap, profile_id, string::utf8(b"Deal"), 1_000_000, deal::stage_lead(), ctx);
+
+        deal::update_deal(&config, &workspace, &admin_cap, &mut d, 99, string::utf8(b"New"), 2_000_000, deal::stage_won(), ctx);
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(admin_cap);
+        test_utils::destroy(d);
+        ts::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = deal::EInvalidStage)]
+    fun test_deal_invalid_stage() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+
+        let profile_id = object::id_from_address(@0x111);
+        let d = deal::create_deal(&config, &workspace, &admin_cap, profile_id, string::utf8(b"Deal"), 1_000_000, 99, ctx);
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(admin_cap);
+        test_utils::destroy(d);
+        ts::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = deal::EAlreadyArchived)]
+    fun test_deal_double_archive_fails() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+
+        let profile_id = object::id_from_address(@0x111);
+        let mut d = deal::create_deal(&config, &workspace, &admin_cap, profile_id, string::utf8(b"Deal"), 1_000_000, deal::stage_lead(), ctx);
+
+        deal::archive_deal(&config, &workspace, &admin_cap, &mut d, 0, ctx);
+        deal::archive_deal(&config, &workspace, &admin_cap, &mut d, 1, ctx);
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(admin_cap);
+        test_utils::destroy(d);
         ts::end(scenario);
     }
 }

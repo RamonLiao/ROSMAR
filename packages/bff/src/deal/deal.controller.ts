@@ -19,12 +19,14 @@ export class CreateDealDto {
   title: string;
   amountUsd: number;
   stage: string;
+  notes?: string;
 }
 
 export class UpdateDealDto {
   title?: string;
   amountUsd?: number;
   stage?: string;
+  notes?: string;
   expectedVersion: number;
 }
 
@@ -98,5 +100,25 @@ export class DealController {
       stage,
       expectedVersion,
     );
+  }
+
+  @Put(':id/archive')
+  @RequirePermissions(WRITE)
+  async archive(
+    @User() user: import('../auth/auth.service').UserPayload,
+    @Param('id') id: string,
+    @Body('expectedVersion') expectedVersion: number,
+  ) {
+    return this.dealService.archive(
+      user.workspaceId,
+      user.address,
+      id,
+      expectedVersion,
+    );
+  }
+
+  @Get(':id/audit')
+  async getAuditLogs(@Param('id') id: string) {
+    return this.dealService.getAuditLogs(id);
   }
 }

@@ -1,8 +1,8 @@
-// @ts-nocheck
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../../../prisma/prisma.service';
 import { SuiClientService } from '../../../blockchain/sui.client';
 import { Transaction } from '@mysten/sui/transactions';
-import { ConfigService } from '@nestjs/config';
 
 export interface AirdropTokenConfig {
   coinType: string; // e.g., '0x2::sui::SUI' or custom token
@@ -11,24 +11,37 @@ export interface AirdropTokenConfig {
 
 @Injectable()
 export class AirdropTokenAction {
+  private readonly logger = new Logger(AirdropTokenAction.name);
+  private isDryRun: boolean;
+
   constructor(
     private readonly suiClient: SuiClientService,
     private readonly configService: ConfigService,
-  ) {}
+    private readonly prisma: PrismaService,
+  ) {
+    this.isDryRun = this.configService.get<string>('SUI_DRY_RUN', 'true') === 'true';
+  }
 
   async execute(profileId: string, config: AirdropTokenConfig): Promise<void> {
-    // TODO: Build and execute token transfer transaction
-    console.log(`Airdropping ${config.amount} of ${config.coinType} to profile ${profileId}`);
+    const profile = await this.prisma.profile.findUniqueOrThrow({
+      where: { id: profileId },
+      select: { primaryAddress: true },
+    });
 
-    // In production:
-    // const tx = new Transaction();
-    //
-    // // Split coin from treasury
-    // const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(config.amount)]);
-    //
-    // // Transfer to profile address
-    // tx.transferObjects([coin], tx.pure.address(profileId));
-    //
-    // await this.suiClient.executeTransaction(tx);
+    if (this.isDryRun) {
+      this.logger.log(
+        `[DRY-RUN] Airdrop ${config.amount} of ${config.coinType} to ${profile.primaryAddress}`,
+      );
+      return;
+    }
+
+    const tx = new Transaction();
+    const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(config.amount)]);
+    tx.transferObjects([coin], tx.pure.address(profile.primaryAddress));
+
+    const result = await this.suiClient.executeTransaction(tx);
+    this.logger.log(
+      `Airdrop TX executed: ${result.digest} → ${profile.primaryAddress}`,
+    );
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -14,17 +14,21 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2 } from "lucide-react";
 
-interface Condition {
+export interface Condition {
   id: string;
   field: string;
   operator: string;
   value: string;
 }
 
-interface RuleGroup {
+export interface RuleGroup {
   id: string;
   logic: "AND" | "OR";
   conditions: Condition[];
+}
+
+export interface SegmentRules {
+  groups: RuleGroup[];
 }
 
 const FIELDS = [
@@ -42,92 +46,84 @@ const OPERATORS = [
   { value: "contains", label: "Contains" },
 ];
 
-export function RuleBuilder() {
-  const [groups, setGroups] = useState<RuleGroup[]>([
-    {
-      id: "1",
-      logic: "AND",
-      conditions: [
-        { id: "1-1", field: "", operator: "", value: "" },
-      ],
-    },
-  ]);
+interface RuleBuilderProps {
+  value: RuleGroup[];
+  onChange: (groups: RuleGroup[]) => void;
+}
+
+export function RuleBuilder({ value: groups, onChange }: RuleBuilderProps) {
+  const update = useCallback(
+    (fn: (prev: RuleGroup[]) => RuleGroup[]) => onChange(fn(groups)),
+    [groups, onChange],
+  );
 
   const addGroup = () => {
-    setGroups([
-      ...groups,
+    update((prev) => [
+      ...prev,
       {
         id: Date.now().toString(),
-        logic: "AND",
+        logic: "AND" as const,
         conditions: [{ id: `${Date.now()}-1`, field: "", operator: "", value: "" }],
       },
     ]);
   };
 
   const removeGroup = (groupId: string) => {
-    setGroups(groups.filter((g) => g.id !== groupId));
+    update((prev) => prev.filter((g) => g.id !== groupId));
   };
 
   const addCondition = (groupId: string) => {
-    setGroups(
-      groups.map((group) =>
+    update((prev) =>
+      prev.map((group) =>
         group.id === groupId
           ? {
               ...group,
               conditions: [
                 ...group.conditions,
-                {
-                  id: `${groupId}-${Date.now()}`,
-                  field: "",
-                  operator: "",
-                  value: "",
-                },
+                { id: `${groupId}-${Date.now()}`, field: "", operator: "", value: "" },
               ],
             }
-          : group
-      )
+          : group,
+      ),
     );
   };
 
   const removeCondition = (groupId: string, conditionId: string) => {
-    setGroups(
-      groups.map((group) =>
+    update((prev) =>
+      prev.map((group) =>
         group.id === groupId
-          ? {
-              ...group,
-              conditions: group.conditions.filter((c) => c.id !== conditionId),
-            }
-          : group
-      )
+          ? { ...group, conditions: group.conditions.filter((c) => c.id !== conditionId) }
+          : group,
+      ),
     );
   };
 
   const updateCondition = (
     groupId: string,
     conditionId: string,
-    updates: Partial<Condition>
+    updates: Partial<Condition>,
   ) => {
-    setGroups(
-      groups.map((group) =>
+    update((prev) =>
+      prev.map((group) =>
         group.id === groupId
           ? {
               ...group,
               conditions: group.conditions.map((c) =>
-                c.id === conditionId ? { ...c, ...updates } : c
+                c.id === conditionId ? { ...c, ...updates } : c,
               ),
             }
-          : group
-      )
+          : group,
+      ),
     );
   };
 
   const toggleGroupLogic = (groupId: string) => {
-    setGroups(
-      groups.map((group) =>
+    update((prev) =>
+      prev.map((group) =>
         group.id === groupId
           ? { ...group, logic: group.logic === "AND" ? "OR" : "AND" }
-          : group
-      )
+          : group,
+      ),
     );
   };
 
@@ -159,12 +155,12 @@ export function RuleBuilder() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            {group.conditions.map((condition, condIndex) => (
+            {group.conditions.map((condition) => (
               <div key={condition.id} className="flex items-center gap-2">
                 <Select
                   value={condition.field}
-                  onValueChange={(value) =>
-                    updateCondition(group.id, condition.id, { field: value })
+                  onValueChange={(v) =>
+                    updateCondition(group.id, condition.id, { field: v })
                   }
                 >
                   <SelectTrigger className="w-[180px]">
@@ -181,8 +177,8 @@ export function RuleBuilder() {
 
                 <Select
                   value={condition.operator}
-                  onValueChange={(value) =>
-                    updateCondition(group.id, condition.id, { operator: value })
+                  onValueChange={(v) =>
+                    updateCondition(group.id, condition.id, { operator: v })
                   }
                 >
                   <SelectTrigger className="w-[180px]">
@@ -201,9 +197,7 @@ export function RuleBuilder() {
                   placeholder="Value"
                   value={condition.value}
                   onChange={(e) =>
-                    updateCondition(group.id, condition.id, {
-                      value: e.target.value,
-                    })
+                    updateCondition(group.id, condition.id, { value: e.target.value })
                   }
                   className="flex-1"
                 />
@@ -245,10 +239,28 @@ export function RuleBuilder() {
           <p className="text-sm text-muted-foreground">
             {groups.length === 0
               ? "No rules defined"
-              : `${groups.length} rule group(s) defined`}
+              : `${groups.length} rule group(s) with ${groups.reduce((sum, g) => sum + g.conditions.filter((c) => c.field && c.operator).length, 0)} active condition(s)`}
           </p>
         </CardContent>
       </Card>
     </div>
   );
+}
+
+/** Check if rules JSON has any meaningful content */
+export function hasRules(rules: unknown): boolean {
+  if (!rules || typeof rules !== "object") return false;
+  const r = rules as { groups?: unknown[] };
+  return Array.isArray(r.groups) && r.groups.length > 0;
+}
+
+/** Default empty rule group for new segments */
+export function defaultRuleGroups(): RuleGroup[] {
+  return [
+    {
+      id: "1",
+      logic: "AND",
+      conditions: [{ id: "1-1", field: "", operator: "", value: "" }],
+    },
+  ];
 }

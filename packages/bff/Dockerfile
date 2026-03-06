@@ -18,22 +18,25 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/bff packages/bff
 
 WORKDIR /app/packages/bff
-RUN npx prisma generate
+COPY packages/bff/prisma.config.ts ./prisma.config.ts
+COPY packages/bff/prisma ./prisma
+RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npx prisma generate
 RUN pnpm build
 
 # ---- Stage 3: Runtime ----
 FROM node:20-slim AS runtime
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
-COPY --from=build /app/packages/bff/dist ./dist
-COPY --from=build /app/packages/bff/node_modules ./node_modules
-COPY --from=build /app/node_modules/.pnpm node_modules/.pnpm
-COPY --from=build /app/node_modules/.prisma node_modules/.prisma
-COPY --from=build /app/node_modules/@prisma node_modules/@prisma
-COPY --from=build /app/packages/bff/package.json ./
+# Copy hoisted root node_modules + bff-specific node_modules
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/packages/bff/node_modules ./packages/bff/node_modules
+COPY --from=build /app/packages/bff/dist ./packages/bff/dist
+COPY --from=build /app/packages/bff/package.json ./packages/bff/package.json
+COPY --from=build /app/packages/bff/prisma.config.ts ./packages/bff/prisma.config.ts
+COPY --from=build /app/packages/bff/prisma ./packages/bff/prisma
 
 ENV NODE_ENV=production
+WORKDIR /app/packages/bff
 EXPOSE 3001
 
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main"]

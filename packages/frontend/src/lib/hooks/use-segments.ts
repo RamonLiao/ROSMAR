@@ -14,17 +14,18 @@ export interface Segment {
   [key: string]: unknown;
 }
 
-export function useSegments(limit?: number, offset?: number) {
+export function useSegments(limit?: number, offset?: number, search?: string) {
   return useQuery({
-    queryKey: ['segments', { limit, offset }],
+    queryKey: ['segments', { limit, offset, search }],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (limit) params.set('limit', limit.toString());
       if (offset) params.set('offset', offset.toString());
+      if (search) params.set('search', search);
 
       const query = params.toString();
       return apiClient.get<{ segments: Segment[]; total: number }>(
-        `/segments${query ? `?${query}` : ''}`
+        `/segments${query ? `?${query}` : ''}`,
       );
     },
   });
@@ -58,6 +59,18 @@ export function useUpdateSegment() {
       apiClient.put<{ success: boolean; txDigest: string }>(`/segments/${id}`, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['segment', id] });
+      queryClient.invalidateQueries({ queryKey: ['segments'] });
+    },
+  });
+}
+
+export function useDeleteSegment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient.delete<{ success: boolean }>(`/segments/${id}`),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['segments'] });
     },
   });

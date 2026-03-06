@@ -1,7 +1,5 @@
-// @ts-nocheck
-import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Pool } from 'pg';
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
 import { SendTelegramAction } from './actions/send-telegram.action';
 import { SendDiscordAction } from './actions/send-discord.action';
 import { AirdropTokenAction } from './actions/airdrop-token.action';
@@ -14,25 +12,19 @@ export interface WorkflowStep {
 
 @Injectable()
 export class WorkflowEngine {
-  private pgPool: Pool;
-  private actions: Map<string, any>;
+  private readonly logger = new Logger(WorkflowEngine.name);
+  private actions: Map<string, { execute(profileId: string, config: any): Promise<void> }>;
 
   constructor(
-    private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
     private readonly sendTelegramAction: SendTelegramAction,
     private readonly sendDiscordAction: SendDiscordAction,
     private readonly airdropTokenAction: AirdropTokenAction,
   ) {
-    this.pgPool = new Pool({
-      connectionString: this.configService.get<string>('DATABASE_URL'),
-    });
-
-    // Register action handlers
-    this.actions = new Map([
-      ['send_telegram', this.sendTelegramAction],
-      ['send_discord', this.sendDiscordAction],
-      ['airdrop_token', this.airdropTokenAction],
-    ]);
+    this.actions = new Map();
+    this.actions.set('send_telegram', this.sendTelegramAction);
+    this.actions.set('send_discord', this.sendDiscordAction);
+    this.actions.set('airdrop_token', this.airdropTokenAction);
   }
 
   async startWorkflow(
@@ -40,14 +32,13 @@ export class WorkflowEngine {
     workflowSteps: WorkflowStep[],
     profileIds: string[],
   ): Promise<void> {
-    // Create workflow executions for each profile
+    // Create workflow executions for each profile (upsert to handle retries)
     for (const profileId of profileIds) {
-      await this.pgPool.query(
-        `INSERT INTO workflow_executions (
-          campaign_id, profile_id, current_step, status, created_at, updated_at
-        ) VALUES ($1, $2, 0, 'pending', now(), now())`,
-        [campaignId, profileId],
-      );
+      await this.prisma.workflowExecution.upsert({
+        where: { campaignId_profileId: { campaignId, profileId } },
+        create: { campaignId, profileId, currentStep: 0, status: 'pending' },
+        update: { currentStep: 0, status: 'pending', error: null, completedAt: null },
+      });
     }
 
     // Trigger first step for all profiles
@@ -61,27 +52,19 @@ export class WorkflowEngine {
     profileId: string,
     workflowSteps: WorkflowStep[],
   ): Promise<void> {
-    const execution = await this.pgPool.query(
-      `SELECT * FROM workflow_executions
-       WHERE campaign_id = $1 AND profile_id = $2`,
-      [campaignId, profileId],
-    );
+    const execution = await this.prisma.workflowExecution.findUnique({
+      where: { campaignId_profileId: { campaignId, profileId } },
+    });
 
-    if (execution.rows.length === 0) {
-      return;
-    }
+    if (!execution) return;
 
-    const execData = execution.rows[0];
-    const currentStep = execData.current_step;
+    const currentStep = execution.currentStep;
 
     if (currentStep >= workflowSteps.length) {
-      // Workflow complete
-      await this.pgPool.query(
-        `UPDATE workflow_executions
-         SET status = 'completed', completed_at = now()
-         WHERE campaign_id = $1 AND profile_id = $2`,
-        [campaignId, profileId],
-      );
+      await this.prisma.workflowExecution.update({
+        where: { id: execution.id },
+        data: { status: 'completed', completedAt: new Date() },
+      });
       return;
     }
 
@@ -89,36 +72,34 @@ export class WorkflowEngine {
     const action = this.actions.get(step.type);
 
     if (!action) {
-      console.error(`Unknown action type: ${step.type}`);
-      await this.pgPool.query(
-        `UPDATE workflow_executions
-         SET status = 'failed', error = $3
-         WHERE campaign_id = $1 AND profile_id = $2`,
-        [campaignId, profileId, `Unknown action: ${step.type}`],
-      );
+      const errorMsg = `Unknown action: ${step.type}`;
+      this.logger.error(errorMsg);
+      await this.prisma.workflowExecution.update({
+        where: { id: execution.id },
+        data: { status: 'failed', error: errorMsg },
+      });
       return;
     }
 
     try {
-      // Execute action
       await action.execute(profileId, step.config);
 
-      // Log action execution
-      await this.pgPool.query(
-        `INSERT INTO workflow_action_logs (
-          campaign_id, profile_id, step_index, action_type,
-          status, executed_at
-        ) VALUES ($1, $2, $3, $4, 'success', now())`,
-        [campaignId, profileId, currentStep, step.type],
-      );
+      // Log successful action
+      await this.prisma.workflowActionLog.create({
+        data: {
+          campaignId,
+          profileId,
+          stepIndex: currentStep,
+          actionType: step.type,
+          status: 'success',
+        },
+      });
 
-      // Move to next step
-      await this.pgPool.query(
-        `UPDATE workflow_executions
-         SET current_step = $3, updated_at = now()
-         WHERE campaign_id = $1 AND profile_id = $2`,
-        [campaignId, profileId, currentStep + 1],
-      );
+      // Advance to next step
+      await this.prisma.workflowExecution.update({
+        where: { id: execution.id },
+        data: { currentStep: currentStep + 1 },
+      });
 
       // Schedule next step (with delay if configured)
       const delay = step.delay || 0;
@@ -129,23 +110,24 @@ export class WorkflowEngine {
       } else {
         await this.executeNextStep(campaignId, profileId, workflowSteps);
       }
-    } catch (error) {
-      console.error(`Action execution failed:`, error);
+    } catch (error: any) {
+      this.logger.error(`Action execution failed: ${error.message}`, error.stack);
 
-      await this.pgPool.query(
-        `INSERT INTO workflow_action_logs (
-          campaign_id, profile_id, step_index, action_type,
-          status, error, executed_at
-        ) VALUES ($1, $2, $3, $4, 'failed', $5, now())`,
-        [campaignId, profileId, currentStep, step.type, error.message],
-      );
+      await this.prisma.workflowActionLog.create({
+        data: {
+          campaignId,
+          profileId,
+          stepIndex: currentStep,
+          actionType: step.type,
+          status: 'failed',
+          error: error.message,
+        },
+      });
 
-      await this.pgPool.query(
-        `UPDATE workflow_executions
-         SET status = 'failed', error = $3
-         WHERE campaign_id = $1 AND profile_id = $2`,
-        [campaignId, profileId, error.message],
-      );
+      await this.prisma.workflowExecution.update({
+        where: { id: execution.id },
+        data: { status: 'failed', error: error.message },
+      });
     }
   }
 
@@ -154,12 +136,10 @@ export class WorkflowEngine {
     profileId: string,
     workflowSteps: WorkflowStep[],
   ): Promise<void> {
-    await this.pgPool.query(
-      `UPDATE workflow_executions
-       SET status = 'pending', error = NULL
-       WHERE campaign_id = $1 AND profile_id = $2`,
-      [campaignId, profileId],
-    );
+    await this.prisma.workflowExecution.update({
+      where: { campaignId_profileId: { campaignId, profileId } },
+      data: { status: 'pending', error: null },
+    });
 
     await this.executeNextStep(campaignId, profileId, workflowSteps);
   }

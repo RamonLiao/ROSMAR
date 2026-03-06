@@ -10,6 +10,7 @@ model Workspace {
   id            String   @id @default(uuid())
   suiObjectId   String?  @map("sui_object_id")
   name          String
+  description   String?
   ownerAddress  String   @map("owner_address")
   createdAt     DateTime @default(now()) @map("created_at")
 
@@ -19,6 +20,11 @@ model Workspace {
   deals         Deal[]
   segments      Segment[]
   campaigns     Campaign[]
+  vaultSecrets  VaultSecret[]
+  messages      Message[]
+  notifications Notification[]
+  tickets       Ticket[]
+  auditLogs     AuditLog[]
 
   @@map("workspaces")
 }
@@ -37,22 +43,30 @@ model WorkspaceMember {
 }
 
 model Profile {
-  id              String   @id
-  workspaceId     String   @map("workspace_id")
-  primaryAddress  String   @map("primary_address")
-  suinsName       String?  @map("suins_name")
-  tags            String[] @default([])
-  tier            Int      @default(0)
-  engagementScore Int      @default(0) @map("engagement_score")
-  version         Int      @default(1)
-  isArchived      Boolean  @default(false) @map("is_archived")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id                String   @id
+  workspaceId       String   @map("workspace_id")
+  primaryAddress    String   @map("primary_address")
+  suinsName         String?  @map("suins_name")
+  email             String?
+  phone             String?
+  telegramChatId    String?  @map("telegram_chat_id")
+  discordWebhookUrl String?  @map("discord_webhook_url")
+  tags              String[] @default([])
+  tier              Int      @default(0)
+  engagementScore   Int      @default(0) @map("engagement_score")
+  version           Int      @default(1)
+  isArchived        Boolean  @default(false) @map("is_archived")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
-  workspace       Workspace @relation(fields: [workspaceId], references: [id])
-  organizations   ProfileOrganization[]
+  workspace          Workspace @relation(fields: [workspaceId], references: [id])
+  organizations      ProfileOrganization[]
   segmentMemberships SegmentMembership[]
-  deals           Deal[]
+  deals              Deal[]
+  vaultSecrets       VaultSecret[]
+  messages           Message[]
+  workflowExecutions WorkflowExecution[]
+  workflowActionLogs WorkflowActionLog[]
 
   @@map("profiles")
 }
@@ -74,15 +88,19 @@ model Organization {
 }
 
 model Deal {
-  id          String   @id
-  workspaceId String   @map("workspace_id")
-  profileId   String   @map("profile_id")
+  id          String    @id
+  workspaceId String    @map("workspace_id")
+  profileId   String    @map("profile_id")
+  suiObjectId String?   @map("sui_object_id")
   title       String
-  amountUsd   Decimal  @map("amount_usd") @db.Decimal(18, 2)
+  amountUsd   Decimal   @map("amount_usd") @db.Decimal(18, 2)
   stage       String
-  version     Int      @default(1)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  notes       String?
+  version     Int       @default(1)
+  isArchived  Boolean   @default(false) @map("is_archived")
+  archivedAt  DateTime? @map("archived_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
   profile     Profile   @relation(fields: [profileId], references: [id])
@@ -133,8 +151,10 @@ model Campaign {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  workspace     Workspace @relation(fields: [workspaceId], references: [id])
-  segment       Segment   @relation(fields: [segmentId], references: [id])
+  workspace          Workspace @relation(fields: [workspaceId], references: [id])
+  segment            Segment   @relation(fields: [segmentId], references: [id])
+  workflowExecutions WorkflowExecution[]
+  workflowActionLogs WorkflowActionLog[]
 
   @@map("campaigns")
 }
@@ -149,4 +169,140 @@ model SegmentMembership {
 
   @@id([segmentId, profileId])
   @@map("segment_memberships")
+}
+
+// ─── P2 Models ───────────────────────────────────
+
+model VaultSecret {
+  id           String   @id @default(uuid())
+  workspaceId  String   @map("workspace_id")
+  profileId    String   @map("profile_id")
+  key          String
+  walrusBlobId String   @map("walrus_blob_id")
+  version      Int      @default(1)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  profile   Profile   @relation(fields: [profileId], references: [id])
+
+  @@unique([workspaceId, profileId, key])
+  @@map("vault_secrets")
+}
+
+model WorkflowExecution {
+  id          String    @id @default(uuid())
+  campaignId  String    @map("campaign_id")
+  profileId   String    @map("profile_id")
+  currentStep Int       @default(0) @map("current_step")
+  status      String    @default("pending")
+  error       String?
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  profile  Profile  @relation(fields: [profileId], references: [id])
+
+  @@unique([campaignId, profileId])
+  @@map("workflow_executions")
+}
+
+model WorkflowActionLog {
+  id         String   @id @default(uuid())
+  campaignId String   @map("campaign_id")
+  profileId  String   @map("profile_id")
+  stepIndex  Int      @map("step_index")
+  actionType String   @map("action_type")
+  status     String   @default("pending")
+  error      String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  profile  Profile  @relation(fields: [profileId], references: [id])
+
+  @@map("workflow_action_logs")
+}
+
+model Message {
+  id          String    @id @default(uuid())
+  workspaceId String    @map("workspace_id")
+  profileId   String    @map("profile_id")
+  channel     String
+  subject     String?
+  body        String
+  status      String    @default("pending")
+  externalId  String?   @map("external_id")
+  sentAt      DateTime? @map("sent_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  profile   Profile   @relation(fields: [profileId], references: [id])
+
+  @@map("messages")
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  workspaceId String   @map("workspace_id")
+  userId      String   @map("user_id")
+  type        String
+  title       String
+  body        String?
+  metadata    Json?
+  isRead      Boolean  @default(false) @map("is_read")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, userId, isRead])
+  @@map("notifications")
+}
+
+model Ticket {
+  id          String    @id @default(uuid())
+  workspaceId String    @map("workspace_id")
+  title       String
+  description String?
+  status      String    @default("open")
+  priority    String    @default("medium")
+  assignee    String?
+  slaDeadline DateTime? @map("sla_deadline")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@map("tickets")
+}
+
+model PasskeyCredential {
+  id           String   @id @default(uuid())
+  address      String
+  credentialId String   @unique @map("credential_id")
+  publicKey    Bytes    @map("public_key")
+  counter      Int      @default(0)
+  transports   String[] @default([])
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([address])
+  @@map("passkey_credentials")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  workspaceId String   @map("workspace_id")
+  actor       String
+  action      Int
+  objectType  Int      @map("object_type")
+  objectId    String   @map("object_id")
+  txDigest    String   @map("tx_digest")
+  timestamp   DateTime
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, objectType, objectId])
+  @@index([txDigest])
+  @@map("audit_logs")
 }

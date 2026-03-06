@@ -1,6 +1,7 @@
-import { Controller, Post, Body, Res, HttpCode, HttpStatus } from '@nestjs/common';
-import type { Response } from 'express';
+import { Controller, Post, Get, Body, Req, Res, HttpCode, HttpStatus, UseGuards, UnauthorizedException } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
+import { SessionGuard } from './guards/session.guard';
 import { IsString, IsNotEmpty } from 'class-validator';
 
 export class WalletLoginDto {
@@ -51,9 +52,21 @@ export class RefreshTokenDto {
   refreshToken: string;
 }
 
+export class SwitchWorkspaceDto {
+  @IsString()
+  @IsNotEmpty()
+  workspaceId: string;
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  @Get('challenge')
+  async getChallenge() {
+    const challenge = this.authService.generateChallenge();
+    return { challenge };
+  }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -118,14 +131,74 @@ export class AuthController {
     };
   }
 
-  @Post('passkey')
+  // ─── Passkey Registration (requires auth) ─────────────
+
+  @Post('passkey/register/options')
+  @UseGuards(SessionGuard)
   @HttpCode(HttpStatus.OK)
-  async passkeyLogin(
-    @Body() dto: PasskeyDto,
+  async passkeyRegisterOptions(@Req() request: Request) {
+    const user = (request as any).user;
+    return this.authService.generatePasskeyRegistrationOptions(user.address);
+  }
+
+  @Post('passkey/register/verify')
+  @UseGuards(SessionGuard)
+  @HttpCode(HttpStatus.OK)
+  async passkeyRegisterVerify(
+    @Req() request: Request,
+    @Body() body: any,
+  ) {
+    const user = (request as any).user;
+    return this.authService.verifyPasskeyRegistration(user.address, body);
+  }
+
+  // ─── Passkey Login (public) ──────────────────────────
+
+  @Post('passkey/login/options')
+  @HttpCode(HttpStatus.OK)
+  async passkeyLoginOptions() {
+    return this.authService.generatePasskeyAuthenticationOptions();
+  }
+
+  @Post('passkey/login/verify')
+  @HttpCode(HttpStatus.OK)
+  async passkeyLoginVerify(
+    @Body() body: any,
     @Res({ passthrough: true }) response: Response,
   ) {
     const { accessToken, refreshToken, user } =
-      await this.authService.passkeyLogin(dto);
+      await this.authService.verifyPasskeyAuthentication(body);
+
+    response.cookie('access_token', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000,
+    });
+
+    response.cookie('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return { success: true, user };
+  }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  async refresh(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    // Read refresh token from httpOnly cookie (not from body)
+    const token = request.cookies?.refresh_token;
+    if (!token) {
+      throw new UnauthorizedException('No refresh token');
+    }
+
+    const { accessToken, refreshToken, user } = await this.authService.refresh(token);
 
     response.cookie('access_token', accessToken, {
       httpOnly: true,
@@ -147,15 +220,17 @@ export class AuthController {
     };
   }
 
-  @Post('refresh')
+  @Post('switch-workspace')
+  @UseGuards(SessionGuard)
   @HttpCode(HttpStatus.OK)
-  async refresh(
-    @Body() dto: RefreshTokenDto,
+  async switchWorkspace(
+    @Body() dto: SwitchWorkspaceDto,
+    @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const { accessToken, refreshToken } = await this.authService.refresh(
-      dto.refreshToken,
-    );
+    const user = (request as any).user;
+    const { accessToken, refreshToken, user: updatedUser } =
+      await this.authService.switchWorkspace(user.address, dto.workspaceId);
 
     response.cookie('access_token', accessToken, {
       httpOnly: true,
@@ -171,16 +246,19 @@ export class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    return {
-      success: true,
-    };
+    return { success: true, user: updatedUser };
   }
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   async logout(@Res({ passthrough: true }) response: Response) {
-    response.clearCookie('access_token');
-    response.clearCookie('refresh_token');
+    const cookieOpts = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict' as const,
+    };
+    response.clearCookie('access_token', cookieOpts);
+    response.clearCookie('refresh_token', cookieOpts);
 
     return {
       success: true,

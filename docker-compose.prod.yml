@@ -1,0 +1,161 @@
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    networks:
+      - internal
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    networks:
+      - internal
+
+  bff:
+    build:
+      context: .
+      dockerfile: packages/bff/Dockerfile
+    restart: unless-stopped
+    environment:
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+
+      # Sui Network
+      SUI_RPC_URL: ${SUI_RPC_URL}
+      SUI_NETWORK: ${SUI_NETWORK}
+      SUI_PRIVATE_KEY: ${SUI_PRIVATE_KEY}
+      SUI_DRY_RUN: ${SUI_DRY_RUN:-false}
+
+      # Sui Package IDs
+      GLOBAL_CONFIG_ID: ${GLOBAL_CONFIG_ID}
+      ADMIN_CAP_ID: ${ADMIN_CAP_ID}
+      CRM_CORE_PACKAGE_ID: ${CRM_CORE_PACKAGE_ID}
+      CRM_DATA_PACKAGE_ID: ${CRM_DATA_PACKAGE_ID}
+      CRM_VAULT_PACKAGE_ID: ${CRM_VAULT_PACKAGE_ID}
+      CRM_ACTION_PACKAGE_ID: ${CRM_ACTION_PACKAGE_ID}
+
+      # Auth
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-7d}
+
+      # Google OAuth (ZkLogin)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+
+      # Enoki
+      ENOKI_API_KEY: ${ENOKI_API_KEY}
+      ENOKI_SECRET_KEY: ${ENOKI_SECRET_KEY}
+      ENOKI_API_URL: ${ENOKI_API_URL:-https://api.enoki.mystenlabs.com}
+
+      # Rust Core gRPC
+      CORE_GRPC_URL: ${CORE_GRPC_URL:-localhost:50051}
+
+      # Node
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '1'
+          memory: 512M
+    networks:
+      - internal
+      - web
+
+  frontend:
+    build:
+      context: .
+      dockerfile: packages/frontend/Dockerfile
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_BFF_URL: ${NEXT_PUBLIC_BFF_URL}
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+    depends_on:
+      bff:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    networks:
+      - web
+
+volumes:
+  pg_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  internal:
+    driver: bridge
+    internal: true
+  web:
+    driver: bridge

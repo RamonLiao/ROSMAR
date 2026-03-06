@@ -11,6 +11,7 @@
     "^@mysten/sui/jsonRpc$": "<rootDir>/__mocks__/@mysten/sui/jsonRpc.ts",
     "^@mysten/sui/transactions$": "<rootDir>/__mocks__/@mysten/sui/transactions.ts",
     "^@mysten/sui/utils$": "<rootDir>/__mocks__/@mysten/sui/utils.ts",
+    "^@mysten/sui/verify$": "<rootDir>/__mocks__/@mysten/sui/verify.ts",
     "^@mysten/enoki$": "<rootDir>/__mocks__/@mysten/enoki.ts",
     "^src/(.*)$": "<rootDir>/../src/$1"
   }

@@ -90,19 +90,48 @@ export class OrganizationService {
     workspaceId: string,
     limit: number,
     offset: number,
+    search?: string,
   ): Promise<any> {
+    const where: any = { workspaceId };
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { domain: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
     const [organizations, total] = await Promise.all([
       this.prisma.organization.findMany({
-        where: { workspaceId },
+        where,
         take: limit,
         skip: offset,
         orderBy: { createdAt: 'desc' },
         include: { _count: { select: { profiles: true } } },
       }),
-      this.prisma.organization.count({ where: { workspaceId } }),
+      this.prisma.organization.count({ where }),
     ]);
 
     return { organizations, total };
+  }
+
+  async getOrganizationProfiles(organizationId: string): Promise<any> {
+    const links = await this.prisma.profileOrganization.findMany({
+      where: { organizationId },
+      include: { profile: true },
+    });
+    return links.map((l) => l.profile);
+  }
+
+  async unlinkProfile(organizationId: string, profileId: string): Promise<any> {
+    await this.prisma.profileOrganization.delete({
+      where: {
+        profileId_organizationId: {
+          profileId,
+          organizationId,
+        },
+      },
+    });
+    return { success: true };
   }
 
   async update(

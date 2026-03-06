@@ -97,20 +97,35 @@ export class ProfileService {
     workspaceId: string,
     limit: number,
     offset: number,
+    search?: string,
   ): Promise<any> {
+    const where: any = { workspaceId, isArchived: false };
+    if (search) {
+      where.OR = [
+        { primaryAddress: { contains: search, mode: 'insensitive' } },
+        { suinsName: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
     const [profiles, total] = await Promise.all([
       this.prisma.profile.findMany({
-        where: { workspaceId, isArchived: false },
+        where,
         take: limit,
         skip: offset,
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.profile.count({
-        where: { workspaceId, isArchived: false },
-      }),
+      this.prisma.profile.count({ where }),
     ]);
 
     return { profiles, total };
+  }
+
+  async getProfileOrganizations(profileId: string): Promise<any> {
+    const links = await this.prisma.profileOrganization.findMany({
+      where: { profileId },
+      include: { organization: true },
+    });
+    return links.map((l) => l.organization);
   }
 
   async updateTags(

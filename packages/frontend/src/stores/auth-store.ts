@@ -4,10 +4,8 @@ import { persist } from 'zustand/middleware';
 interface AuthState {
   isAuthenticated: boolean;
   userAddress: string | null;
-  jwt: string | null;
-  login: (address: string, jwt?: string) => void;
+  login: (address: string) => void;
   logout: () => void;
-  setJwt: (jwt: string) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -15,10 +13,8 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       isAuthenticated: false,
       userAddress: null,
-      jwt: null,
-      login: (address, jwt) => set({ isAuthenticated: true, userAddress: address, jwt: jwt || null }),
-      logout: () => set({ isAuthenticated: false, userAddress: null, jwt: null }),
-      setJwt: (jwt) => set({ jwt }),
+      login: (address) => set({ isAuthenticated: true, userAddress: address }),
+      logout: () => set({ isAuthenticated: false, userAddress: null }),
     }),
     {
       name: 'auth-storage',

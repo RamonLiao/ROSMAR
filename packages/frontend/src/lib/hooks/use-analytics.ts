@@ -12,6 +12,12 @@ interface ActivityCell {
   activity: number;
 }
 
+interface PipelineStage {
+  stage: string;
+  count: number;
+  value: number;
+}
+
 export function useScoreDistribution() {
   return useQuery({
     queryKey: ['analytics', 'score-distribution'],
@@ -23,5 +29,12 @@ export function useActivityHeatmap() {
   return useQuery({
     queryKey: ['analytics', 'activity-heatmap'],
     queryFn: () => apiClient.get<ActivityCell[]>('/analytics/activity-heatmap'),
+  });
+}
+
+export function usePipelineSummary() {
+  return useQuery({
+    queryKey: ['analytics', 'pipeline-summary'],
+    queryFn: () => apiClient.get<PipelineStage[]>('/analytics/pipeline-summary'),
   });
 }

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Param,
   Body,
@@ -12,12 +13,22 @@ import { SessionGuard } from '../auth/guards/session.guard';
 import { RbacGuard, WRITE, MANAGE } from '../auth/guards/rbac.guard';
 import { RequirePermissions } from '../auth/decorators/permissions';
 import { CurrentUser } from '../auth/decorators/current-user';
-import { IsString, IsNotEmpty, IsNumber } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
 
 export class CreateWorkspaceDto {
   @IsString()
   @IsNotEmpty()
   name: string;
+}
+
+export class UpdateWorkspaceDto {
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
 }
 
 export class AddMemberDto {
@@ -53,6 +64,20 @@ export class WorkspaceController {
   @Get(':id')
   async getWorkspace(@Param('id') id: string) {
     return this.workspaceService.getWorkspace(id);
+  }
+
+  @Patch(':id')
+  @RequirePermissions(WRITE)
+  async updateWorkspace(
+    @Param('id') id: string,
+    @Body() dto: UpdateWorkspaceDto,
+  ) {
+    return this.workspaceService.updateWorkspace(id, dto);
+  }
+
+  @Get(':id/members')
+  async listMembers(@Param('id') workspaceId: string) {
+    return this.workspaceService.listMembers(workspaceId);
   }
 
   @Post(':id/members')

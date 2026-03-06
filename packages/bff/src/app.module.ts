@@ -11,6 +11,11 @@ import { DealModule } from './deal/deal.module';
 import { SegmentModule } from './segment/segment.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { BlockchainModule } from './blockchain/blockchain.module';
+import { CampaignModule } from './campaign/campaign.module';
+import { VaultModule } from './vault/vault.module';
+import { MessagingModule } from './messaging/messaging.module';
+import { NotificationModule } from './notification/notification.module';
+import { TicketModule } from './ticket/ticket.module';
 
 @Module({
   imports: [
@@ -24,6 +29,11 @@ import { BlockchainModule } from './blockchain/blockchain.module';
     DealModule,
     SegmentModule,
     AnalyticsModule,
+    CampaignModule,
+    VaultModule,
+    MessagingModule,
+    NotificationModule,
+    TicketModule,
   ],
   controllers: [AppController],
   providers: [AppService],

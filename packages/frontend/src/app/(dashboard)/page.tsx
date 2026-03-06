@@ -7,8 +7,7 @@ import { ActivityHeatmap } from "@/components/charts/activity-heatmap";
 import { PipelineFunnel } from "@/components/charts/pipeline-funnel";
 import { Users, Wallet, TrendingUp, Ticket, Loader2 } from "lucide-react";
 import { useDashboardStats } from "@/lib/hooks/use-dashboard-stats";
-import { useDeals } from "@/lib/hooks/use-deals";
-import { useScoreDistribution, useActivityHeatmap } from "@/lib/hooks/use-analytics";
+import { useScoreDistribution, useActivityHeatmap, usePipelineSummary } from "@/lib/hooks/use-analytics";
 
 function formatCurrency(amount: number) {
   if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
@@ -18,49 +17,41 @@ function formatCurrency(amount: number) {
 
 export default function DashboardPage() {
   const { data: stats, isLoading } = useDashboardStats();
-  const { data: dealsData } = useDeals({ limit: 100 });
   const { data: scoreData } = useScoreDistribution();
   const { data: activityData } = useActivityHeatmap();
-
-  // Build pipeline data from real deals
-  const pipelineData = (() => {
-    const deals = dealsData?.deals ?? [];
-    const stageMap = new Map<string, { count: number; value: number }>();
-    for (const deal of deals) {
-      const entry = stageMap.get(deal.stage) ?? { count: 0, value: 0 };
-      entry.count++;
-      entry.value += Number(deal.amountUsd);
-      stageMap.set(deal.stage, entry);
-    }
-    return Array.from(stageMap.entries()).map(([stage, data]) => ({
-      stage,
-      count: data.count,
-      value: data.value,
-    }));
-  })();
+  const { data: pipelineData } = usePipelineSummary();
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">
+    <div className="space-y-6 relative overflow-hidden p-2 -m-2">
+      {/* Brand Identity: The Digital Anchor & Matte/Crystalline animated background */}
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-[#2DD4BF]/5 dark:bg-[#2DD4BF]/10 rounded-full blur-3xl animate-[pulse_6s_ease-in-out_infinite]" />
+        <div className="absolute bottom-[-10%] left-[-5%] w-[400px] h-[400px] bg-[#E2E8F0]/30 dark:bg-[#E2E8F0]/8 rounded-full blur-3xl animate-[pulse_8s_ease-in-out_infinite_reverse]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-[600px] bg-[radial-gradient(ellipse_at_center,rgba(45,212,191,0.03)_0%,transparent_60%)] dark:bg-[radial-gradient(ellipse_at_center,rgba(45,212,191,0.06)_0%,transparent_60%)]" />
+      </div>
+
+      <div className="mb-8">
+        <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
+        <p className="text-sm text-muted-foreground mt-1 tracking-tight">
           Welcome to ROSMAR CRM
         </p>
       </div>
 
       {/* Overview Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+        <Card className="hover:shadow-xl">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <CardTitle className="text-sm font-medium tracking-tight text-muted-foreground">
               Total Profiles
             </CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <div className="p-2 bg-primary/10 rounded-xl">
+              <Users className="h-4 w-4 text-primary" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-3xl font-bold tabular-nums">
               {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               ) : (
                 (stats?.profileCount ?? 0).toLocaleString()
               )}
@@ -68,17 +59,19 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+        <Card className="hover:shadow-xl">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <CardTitle className="text-sm font-medium tracking-tight text-muted-foreground">
               Active Deals
             </CardTitle>
-            <Wallet className="h-4 w-4 text-muted-foreground" />
+            <div className="p-2 bg-primary/10 rounded-xl">
+              <Wallet className="h-4 w-4 text-primary" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-3xl font-bold tabular-nums">
               {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               ) : (
                 (stats?.dealCount ?? 0).toLocaleString()
               )}
@@ -86,17 +79,19 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+        <Card className="hover:shadow-xl">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <CardTitle className="text-sm font-medium tracking-tight text-muted-foreground">
               Pipeline Total
             </CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <div className="p-2 bg-primary/10 rounded-xl">
+              <TrendingUp className="h-4 w-4 text-primary" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-3xl font-bold tabular-nums">
               {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               ) : (
                 formatCurrency(stats?.pipelineTotal ?? 0)
               )}
@@ -104,17 +99,19 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+        <Card className="hover:shadow-xl">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <CardTitle className="text-sm font-medium tracking-tight text-muted-foreground">
               Segments
             </CardTitle>
-            <Ticket className="h-4 w-4 text-muted-foreground" />
+            <div className="p-2 bg-primary/10 rounded-xl">
+              <Ticket className="h-4 w-4 text-primary" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-3xl font-bold tabular-nums">
               {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               ) : (
                 (stats?.segmentCount ?? 0).toLocaleString()
               )}
@@ -131,10 +128,10 @@ export default function DashboardPage() {
           <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="engagement" className="space-y-4">
+        <TabsContent value="engagement" className="space-y-4 pt-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Score Distribution</CardTitle>
+            <CardHeader className="pb-2">
+              <CardTitle className="tracking-tight">Score Distribution</CardTitle>
             </CardHeader>
             <CardContent>
               <ScoreDistribution data={scoreData ?? []} />
@@ -142,10 +139,10 @@ export default function DashboardPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="activity" className="space-y-4">
+        <TabsContent value="activity" className="space-y-4 pt-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Activity Heatmap</CardTitle>
+            <CardHeader className="pb-2">
+              <CardTitle className="tracking-tight">Activity Heatmap</CardTitle>
             </CardHeader>
             <CardContent>
               <ActivityHeatmap data={activityData ?? []} />
@@ -153,13 +150,13 @@ export default function DashboardPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="pipeline" className="space-y-4">
+        <TabsContent value="pipeline" className="space-y-4 pt-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Deal Pipeline Funnel</CardTitle>
+            <CardHeader className="pb-2">
+              <CardTitle className="tracking-tight">Deal Pipeline Funnel</CardTitle>
             </CardHeader>
             <CardContent>
-              <PipelineFunnel data={pipelineData.length > 0 ? pipelineData : [{ stage: "No deals", count: 0, value: 0 }]} />
+              <PipelineFunnel data={(pipelineData ?? []).length > 0 ? pipelineData ?? [] : [{ stage: "No deals", count: 0, value: 0 }]} />
             </CardContent>
           </Card>
         </TabsContent>

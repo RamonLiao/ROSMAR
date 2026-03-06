@@ -1,13 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 
+export interface WorkflowStep {
+  type: string;
+  config: Record<string, unknown>;
+  delay?: number;
+}
+
 export interface Campaign {
   id: string;
   name: string;
   description: string | null;
   segmentId: string;
   status: string;
-  workflowSteps: unknown;
+  workflowSteps: WorkflowStep[];
   version: number;
   startedAt: string | null;
   createdAt: string;
@@ -63,7 +69,7 @@ export function useUpdateCampaign() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: string; name?: string; description?: string; status?: string; expectedVersion: number }) =>
+    mutationFn: ({ id, ...data }: { id: string; name?: string; description?: string; status?: string; workflowSteps?: WorkflowStep[]; expectedVersion: number }) =>
       apiClient.put<{ success: boolean; txDigest: string }>(`/campaigns/${id}`, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['campaign', id] });
@@ -78,7 +84,9 @@ export function useStartCampaign() {
   return useMutation({
     mutationFn: (id: string) =>
       apiClient.post<{ success: boolean; profileCount: number }>(`/campaigns/${id}/start`),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['campaign', id] });
+      queryClient.invalidateQueries({ queryKey: ['campaign-stats', id] });
       queryClient.invalidateQueries({ queryKey: ['campaigns'] });
     },
   });
@@ -90,7 +98,8 @@ export function usePauseCampaign() {
   return useMutation({
     mutationFn: (id: string) =>
       apiClient.post<{ success: boolean }>(`/campaigns/${id}/pause`),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['campaign', id] });
       queryClient.invalidateQueries({ queryKey: ['campaigns'] });
     },
   });

@@ -31,7 +31,7 @@ export function useSponsoredTx() {
         });
 
         // Request sponsorship from BFF (sender derived from session server-side)
-        const { data } = await apiClient.post<SponsorResponse>(
+        const res = await apiClient.post<SponsorResponse>(
           "/sponsor/create",
           {
             transactionKindBytes: toBase64(kindBytes),
@@ -42,16 +42,16 @@ export function useSponsoredTx() {
 
         // Sign the sponsored TX bytes
         const { signature } = await signTransaction({
-          transaction: Transaction.from(data.data.bytes),
+          transaction: Transaction.from(res.data.bytes),
         });
 
         // Execute via BFF
         await apiClient.post("/sponsor/execute", {
-          digest: data.data.digest,
+          digest: res.data.digest,
           signature,
         });
 
-        return { digest: data.data.digest };
+        return { digest: res.data.digest };
       } finally {
         setIsPending(false);
       }

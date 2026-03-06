@@ -3,27 +3,45 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Body,
   Param,
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { IsString, IsOptional, IsInt, IsNotEmpty, Allow } from 'class-validator';
 import { SegmentService } from './segment.service';
 import { SessionGuard } from '../auth/guards/session.guard';
-import { RbacGuard, RequirePermissions, WRITE } from '../auth/guards/rbac.guard';
+import { RbacGuard, RequirePermissions, WRITE, DELETE as DELETE_PERM } from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
-import { UserPayload } from '../auth/auth.service';
 
 export class CreateSegmentDto {
+  @IsString()
+  @IsNotEmpty()
   name: string;
+
+  @IsString()
+  @IsOptional()
   description?: string;
-  rules: any; // JSONB structure
+
+  @Allow()
+  rules: any;
 }
 
 export class UpdateSegmentDto {
+  @IsString()
+  @IsOptional()
   name?: string;
+
+  @IsString()
+  @IsOptional()
   description?: string;
+
+  @Allow()
+  @IsOptional()
   rules?: any;
+
+  @IsInt()
   expectedVersion: number;
 }
 
@@ -36,7 +54,7 @@ export class SegmentController {
   @RequirePermissions(WRITE)
   async create(
     @User() user: import('../auth/auth.service').UserPayload,
-    @Body() dto: import('./segment.controller').CreateSegmentDto,
+    @Body() dto: CreateSegmentDto,
   ) {
     return this.segmentService.create(
       user.workspaceId,
@@ -68,11 +86,13 @@ export class SegmentController {
     @User() user: import('../auth/auth.service').UserPayload,
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
+    @Query('search') search?: string,
   ) {
     return this.segmentService.listSegments(
       user.workspaceId,
       limit || 50,
       offset || 0,
+      search,
     );
   }
 
@@ -81,7 +101,7 @@ export class SegmentController {
   async update(
     @User() user: import('../auth/auth.service').UserPayload,
     @Param('id') id: string,
-    @Body() dto: import('./segment.controller').UpdateSegmentDto,
+    @Body() dto: UpdateSegmentDto,
   ) {
     return this.segmentService.update(
       user.workspaceId,
@@ -89,6 +109,14 @@ export class SegmentController {
       id,
       dto,
     );
+  }
+
+  @Delete(':id')
+  @RequirePermissions(DELETE_PERM)
+  async remove(
+    @Param('id') id: string,
+  ) {
+    return this.segmentService.delete(id);
   }
 
   @Post(':id/refresh')

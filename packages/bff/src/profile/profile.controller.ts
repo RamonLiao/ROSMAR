@@ -55,12 +55,19 @@ export class ProfileController {
     @User() user: import('../auth/auth.service').UserPayload,
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
+    @Query('search') search?: string,
   ) {
     return this.profileService.listProfiles(
       user.workspaceId,
       limit || 50,
       offset || 0,
+      search,
     );
+  }
+
+  @Get(':id/organizations')
+  async getProfileOrganizations(@Param('id') id: string) {
+    return this.profileService.getProfileOrganizations(id);
   }
 
   @Put(':id/tags')

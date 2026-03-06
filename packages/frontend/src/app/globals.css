@@ -45,17 +45,65 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+
+  --animate-float-slow: float-slow 8s ease-in-out infinite;
+  --animate-float-fast: float-fast 4s ease-in-out infinite;
+  --animate-pulse-glow: pulse-glow 3s ease-in-out infinite;
+  --animate-ocean-wave: ocean-wave 12s linear infinite;
+  --animate-crystal-shimmer: crystal-shimmer 2s linear infinite;
+  --animate-drift-up: drift-up 15s linear infinite;
+  --animate-fade-in-up: fade-in-up 0.5s var(--ease-spring) both;
+
+  @keyframes float-slow {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-20px) scale(1.02); }
+  }
+  @keyframes float-fast {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-10px) rotate(5deg); }
+  }
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 0.6; filter: brightness(1); }
+    50% { opacity: 1; filter: brightness(1.2) drop-shadow(0 0 10px var(--color-primary)); }
+  }
+  @keyframes ocean-wave {
+    0% { transform: translateX(0) scaleY(1); }
+    50% { transform: translateX(-25%) scaleY(1.1); }
+    100% { transform: translateX(-50%) scaleY(1); }
+  }
+  @keyframes crystal-shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  @keyframes drift-up {
+    0% { transform: translateY(100vh) scale(0.5); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+  }
+  @keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
 }
 
 :root {
   --radius: 0.625rem;
-  /* ROSMAR Nordic Glacier — Frost White */
-  --background: oklch(1 0 0);
-  /* Deep Ice Blue #0F172A */
+
+  /* ── Motion System ── */
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+
+  /* ── ROSMAR Nordic Glacier — Light Mode ── */
+  --background: oklch(0.955 0.008 260);
   --foreground: oklch(0.208 0.042 265.755);
-  --card: oklch(1 0 0);
+  --card: oklch(0.995 0.002 260);
   --card-foreground: oklch(0.208 0.042 265.755);
-  --popover: oklch(1 0 0);
+  --popover: oklch(0.995 0.002 260);
   --popover-foreground: oklch(0.208 0.042 265.755);
   /* Electric Teal #2DD4BF */
   --primary: oklch(0.795 0.15 175.768);
@@ -63,13 +111,13 @@
   /* Platinum Silver #E2E8F0 */
   --secondary: oklch(0.929 0.013 255.508);
   --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.929 0.013 255.508);
-  --muted-foreground: oklch(0.556 0.02 265);
+  --muted: oklch(0.935 0.01 260);
+  --muted-foreground: oklch(0.45 0.02 265);
   --accent: oklch(0.929 0.013 255.508);
   --accent-foreground: oklch(0.208 0.042 265.755);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
+  --border: oklch(0.92 0.01 260);
+  --input: oklch(0.92 0.01 260);
   --ring: oklch(0.795 0.15 175.768);
   /* Chart palette — teal-centric */
   --chart-1: oklch(0.795 0.15 175.768);
@@ -77,6 +125,9 @@
   --chart-3: oklch(0.5 0.08 240);
   --chart-4: oklch(0.75 0.1 160);
   --chart-5: oklch(0.6 0.06 255);
+  /* Glow tokens */
+  --glow-teal: 0 0 20px oklch(0.795 0.15 175.768 / 15%);
+  --glow-teal-strong: 0 0 40px oklch(0.795 0.15 175.768 / 30%);
   /* Sidebar — Deep Ice Blue */
   --sidebar: oklch(0.208 0.042 265.755);
   --sidebar-foreground: oklch(0.929 0.013 255.508);
@@ -89,38 +140,39 @@
 }
 
 .dark {
-  /* Dark mode: Deep Ice Blue background */
-  --background: oklch(0.208 0.042 265.755);
-  --foreground: oklch(0.929 0.013 255.508);
-  --card: oklch(0.27 0.04 265);
-  --card-foreground: oklch(0.929 0.013 255.508);
-  --popover: oklch(0.27 0.04 265);
-  --popover-foreground: oklch(0.929 0.013 255.508);
-  /* Electric Teal stays vibrant in dark */
+  /* ── Bioluminescent Deep Sea — Dark Mode ── */
+  --background: oklch(0.17 0.035 265);
+  --foreground: oklch(0.92 0.01 260);
+  --card: oklch(0.22 0.035 265);
+  --card-foreground: oklch(0.92 0.01 260);
+  --popover: oklch(0.22 0.035 265);
+  --popover-foreground: oklch(0.92 0.01 260);
   --primary: oklch(0.795 0.15 175.768);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.32 0.035 265);
-  --secondary-foreground: oklch(0.929 0.013 255.508);
-  --muted: oklch(0.32 0.035 265);
-  --muted-foreground: oklch(0.65 0.015 255);
-  --accent: oklch(0.32 0.035 265);
-  --accent-foreground: oklch(0.929 0.013 255.508);
+  --primary-foreground: oklch(0.17 0.035 265);
+  --secondary: oklch(0.28 0.03 265);
+  --secondary-foreground: oklch(0.92 0.01 260);
+  --muted: oklch(0.25 0.025 265);
+  --muted-foreground: oklch(0.6 0.015 260);
+  --accent: oklch(0.28 0.03 265);
+  --accent-foreground: oklch(0.92 0.01 260);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 12%);
   --ring: oklch(0.795 0.15 175.768);
   --chart-1: oklch(0.795 0.15 175.768);
   --chart-2: oklch(0.7 0.12 190);
   --chart-3: oklch(0.6 0.1 210);
   --chart-4: oklch(0.75 0.08 160);
   --chart-5: oklch(0.65 0.06 230);
-  --sidebar: oklch(0.17 0.04 265);
-  --sidebar-foreground: oklch(0.929 0.013 255.508);
+  --glow-teal: 0 0 25px oklch(0.795 0.15 175.768 / 20%);
+  --glow-teal-strong: 0 0 50px oklch(0.795 0.15 175.768 / 40%);
+  --sidebar: oklch(0.14 0.035 265);
+  --sidebar-foreground: oklch(0.92 0.01 260);
   --sidebar-primary: oklch(0.795 0.15 175.768);
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.27 0.04 265);
-  --sidebar-accent-foreground: oklch(0.929 0.013 255.508);
-  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-accent: oklch(0.22 0.035 265);
+  --sidebar-accent-foreground: oklch(0.92 0.01 260);
+  --sidebar-border: oklch(1 0 0 / 8%);
   --sidebar-ring: oklch(0.795 0.15 175.768);
 }
 
@@ -130,5 +182,38 @@
   }
   body {
     @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* ── Glass Morphism Utilities ── */
+@layer utilities {
+  .glass {
+    background: oklch(1 0 0 / 60%);
+    backdrop-filter: blur(20px) saturate(1.8);
+    -webkit-backdrop-filter: blur(20px) saturate(1.8);
+    border: 1px solid oklch(1 0 0 / 30%);
+  }
+  .dark .glass {
+    background: oklch(1 0 0 / 5%);
+    border-color: oklch(1 0 0 / 8%);
+  }
+  .glass-subtle {
+    background: oklch(1 0 0 / 30%);
+    backdrop-filter: blur(12px) saturate(1.5);
+    -webkit-backdrop-filter: blur(12px) saturate(1.5);
+  }
+  .dark .glass-subtle {
+    background: oklch(1 0 0 / 3%);
+  }
+  .glow-teal {
+    box-shadow: var(--glow-teal);
+  }
+  .glow-teal-strong {
+    box-shadow: var(--glow-teal-strong);
+  }
+  .inner-shine {
+    box-shadow: inset 0 1px 0 0 oklch(1 0 0 / 10%), inset 0 0 0 1px oklch(1 0 0 / 5%);
   }
 }

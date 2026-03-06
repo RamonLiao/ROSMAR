@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Body,
   Param,
   Query,
@@ -10,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { OrganizationService } from './organization.service';
 import { SessionGuard } from '../auth/guards/session.guard';
-import { RbacGuard, RequirePermissions, WRITE } from '../auth/guards/rbac.guard';
+import { RbacGuard, RequirePermissions, WRITE, DELETE } from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
 import { UserPayload } from '../auth/auth.service';
 
@@ -55,11 +56,13 @@ export class OrganizationController {
     @User() user: import('../auth/auth.service').UserPayload,
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
+    @Query('search') search?: string,
   ) {
     return this.organizationService.listOrganizations(
       user.workspaceId,
       limit || 50,
       offset || 0,
+      search,
     );
   }
 
@@ -91,5 +94,19 @@ export class OrganizationController {
       orgId,
       profileId,
     );
+  }
+
+  @Get(':id/profiles')
+  async getOrganizationProfiles(@Param('id') id: string) {
+    return this.organizationService.getOrganizationProfiles(id);
+  }
+
+  @Delete(':orgId/profiles/:profileId')
+  @RequirePermissions(DELETE)
+  async unlinkProfile(
+    @Param('orgId') orgId: string,
+    @Param('profileId') profileId: string,
+  ) {
+    return this.organizationService.unlinkProfile(orgId, profileId);
   }
 }

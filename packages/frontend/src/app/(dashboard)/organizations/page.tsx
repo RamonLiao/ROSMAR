@@ -1,15 +1,39 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { staggerContainer, staggerItem } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/shared/data-table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useOrganizations, type Organization } from "@/lib/hooks/use-organizations";
+import { CreateOrganizationDialog } from "@/components/organization/create-organization-dialog";
 
 export default function OrganizationsPage() {
-  const { data, isLoading, error } = useOrganizations();
+  const router = useRouter();
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const { data, isLoading, error } = useOrganizations({
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+    search: debouncedSearch || undefined,
+  });
 
   const organizations = data?.organizations ?? [];
+  const total = data?.total ?? 0;
 
   const columns = [
     {
@@ -45,8 +69,12 @@ export default function OrganizationsPage() {
     {
       key: "actions",
       label: "Actions",
-      render: () => (
-        <Button variant="outline" size="sm">
+      render: (item: Organization) => (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => router.push(`/organizations/${item.id}`)}
+        >
           View
         </Button>
       ),
@@ -70,26 +98,32 @@ export default function OrganizationsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <motion.div className="space-y-6" variants={staggerContainer} initial="hidden" animate="visible">
+      <motion.div variants={staggerItem} className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Organizations</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-3xl font-semibold tracking-tight">Organizations</h1>
+          <p className="text-muted-foreground tracking-tight">
             Manage company and organization profiles
           </p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          New Organization
-        </Button>
-      </div>
+        <CreateOrganizationDialog />
+      </motion.div>
 
+      <motion.div variants={staggerItem}>
       <DataTable
         data={organizations}
         columns={columns}
         searchable
         searchPlaceholder="Search organizations..."
+        onSearch={setSearch}
+        pagination={{
+          page,
+          pageSize,
+          total,
+          onPageChange: setPage,
+        }}
       />
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

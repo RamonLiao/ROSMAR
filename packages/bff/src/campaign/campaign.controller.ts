@@ -25,6 +25,7 @@ export class UpdateCampaignDto {
   name?: string;
   description?: string;
   status?: string;
+  workflowSteps?: any[];
   expectedVersion: number;
 }
 

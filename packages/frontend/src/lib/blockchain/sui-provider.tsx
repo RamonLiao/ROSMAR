@@ -32,10 +32,13 @@ function RegisterEnokiWallets() {
       return;
     }
 
+    // Fix redirectUrl to /login so Google OAuth redirect_uri is stable
+    const redirectUrl = `${window.location.origin}/login`;
+
     const { unregister } = registerEnokiWallets({
       apiKey: enokiApiKey,
       providers: {
-        google: { clientId: googleClientId },
+        google: { clientId: googleClientId, redirectUrl },
       },
       client,
       network,

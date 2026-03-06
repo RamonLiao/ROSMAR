@@ -13,6 +13,7 @@ export class ApiError extends Error {
 
 class ApiClient {
   private baseUrl: string;
+  private refreshPromise: Promise<boolean> | null = null;
 
   constructor(baseUrl: string = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api') {
     this.baseUrl = baseUrl;
@@ -20,24 +21,36 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    isRetry = false,
   ): Promise<T> {
-    const { jwt } = useAuthStore.getState();
-
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>),
     };
-
-    if (jwt) {
-      headers['Authorization'] = `Bearer ${jwt}`;
-    }
 
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...options,
       headers,
       credentials: 'include',
     });
+
+    // Auto-refresh on 401 (skip for auth endpoints and retries)
+    if (
+      response.status === 401 &&
+      !isRetry &&
+      !endpoint.startsWith('/auth/')
+    ) {
+      const refreshed = await this.tryRefresh();
+      if (refreshed) {
+        return this.request<T>(endpoint, options, true);
+      }
+      // Refresh failed — clear auth state and redirect to login
+      useAuthStore.getState().logout();
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
@@ -49,6 +62,22 @@ class ApiClient {
     }
 
     return response.json();
+  }
+
+  /** Deduplicated refresh: multiple concurrent 401s share one refresh call */
+  private async tryRefresh(): Promise<boolean> {
+    if (!this.refreshPromise) {
+      this.refreshPromise = fetch(`${this.baseUrl}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+        .then((res) => res.ok)
+        .catch(() => false)
+        .finally(() => {
+          this.refreshPromise = null;
+        });
+    }
+    return this.refreshPromise;
   }
 
   async get<T>(endpoint: string): Promise<T> {

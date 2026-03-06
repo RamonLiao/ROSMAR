@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SuiClientService } from '../blockchain/sui.client';
 import { TxBuilderService } from '../blockchain/tx-builder.service';
 import { WorkflowEngine } from './workflow/workflow.engine';
+import { NotificationService } from '../notification/notification.service';
 
 export interface CreateCampaignDto {
   name: string;
@@ -17,37 +18,50 @@ export interface UpdateCampaignDto {
   name?: string;
   description?: string;
   status?: string;
+  workflowSteps?: any[];
   expectedVersion: number;
 }
 
 @Injectable()
 export class CampaignService {
+  private isDryRun: boolean;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly suiClient: SuiClientService,
     private readonly txBuilder: TxBuilderService,
     private readonly workflowEngine: WorkflowEngine,
     private readonly configService: ConfigService,
-  ) {}
+    private readonly notificationService: NotificationService,
+  ) {
+    this.isDryRun = this.configService.get<string>('SUI_DRY_RUN', 'false') === 'true';
+  }
+
+  private async execChainTx(buildTx: () => any): Promise<any> {
+    if (this.isDryRun) {
+      return { digest: 'dry-run', events: [] };
+    }
+    const tx = buildTx();
+    return this.suiClient.executeTransaction(tx);
+  }
 
   async create(
     workspaceId: string,
     callerAddress: string,
     dto: CreateCampaignDto,
   ): Promise<any> {
-    const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
-    const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
-
-    const tx = this.txBuilder.buildCreateCampaignTx(
-      globalConfigId,
-      workspaceId,
-      adminCapId,
-      dto.name,
-      dto.description || '',
-      dto.segmentId,
-    );
-
-    const result = await this.suiClient.executeTransaction(tx);
+    const result = await this.execChainTx(() => {
+      const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
+      const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
+      return this.txBuilder.buildCreateCampaignTx(
+        globalConfigId,
+        workspaceId,
+        adminCapId,
+        dto.name,
+        dto.description || '',
+        dto.segmentId,
+      );
+    });
 
     const campaignCreatedEvent = result.events?.find(
       (e: any) => e.type.includes('::campaign::CampaignCreated'),
@@ -108,26 +122,26 @@ export class CampaignService {
     campaignId: string,
     dto: UpdateCampaignDto,
   ): Promise<any> {
-    const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
-    const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
-
-    const tx = this.txBuilder.buildUpdateCampaignTx(
-      globalConfigId,
-      workspaceId,
-      adminCapId,
-      campaignId,
-      dto.name,
-      dto.description,
-      dto.status,
-      dto.expectedVersion,
-    );
-
-    const result = await this.suiClient.executeTransaction(tx);
+    const result = await this.execChainTx(() => {
+      const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
+      const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
+      return this.txBuilder.buildUpdateCampaignTx(
+        globalConfigId,
+        workspaceId,
+        adminCapId,
+        campaignId,
+        dto.name,
+        dto.description,
+        dto.status,
+        dto.expectedVersion,
+      );
+    });
 
     const updateData: any = { version: { increment: 1 } };
     if (dto.name !== undefined) updateData.name = dto.name;
     if (dto.description !== undefined) updateData.description = dto.description;
     if (dto.status !== undefined) updateData.status = dto.status;
+    if (dto.workflowSteps !== undefined) updateData.workflowSteps = dto.workflowSteps;
 
     await this.prisma.campaign.update({
       where: { id: campaignId, version: dto.expectedVersion },
@@ -166,6 +180,15 @@ export class CampaignService {
       where: { id: campaignId },
       data: { status: 'active', startedAt: new Date() },
     });
+
+    this.notificationService.create({
+      workspaceId,
+      userId: callerAddress,
+      type: 'campaign_started',
+      title: `Campaign "${campaign.name}" started`,
+      body: `Targeting ${profileIds.length} profiles`,
+      metadata: { campaignId },
+    }).catch(() => {});
 
     return {
       success: true,

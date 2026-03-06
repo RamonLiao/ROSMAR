@@ -1,23 +1,37 @@
 "use client";
 
+import { motion } from "framer-motion";
+import { staggerContainer, staggerItem } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/shared/data-table";
 import { TierBadge } from "@/components/shared/tier-badge";
 import { EngagementBadge } from "@/components/profile/engagement-badge";
 import { AddressDisplay } from "@/components/shared/address-display";
-import { Plus, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useProfiles, type Profile } from "@/lib/hooks/use-profiles";
+import { CreateProfileDialog } from "@/components/profile/create-profile-dialog";
 
 export default function ProfilesPage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
   const pageSize = 10;
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const { data, isLoading, error } = useProfiles({
     limit: pageSize,
     offset: (page - 1) * pageSize,
+    search: debouncedSearch || undefined,
   });
 
   const profiles = data?.profiles ?? [];
@@ -88,25 +102,24 @@ export default function ProfilesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <motion.div className="space-y-6" variants={staggerContainer} initial="hidden" animate="visible">
+      <motion.div variants={staggerItem} className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Profiles</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-3xl font-semibold tracking-tight">Profiles</h1>
+          <p className="text-muted-foreground tracking-tight">
             Manage your customer profiles
           </p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Profile
-        </Button>
-      </div>
+        <CreateProfileDialog />
+      </motion.div>
 
+      <motion.div variants={staggerItem}>
       <DataTable
         data={profiles}
         columns={columns}
         searchable
         searchPlaceholder="Search profiles..."
+        onSearch={setSearch}
         pagination={{
           page,
           pageSize,
@@ -114,6 +127,7 @@ export default function ProfilesPage() {
           onPageChange: setPage,
         }}
       />
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

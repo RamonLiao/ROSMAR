@@ -1,10 +1,28 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkflowCanvas } from "@/components/campaign/workflow-canvas";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Loader2, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
+import {
+  useCampaign,
+  useUpdateCampaign,
+  type WorkflowStep,
+} from "@/lib/hooks/use-campaigns";
+
+/* ── Action palette config ── */
+const ACTIONS = [
+  { type: "send_telegram", label: "Send Telegram", enabled: true },
+  { type: "send_discord", label: "Send Discord", enabled: true },
+  { type: "send_email", label: "Send Email", enabled: false },
+  { type: "airdrop_token", label: "Airdrop Token", enabled: true },
+  { type: "add_to_segment", label: "Add to Segment", enabled: false },
+  { type: "update_tier", label: "Update Tier", enabled: false },
+  { type: "wait_delay", label: "Wait Delay", enabled: false },
+  { type: "condition", label: "Condition", enabled: false },
+] as const;
 
 export default function WorkflowEditorPage({
   params,
@@ -12,12 +30,67 @@ export default function WorkflowEditorPage({
   params: { id: string };
 }) {
   const router = useRouter();
+  const { data: campaign, isLoading } = useCampaign(params.id);
+  const updateCampaign = useUpdateCampaign();
 
-  const handleSave = () => {
-    // TODO: Save workflow via API
-    console.log("Save workflow for campaign", params.id);
-    router.push(`/campaigns/${params.id}`);
-  };
+  // Local steps state — initialized from API, then managed locally
+  const [localSteps, setLocalSteps] = useState<WorkflowStep[] | null>(null);
+  const initialized = useRef(false);
+
+  // Initialize localSteps from campaign data once
+  useEffect(() => {
+    if (campaign && !initialized.current) {
+      const apiSteps = Array.isArray(campaign.workflowSteps)
+        ? campaign.workflowSteps
+        : [];
+      setLocalSteps(apiSteps);
+      initialized.current = true;
+    }
+  }, [campaign]);
+
+  const handleCanvasChange = useCallback((steps: WorkflowStep[]) => {
+    setLocalSteps(steps);
+  }, []);
+
+  const handleAddAction = useCallback((actionType: string) => {
+    setLocalSteps((prev) => [
+      ...(prev || []),
+      { type: actionType, config: {} },
+    ]);
+  }, []);
+
+  const handleSave = useCallback(() => {
+    if (!campaign || !localSteps) return;
+    updateCampaign.mutate(
+      {
+        id: params.id,
+        workflowSteps: localSteps,
+        expectedVersion: campaign.version,
+      },
+      {
+        onSuccess: () => router.push(`/campaigns/${params.id}`),
+      }
+    );
+  }, [campaign, localSteps, params.id, router, updateCampaign]);
+
+  if (isLoading || localSteps === null) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!campaign) {
+    return (
+      <div className="flex h-96 items-center justify-center text-muted-foreground">
+        Campaign not found
+      </div>
+    );
+  }
+
+  const isReadOnly =
+    campaign.status === "active" || campaign.status === "completed";
 
   return (
     <div className="space-y-6">
@@ -26,15 +99,26 @@ export default function WorkflowEditorPage({
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold">Workflow Editor</h1>
-          <p className="text-muted-foreground">
-            Design your campaign automation flow
+          <h1 className="text-3xl font-semibold tracking-tight">
+            Workflow Editor
+          </h1>
+          <p className="text-muted-foreground tracking-tight">
+            {campaign.name}
+            {isReadOnly
+              ? ` — Read-only (campaign is ${campaign.status})`
+              : " — Design your automation flow"}
           </p>
         </div>
-        <Button onClick={handleSave}>
-          <Save className="mr-2 h-4 w-4" />
-          Save Workflow
-        </Button>
+        {!isReadOnly && (
+          <Button onClick={handleSave} disabled={updateCampaign.isPending}>
+            {updateCampaign.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            Save Workflow
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -42,43 +126,37 @@ export default function WorkflowEditorPage({
           <CardTitle>Canvas</CardTitle>
         </CardHeader>
         <CardContent>
-          <WorkflowCanvas />
+          <WorkflowCanvas steps={localSteps} onChange={handleCanvasChange} />
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Available Actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-            <Button variant="outline" size="sm">
-              Send Telegram
-            </Button>
-            <Button variant="outline" size="sm">
-              Send Discord
-            </Button>
-            <Button variant="outline" size="sm">
-              Send Email
-            </Button>
-            <Button variant="outline" size="sm">
-              Airdrop Token
-            </Button>
-            <Button variant="outline" size="sm">
-              Add to Segment
-            </Button>
-            <Button variant="outline" size="sm">
-              Update Tier
-            </Button>
-            <Button variant="outline" size="sm">
-              Wait Delay
-            </Button>
-            <Button variant="outline" size="sm">
-              Condition
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {!isReadOnly && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Available Actions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+              {ACTIONS.map((action) => (
+                <Button
+                  key={action.type}
+                  variant="outline"
+                  size="sm"
+                  disabled={!action.enabled}
+                  onClick={() => handleAddAction(action.type)}
+                >
+                  {action.label}
+                  {!action.enabled && (
+                    <span className="ml-1 text-xs text-muted-foreground">
+                      (soon)
+                    </span>
+                  )}
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

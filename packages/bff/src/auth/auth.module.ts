@@ -31,6 +31,6 @@ import { RbacGuard } from './guards/rbac.guard';
     SessionGuard,
     RbacGuard,
   ],
-  exports: [AuthService, SessionGuard, RbacGuard],
+  exports: [AuthService, SessionGuard, RbacGuard, JwtModule],
 })
 export class AuthModule {}

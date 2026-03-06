@@ -1,11 +1,21 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { Ed25519PublicKey } from '@mysten/sui/keypairs/ed25519';
+import { randomBytes } from 'node:crypto';
+import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
+import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
+import { PrismaService } from '../prisma/prisma.service';
+import {
+  generateRegistrationOptions,
+  verifyRegistrationResponse,
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse,
+} from '@simplewebauthn/server';
 
 export interface UserPayload {
   address: string;
   workspaceId: string;
+  workspaceName: string;
   role: number;
   permissions: number;
 }
@@ -19,15 +29,96 @@ export interface AuthResponse {
 @Injectable()
 export class AuthService {
   private readonly refreshExpiresIn: string;
+  private readonly suiClient: SuiJsonRpcClient;
+  /** In-memory challenge store: nonce → expiry timestamp */
+  private readonly challenges = new Map<string, number>();
+  /** In-memory WebAuthn challenge store: challenge → { expiry, address? } */
+  private readonly webauthnChallenges = new Map<string, { expiry: number; address?: string }>();
+  private readonly rpId: string;
+  private readonly rpName: string;
+  private readonly rpOrigin: string;
+  private static readonly CHALLENGE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
   ) {
     this.refreshExpiresIn = this.configService.get<string>(
       'REFRESH_TOKEN_EXPIRES_IN',
       '7d',
     )!;
+    const network = this.configService.get<string>('SUI_NETWORK', 'testnet');
+    this.suiClient = new SuiJsonRpcClient({
+      url: this.configService.get<string>('SUI_RPC_URL', 'https://fullnode.testnet.sui.io:443'),
+      network,
+    });
+    this.rpId = this.configService.get<string>('WEBAUTHN_RP_ID', 'localhost');
+    this.rpName = this.configService.get<string>('WEBAUTHN_RP_NAME', 'ROSMAR CRM');
+    this.rpOrigin = this.configService.get<string>('WEBAUTHN_ORIGIN', 'http://localhost:3000');
+  }
+
+  /**
+   * Lookup workspace membership by address. If none exists, auto-provision
+   * a new workspace + owner membership.
+   */
+  private async resolveOrCreateMembership(address: string): Promise<UserPayload> {
+    return this.prisma.$transaction(async (tx) => {
+      const membership = await tx.workspaceMember.findFirst({
+        where: { address },
+        include: { workspace: true },
+        orderBy: { joinedAt: 'asc' }, // deterministic: oldest membership first
+      });
+
+      if (membership) {
+        return {
+          address,
+          workspaceId: membership.workspaceId,
+          workspaceName: membership.workspace.name,
+          role: membership.roleLevel,
+          permissions: membership.permissions,
+        };
+      }
+
+      // New user — create workspace + owner membership atomically
+      const workspace = await tx.workspace.create({
+        data: {
+          name: 'My Workspace',
+          ownerAddress: address,
+          members: {
+            create: {
+              address,
+              roleLevel: 3, // owner
+              permissions: 31, // all
+            },
+          },
+        },
+      });
+
+      return {
+        address,
+        workspaceId: workspace.id,
+        workspaceName: workspace.name,
+        role: 3,
+        permissions: 31,
+      };
+    });
+  }
+
+  generateChallenge(): string {
+    const nonce = randomBytes(32).toString('hex');
+    this.challenges.set(nonce, Date.now() + AuthService.CHALLENGE_TTL_MS);
+    return `Sign this message to authenticate with ROSMAR CRM:\n${nonce}`;
+  }
+
+  private consumeChallenge(message: string): boolean {
+    // Extract nonce from the structured message
+    const lines = message.split('\n');
+    const nonce = lines[lines.length - 1];
+    const expiry = this.challenges.get(nonce);
+    if (!expiry) return false;
+    this.challenges.delete(nonce);
+    return Date.now() < expiry;
   }
 
   async walletLogin(
@@ -46,62 +137,160 @@ export class AuthService {
       throw new UnauthorizedException('Invalid signature');
     }
 
-    // TODO: Lookup workspace membership from database
-    // For now, mock data
-    const user: UserPayload = {
-      address,
-      workspaceId: 'mock-workspace-id',
-      role: 3, // owner
-      permissions: 31, // all permissions
-    };
-
+    const user = await this.resolveOrCreateMembership(address);
     return this.issueTokens(user);
   }
 
   async zkLogin(jwt: string, salt: string): Promise<AuthResponse> {
-    // Call Enoki API to get proof and derive address
     const address = await this.deriveZkLoginAddress(jwt, salt);
-
-    // TODO: Lookup workspace membership
-    const user: UserPayload = {
-      address,
-      workspaceId: 'mock-workspace-id',
-      role: 3,
-      permissions: 31,
-    };
-
+    const user = await this.resolveOrCreateMembership(address);
     return this.issueTokens(user);
   }
 
-  async passkeyLogin(dto: any): Promise<AuthResponse> {
-    // TODO: Implement WebAuthn verification
-    // For now, mock implementation
-    const address = 'passkey-derived-address';
+  // ─── Passkey / WebAuthn ───────────────────────────────
 
-    const user: UserPayload = {
+  async generatePasskeyRegistrationOptions(address: string) {
+    const existingCreds = await this.prisma.passkeyCredential.findMany({
+      where: { address },
+    });
+
+    const options = await generateRegistrationOptions({
+      rpName: this.rpName,
+      rpID: this.rpId,
+      userName: address,
+      attestationType: 'none',
+      excludeCredentials: existingCreds.map((c) => ({
+        id: c.credentialId,
+        transports: c.transports as any[],
+      })),
+      authenticatorSelection: {
+        residentKey: 'preferred',
+        userVerification: 'preferred',
+      },
+    });
+
+    this.webauthnChallenges.set(options.challenge, {
+      expiry: Date.now() + AuthService.CHALLENGE_TTL_MS,
       address,
-      workspaceId: 'mock-workspace-id',
-      role: 3,
-      permissions: 31,
-    };
+    });
 
+    return options;
+  }
+
+  async verifyPasskeyRegistration(address: string, response: any) {
+    const stored = this.webauthnChallenges.get(response.challenge ?? '');
+    // Try to find the challenge from the response's clientDataJSON
+    let expectedChallenge: string | undefined;
+    for (const [challenge, data] of this.webauthnChallenges.entries()) {
+      if (data.address === address && data.expiry > Date.now()) {
+        expectedChallenge = challenge;
+        break;
+      }
+    }
+
+    if (!expectedChallenge) {
+      throw new UnauthorizedException('Invalid or expired WebAuthn challenge');
+    }
+
+    const verification = await verifyRegistrationResponse({
+      response,
+      expectedChallenge,
+      expectedOrigin: this.rpOrigin,
+      expectedRPID: this.rpId,
+    });
+
+    this.webauthnChallenges.delete(expectedChallenge);
+
+    if (!verification.verified || !verification.registrationInfo) {
+      throw new UnauthorizedException('Passkey registration verification failed');
+    }
+
+    const { credential } = verification.registrationInfo;
+
+    await this.prisma.passkeyCredential.create({
+      data: {
+        address,
+        credentialId: credential.id,
+        publicKey: Buffer.from(credential.publicKey),
+        counter: credential.counter,
+        transports: (response.response?.transports as string[]) ?? [],
+      },
+    });
+
+    return { verified: true };
+  }
+
+  async generatePasskeyAuthenticationOptions() {
+    const options = await generateAuthenticationOptions({
+      rpID: this.rpId,
+      userVerification: 'preferred',
+    });
+
+    this.webauthnChallenges.set(options.challenge, {
+      expiry: Date.now() + AuthService.CHALLENGE_TTL_MS,
+    });
+
+    return options;
+  }
+
+  async verifyPasskeyAuthentication(response: any): Promise<AuthResponse> {
+    // Find matching credential
+    const credential = await this.prisma.passkeyCredential.findUnique({
+      where: { credentialId: response.id },
+    });
+
+    if (!credential) {
+      throw new UnauthorizedException('Unknown passkey credential');
+    }
+
+    // Find the matching challenge
+    let expectedChallenge: string | undefined;
+    for (const [challenge, data] of this.webauthnChallenges.entries()) {
+      if (data.expiry > Date.now() && !data.address) {
+        expectedChallenge = challenge;
+        break;
+      }
+    }
+
+    if (!expectedChallenge) {
+      throw new UnauthorizedException('Invalid or expired WebAuthn challenge');
+    }
+
+    const verification = await verifyAuthenticationResponse({
+      response,
+      expectedChallenge,
+      expectedOrigin: this.rpOrigin,
+      expectedRPID: this.rpId,
+      credential: {
+        id: credential.credentialId,
+        publicKey: credential.publicKey,
+        counter: credential.counter,
+        transports: credential.transports as any[],
+      },
+    });
+
+    this.webauthnChallenges.delete(expectedChallenge);
+
+    if (!verification.verified) {
+      throw new UnauthorizedException('Passkey authentication failed');
+    }
+
+    // Update counter
+    await this.prisma.passkeyCredential.update({
+      where: { id: credential.id },
+      data: { counter: verification.authenticationInfo.newCounter },
+    });
+
+    const user = await this.resolveOrCreateMembership(credential.address);
     return this.issueTokens(user);
   }
 
-  async refresh(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
+  async refresh(refreshToken: string): Promise<AuthResponse> {
     try {
       const payload = this.jwtService.verify(refreshToken);
-
-      // TODO: Lookup fresh user data from database
-      const user: UserPayload = {
-        address: payload.address,
-        workspaceId: 'mock-workspace-id',
-        role: 3,
-        permissions: 31,
-      };
-
+      const user = await this.resolveOrCreateMembership(payload.address);
       const { accessToken, refreshToken: newRefreshToken } = this.issueTokens(user);
-      return { accessToken, refreshToken: newRefreshToken };
+      return { accessToken, refreshToken: newRefreshToken, user };
     } catch (error) {
       throw new UnauthorizedException('Invalid refresh token');
     }
@@ -113,17 +302,50 @@ export class AuthService {
     message: string,
   ): Promise<boolean> {
     try {
-      // Convert signature from base64 to Uint8Array
-      const signatureBytes = Buffer.from(signature, 'base64');
-      const messageBytes = new TextEncoder().encode(message);
+      // Validate challenge nonce is fresh and unused
+      if (!this.consumeChallenge(message)) {
+        console.error('Invalid or expired challenge');
+        return false;
+      }
 
-      // Verify signature using Ed25519PublicKey
-      const publicKey = new Ed25519PublicKey(address);
-      return await publicKey.verify(messageBytes, signatureBytes);
+      // verifyPersonalMessageSignature handles the intent prefix added by signPersonalMessage
+      // client is required for zkLogin signatures (fetches JWK + epoch from chain)
+      const messageBytes = new TextEncoder().encode(message);
+      const publicKey = await verifyPersonalMessageSignature(messageBytes, signature, {
+        client: this.suiClient,
+      });
+
+      // Confirm the recovered address matches the claimed address
+      return publicKey.toSuiAddress() === address;
     } catch (error) {
       console.error('Signature verification error:', error);
       return false;
     }
+  }
+
+  /**
+   * Switch the caller's active workspace. Verifies membership, then
+   * re-issues tokens scoped to the target workspace.
+   */
+  async switchWorkspace(address: string, workspaceId: string): Promise<AuthResponse> {
+    const membership = await this.prisma.workspaceMember.findUnique({
+      where: { workspaceId_address: { workspaceId, address } },
+      include: { workspace: true },
+    });
+
+    if (!membership) {
+      throw new ForbiddenException('Not a member of this workspace');
+    }
+
+    const user: UserPayload = {
+      address,
+      workspaceId: membership.workspaceId,
+      workspaceName: membership.workspace.name,
+      role: membership.roleLevel,
+      permissions: membership.permissions,
+    };
+
+    return this.issueTokens(user);
   }
 
   async validateUser(payload: UserPayload): Promise<UserPayload> {
@@ -132,7 +354,8 @@ export class AuthService {
   }
 
   private issueTokens(user: UserPayload): AuthResponse {
-    const accessToken = this.jwtService.sign({ ...user });
+    const { workspaceName: _, ...tokenPayload } = user;
+    const accessToken = this.jwtService.sign(tokenPayload);
     // expiresIn typed as StringValue (ms@4) but ms@2 is installed — safe runtime cast
     const refreshToken = this.jwtService.sign({ address: user.address }, {
       expiresIn: this.refreshExpiresIn,

@@ -6,18 +6,30 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class WorkspaceService {
+  private readonly isDryRun: boolean;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly suiClient: SuiClientService,
     private readonly txBuilder: TxBuilderService,
     private readonly configService: ConfigService,
-  ) {}
+  ) {
+    this.isDryRun = this.configService.get<string>('SUI_DRY_RUN', 'false') === 'true';
+  }
+
+  private async execChainTx(buildTx: () => any): Promise<any> {
+    if (this.isDryRun) {
+      return { digest: 'dry-run', events: [] };
+    }
+    const tx = buildTx();
+    return this.suiClient.executeTransaction(tx);
+  }
 
   async createWorkspace(name: string, ownerAddress: string) {
-    const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
-
-    const tx = this.txBuilder.buildCreateWorkspaceTx(name, globalConfigId);
-    const result = await this.suiClient.executeTransaction(tx);
+    const result = await this.execChainTx(() => {
+      const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
+      return this.txBuilder.buildCreateWorkspaceTx(name, globalConfigId);
+    });
 
     const wsEvent = result.events?.find(
       (e: any) => e.type.includes('::workspace::WorkspaceCreated'),
@@ -57,6 +69,22 @@ export class WorkspaceService {
     };
   }
 
+  async updateWorkspace(
+    workspaceId: string,
+    data: { name?: string; description?: string },
+  ) {
+    const workspace = await this.prisma.workspace.update({
+      where: { id: workspaceId },
+      data,
+    });
+
+    return {
+      id: workspace.id,
+      name: workspace.name,
+      description: workspace.description,
+    };
+  }
+
   async getWorkspace(workspaceId: string) {
     const workspace = await this.prisma.workspace.findUniqueOrThrow({
       where: { id: workspaceId },
@@ -66,9 +94,26 @@ export class WorkspaceService {
     return {
       id: workspace.id,
       name: workspace.name,
+      description: workspace.description,
       owner_address: workspace.ownerAddress,
       member_count: workspace._count.members,
       created_at: workspace.createdAt,
+    };
+  }
+
+  async listMembers(workspaceId: string) {
+    const members = await this.prisma.workspaceMember.findMany({
+      where: { workspaceId },
+      orderBy: { joinedAt: 'asc' },
+    });
+
+    return {
+      members: members.map((m) => ({
+        address: m.address,
+        role_level: m.roleLevel,
+        permissions: m.permissions,
+        joined_at: m.joinedAt,
+      })),
     };
   }
 
@@ -78,19 +123,18 @@ export class WorkspaceService {
     roleLevel: number,
     permissions: number,
   ) {
-    const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
-    const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
-
-    const tx = this.txBuilder.buildAddMemberTx(
-      globalConfigId,
-      workspaceId,
-      adminCapId,
-      memberAddress,
-      roleLevel,
-      permissions,
-    );
-
-    const result = await this.suiClient.executeTransaction(tx);
+    const result = await this.execChainTx(() => {
+      const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
+      const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
+      return this.txBuilder.buildAddMemberTx(
+        globalConfigId,
+        workspaceId,
+        adminCapId,
+        memberAddress,
+        roleLevel,
+        permissions,
+      );
+    });
 
     const member = await this.prisma.workspaceMember.create({
       data: { workspaceId, address: memberAddress, roleLevel, permissions },
@@ -100,17 +144,16 @@ export class WorkspaceService {
   }
 
   async removeMember(workspaceId: string, memberAddress: string) {
-    const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
-    const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
-
-    const tx = this.txBuilder.buildRemoveMemberTx(
-      globalConfigId,
-      workspaceId,
-      adminCapId,
-      memberAddress,
-    );
-
-    const result = await this.suiClient.executeTransaction(tx);
+    const result = await this.execChainTx(() => {
+      const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
+      const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
+      return this.txBuilder.buildRemoveMemberTx(
+        globalConfigId,
+        workspaceId,
+        adminCapId,
+        memberAddress,
+      );
+    });
 
     await this.prisma.workspaceMember.delete({
       where: {

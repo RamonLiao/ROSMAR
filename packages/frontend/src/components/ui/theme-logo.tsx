@@ -25,7 +25,8 @@ export function ThemeLogo({ width = 28, height = 28, className }: ThemeLogoProps
       alt="ROSMAR"
       width={width}
       height={height}
-      className={`${isDark ? 'brightness-0 invert' : ''} ${className ?? ''}`}
+      className={className ?? ''}
+      priority
     />
   );
 }

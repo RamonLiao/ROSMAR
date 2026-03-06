@@ -1,5 +1,4 @@
-import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface SendDiscordDto {
@@ -16,57 +15,55 @@ export interface SendDiscordDto {
 
 @Injectable()
 export class DiscordService {
-  constructor(
-    private readonly configService: ConfigService,
-    private readonly prisma: PrismaService,
-  ) {}
+  private readonly logger = new Logger(DiscordService.name);
+
+  constructor(private readonly prisma: PrismaService) {}
 
   async sendMessage(workspaceId: string, dto: SendDiscordDto): Promise<any> {
-    const webhookUrl = dto.webhookUrl || (await this.getWebhookForProfile(dto.profileId));
+    const profile = await this.prisma.profile.findUniqueOrThrow({
+      where: { id: dto.profileId },
+      select: { discordWebhookUrl: true },
+    });
 
-    // TODO: Send via Discord Webhook API
-    console.log(`Sending Discord message to ${webhookUrl}:`, dto.content);
-
-    // In production:
-    // const response = await fetch(webhookUrl, {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({
-    //     content: dto.content,
-    //     embeds: dto.embeds || [],
-    //   }),
-    // });
-    //
-    // if (!response.ok) {
-    //   throw new Error(`Discord webhook failed: ${response.statusText}`);
-    // }
-
-    const messageId = `dc_${Date.now()}`;
-
-    // Log to database
-    await this.prisma.$executeRaw`
-      INSERT INTO messages (
-        workspace_id, profile_id, channel, body, status, external_id, sent_at
-      ) VALUES (${workspaceId}, ${dto.profileId}, 'discord', ${dto.content}, 'sent', ${messageId}, now())
-    `;
-
-    return {
-      messageId,
-      webhookUrl,
-      status: 'sent',
-    };
-  }
-
-  private async getWebhookForProfile(profileId: string): Promise<string> {
-    // TODO: Query profile's linked Discord webhook URL
-    const result = await this.prisma.$queryRaw<Array<{ discord_webhook_url: string }>>`
-      SELECT discord_webhook_url FROM profile_socials WHERE profile_id = ${profileId}
-    `;
-
-    if (result.length === 0 || !result[0].discord_webhook_url) {
+    const webhookUrl = dto.webhookUrl || profile.discordWebhookUrl;
+    if (!webhookUrl) {
       throw new Error('No Discord webhook URL linked to profile');
     }
 
-    return result[0].discord_webhook_url;
+    let externalId = `dc_mock_${Date.now()}`;
+    let status = 'sent';
+
+    try {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: dto.content,
+          embeds: dto.embeds || [],
+        }),
+      });
+
+      if (!response.ok) {
+        status = 'failed';
+        this.logger.error(`Discord webhook failed: ${response.status}`);
+      }
+    } catch (err: any) {
+      status = 'failed';
+      this.logger.error(`Discord send error: ${err.message}`);
+    }
+
+    await this.prisma.message.create({
+      data: {
+        workspaceId,
+        profileId: dto.profileId,
+        channel: 'discord',
+        body: dto.content,
+        status,
+        externalId,
+        sentAt: new Date(),
+      },
+    });
+
+    return { messageId: externalId, webhookUrl, status };
   }
 }

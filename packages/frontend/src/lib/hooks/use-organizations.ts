@@ -13,13 +13,20 @@ export interface Organization {
   [key: string]: unknown;
 }
 
-export function useOrganizations(limit?: number, offset?: number) {
+interface OrganizationFilters {
+  limit?: number;
+  offset?: number;
+  search?: string;
+}
+
+export function useOrganizations(filters?: OrganizationFilters) {
   return useQuery({
-    queryKey: ['organizations', { limit, offset }],
+    queryKey: ['organizations', filters],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (limit) params.set('limit', limit.toString());
-      if (offset) params.set('offset', offset.toString());
+      if (filters?.limit) params.set('limit', filters.limit.toString());
+      if (filters?.offset) params.set('offset', filters.offset.toString());
+      if (filters?.search) params.set('search', filters.search);
 
       const query = params.toString();
       return apiClient.get<{ organizations: Organization[]; total: number }>(
@@ -58,6 +65,48 @@ export function useUpdateOrganization() {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['organization', id] });
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
+    },
+  });
+}
+
+export function useOrganizationProfiles(orgId: string) {
+  return useQuery({
+    queryKey: ['organization', orgId, 'profiles'],
+    queryFn: () =>
+      apiClient.get<Array<{ id: string; primaryAddress: string; suinsName: string | null; tags: string[]; tier: number }>>(
+        `/organizations/${orgId}/profiles`
+      ),
+    enabled: !!orgId,
+  });
+}
+
+export function useLinkProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ orgId, profileId }: { orgId: string; profileId: string }) =>
+      apiClient.post<{ success: boolean; txDigest: string }>(
+        `/organizations/${orgId}/profiles/${profileId}`,
+        {}
+      ),
+    onSuccess: (_, { orgId }) => {
+      queryClient.invalidateQueries({ queryKey: ['organization', orgId, 'profiles'] });
+      queryClient.invalidateQueries({ queryKey: ['organization', orgId] });
+    },
+  });
+}
+
+export function useUnlinkProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ orgId, profileId }: { orgId: string; profileId: string }) =>
+      apiClient.delete<{ success: boolean }>(
+        `/organizations/${orgId}/profiles/${profileId}`
+      ),
+    onSuccess: (_, { orgId }) => {
+      queryClient.invalidateQueries({ queryKey: ['organization', orgId, 'profiles'] });
+      queryClient.invalidateQueries({ queryKey: ['organization', orgId] });
     },
   });
 }
