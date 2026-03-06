@@ -1,15 +1,48 @@
-use crate::handlers::{audit, defi, nft};
+use crate::alerts::AlertEngine;
+use crate::enricher::Enricher;
+use crate::handlers::{audit, defi, governance, nft};
+use crate::webhook::WebhookDispatcher;
 use serde_json::Value;
 use sqlx::PgPool;
+use std::sync::Arc;
 
 /// Event router dispatches events to appropriate handlers based on event type
 pub struct EventRouter {
     pool: PgPool,
+    enricher: Arc<Enricher>,
+    webhook: Option<Arc<WebhookDispatcher>>,
+    alert_engine: Arc<AlertEngine>,
 }
 
 impl EventRouter {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(pool: PgPool, enricher: Arc<Enricher>, alert_engine: Arc<AlertEngine>) -> Self {
+        Self { pool, enricher, webhook: None, alert_engine }
+    }
+
+    pub fn with_webhook(mut self, webhook: Arc<WebhookDispatcher>) -> Self {
+        self.webhook = Some(webhook);
+        self
+    }
+
+    /// Check if an event type is a governance event
+    fn is_governance_event(event_type: &str) -> bool {
+        event_type.contains("VoteEvent")
+            || event_type.contains("ProposalEvent")
+            || event_type.contains("DelegateEvent")
+            || event_type.contains("GovernanceEvent")
+            || event_type.contains("vote")
+            || event_type.contains("proposal")
+            || event_type.contains("delegate")
+    }
+
+    /// Extract the primary address from an event's parsedJson
+    fn extract_address(event: &Value) -> Option<&str> {
+        let data = event.get("parsedJson").unwrap_or(event);
+        data.get("sender")
+            .or_else(|| data.get("user"))
+            .or_else(|| data.get("actor"))
+            .or_else(|| data.get("recipient"))
+            .and_then(|a| a.as_str())
     }
 
     /// Route event to appropriate handler
@@ -44,10 +77,79 @@ impl EventRouter {
                 defi::handle_defi_event(&self.pool, event).await?;
             }
 
+            // Governance events
+            t if Self::is_governance_event(t) => {
+                governance::handle_governance_event(&self.pool, event).await?;
+            }
+
             // Unknown event type - log and skip
             _ => {
                 tracing::trace!("Unhandled event type: {}", event_type);
+                return Ok(());
             }
+        }
+
+        // Check alert engine for whale alerts (before enrichment / webhook)
+        {
+            let data = event.get("parsedJson").unwrap_or(event);
+            let address_for_alert = Self::extract_address(event).unwrap_or("0x0");
+            let amount = data
+                .get("amount")
+                .or_else(|| data.get("value"))
+                .and_then(|a| a.as_str().and_then(|s| s.parse::<i64>().ok()).or_else(|| a.as_i64()))
+                .unwrap_or(0);
+            let token = data
+                .get("coinType")
+                .or_else(|| data.get("token"))
+                .and_then(|t| t.as_str());
+            let tx_digest = event
+                .get("id")
+                .and_then(|id| id.get("txDigest"))
+                .and_then(|d| d.as_str())
+                .unwrap_or("unknown");
+
+            if let Err(e) = self
+                .alert_engine
+                .check_and_alert(address_for_alert, event_type, amount, token, tx_digest)
+                .await
+            {
+                tracing::warn!("Alert engine error: {}", e);
+            }
+        }
+
+        // After handler writes, resolve address -> profile_id for enrichment
+        let address = Self::extract_address(event)
+            .unwrap_or("0x0")
+            .to_string();
+        let profile_id = match self.enricher.resolve_address(&address).await {
+            Ok(Some(pid)) => {
+                tracing::debug!("Enriched address {} -> profile {}", address, pid);
+                Some(pid)
+            }
+            Ok(None) => {
+                tracing::trace!("No profile found for address {}", address);
+                None
+            }
+            Err(e) => {
+                tracing::warn!("Enrichment failed for address {}: {}", address, e);
+                None
+            }
+        };
+
+        // Fire-and-forget webhook dispatch to BFF
+        if let Some(ref webhook) = self.webhook {
+            let indexer_event = WebhookDispatcher::build_event(
+                event,
+                event_type,
+                &address,
+                profile_id,
+            );
+            let wh = webhook.clone();
+            tokio::spawn(async move {
+                if let Err(e) = wh.dispatch(&indexer_event).await {
+                    tracing::warn!("Webhook dispatch error: {}", e);
+                }
+            });
         }
 
         Ok(())
@@ -75,7 +177,11 @@ mod tests {
     async fn test_route_event() {
         let database_url = std::env::var("DATABASE_URL").unwrap();
         let pool = crate::db::create_pool(&database_url).await.unwrap();
-        let router = EventRouter::new(pool);
+        let cache = crate::cache::AddressCache::new();
+        let enricher = Arc::new(crate::enricher::Enricher::new(cache, pool.clone()));
+        let config = crate::config::Config::from_env().unwrap();
+        let alert_engine = Arc::new(crate::alerts::AlertEngine::new(config, pool.clone()));
+        let router = EventRouter::new(pool, enricher, alert_engine);
 
         let event = json!({
             "type": "0x123::profile::AuditEventV1",

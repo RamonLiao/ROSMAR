@@ -131,9 +131,25 @@ impl AlertEngine {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_is_whale_alert() {
-        let config = Config::from_env().unwrap();
+    #[tokio::test]
+    async fn test_is_whale_alert() {
+        // Use a dummy config for unit testing (no real DB needed)
+        let config = Config {
+            database_url: "postgresql://test:test@localhost/test".to_string(),
+            sui_rpc_url: "https://fullnode.testnet.sui.io:443".to_string(),
+            sui_network: "testnet".to_string(),
+            crm_core_package_id: "0x0".to_string(),
+            crm_data_package_id: "0x0".to_string(),
+            crm_vault_package_id: "0x0".to_string(),
+            crm_action_package_id: "0x0".to_string(),
+            whale_alert_threshold_sui: 10_000_000_000,
+            whale_alert_threshold_usd: 10_000,
+            bff_webhook_url: "http://localhost:4000".to_string(),
+            batch_size: 100,
+            batch_timeout_ms: 1000,
+            poll_interval_ms: 2000,
+            checkpoint_batch_size: 10,
+        };
         let pool = sqlx::PgPool::connect_lazy(&config.database_url).unwrap();
         let engine = AlertEngine::new(config, pool);
 

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -17,10 +18,12 @@ import { MessagingModule } from './messaging/messaging.module';
 import { NotificationModule } from './notification/notification.module';
 import { TicketModule } from './ticket/ticket.module';
 import { TestAuthModule } from './auth/test-auth.module';
+import { WebhookModule } from './webhook/webhook.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    EventEmitterModule.forRoot(),
     PrismaModule,
     AuthModule,
     BlockchainModule,
@@ -35,6 +38,7 @@ import { TestAuthModule } from './auth/test-auth.module';
     MessagingModule,
     NotificationModule,
     TicketModule,
+    WebhookModule,
     ...(process.env.NODE_ENV === 'test' ? [TestAuthModule] : []),
   ],
   controllers: [AppController],

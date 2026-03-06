@@ -1,5 +1,6 @@
 pub mod audit;
 pub mod defi;
+pub mod governance;
 pub mod nft;
 
 /// Common event data structure

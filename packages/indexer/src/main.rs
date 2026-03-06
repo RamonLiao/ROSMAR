@@ -6,8 +6,10 @@ mod db;
 mod enricher;
 mod handlers;
 mod router;
+mod webhook;
 mod writer;
 
+use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -35,20 +37,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cache = cache::AddressCache::new();
 
     // Create enricher and preload cache
-    let enricher = enricher::Enricher::new(cache.clone(), pool.clone());
+    let enricher = Arc::new(enricher::Enricher::new(cache.clone(), pool.clone()));
     let preloaded = enricher.preload_cache().await?;
     tracing::info!("Preloaded {} profiles into cache", preloaded);
 
     // Initialize alert engine
-    let _alert_engine = alerts::AlertEngine::new(config.clone(), pool.clone());
+    let alert_engine = Arc::new(alerts::AlertEngine::new(config.clone(), pool.clone()));
     tracing::info!("Alert engine initialized");
 
+    // Create webhook dispatcher
+    let webhook_dispatcher = Arc::new(webhook::WebhookDispatcher::new(
+        config.bff_webhook_url.clone(),
+    ));
+    tracing::info!("Webhook dispatcher initialized");
+
     // Create event router
-    let _router = router::EventRouter::new(pool.clone());
+    let router = Arc::new(
+        router::EventRouter::new(pool.clone(), enricher.clone(), alert_engine)
+            .with_webhook(webhook_dispatcher),
+    );
     tracing::info!("Event router initialized");
 
     // Create checkpoint consumer
-    let consumer = consumer::CheckpointConsumer::new(config.clone(), pool.clone());
+    let consumer = consumer::CheckpointConsumer::new(config.clone(), pool.clone(), router);
 
     // Get starting checkpoint
     let start_checkpoint = db::get_last_checkpoint(&pool).await?;
