@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { IsString, IsOptional, IsInt } from 'class-validator';
 import { VaultService } from './vault.service';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { RbacGuard, RequirePermissions, WRITE, DELETE } from '../auth/guards/rbac.guard';
@@ -16,13 +17,25 @@ import { User } from '../auth/decorators/user.decorator';
 import { UserPayload } from '../auth/auth.service';
 
 export class StoreSecretDto {
+  @IsString()
   profileId: string;
+
+  @IsString()
   key: string;
-  encryptedData: Buffer;
+
+  @IsString()
+  encryptedData: string; // base64-encoded encrypted blob
+
+  @IsOptional()
+  @IsString()
+  sealPolicyId?: string;
 }
 
 export class UpdateSecretDto {
-  encryptedData: Buffer;
+  @IsString()
+  encryptedData: string; // base64-encoded encrypted blob
+
+  @IsInt()
   expectedVersion: number;
 }
 

@@ -7,11 +7,12 @@ import { Pool } from 'pg';
 export interface StoreSecretDto {
   profileId: string;
   key: string;
-  encryptedData: Buffer; // Client-side encrypted blob
+  encryptedData: string; // base64-encoded encrypted blob
+  sealPolicyId?: string; // Seal policy object ID for decryption
 }
 
 export interface UpdateSecretDto {
-  encryptedData: Buffer;
+  encryptedData: string; // base64-encoded encrypted blob
   expectedVersion: number;
 }
 
@@ -39,17 +40,20 @@ export class VaultService {
   ): Promise<any> {
     await this.verifyAccess(workspaceId, callerAddress, dto.profileId);
 
+    // Decode base64 → Buffer for Walrus upload
+    const blobBuffer = Buffer.from(dto.encryptedData, 'base64');
+
     // Upload encrypted blob to Walrus
-    const uploadResult = await this.walrusClient.uploadBlob(dto.encryptedData);
+    const uploadResult = await this.walrusClient.uploadBlob(blobBuffer);
 
     // Store metadata in PostgreSQL (blob_id only, no plaintext)
     await this.pgPool.query(
       `INSERT INTO vault_secrets (
-        workspace_id, profile_id, key, walrus_blob_id, version, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, 1, now(), now())
+        workspace_id, profile_id, key, walrus_blob_id, seal_policy_id, version, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, 1, now(), now())
       ON CONFLICT (workspace_id, profile_id, key)
-      DO UPDATE SET walrus_blob_id = $4, version = vault_secrets.version + 1, updated_at = now()`,
-      [workspaceId, dto.profileId, dto.key, uploadResult.blobId],
+      DO UPDATE SET walrus_blob_id = $4, seal_policy_id = $5, version = vault_secrets.version + 1, updated_at = now()`,
+      [workspaceId, dto.profileId, dto.key, uploadResult.blobId, dto.sealPolicyId ?? null],
     );
 
     return {
@@ -71,7 +75,7 @@ export class VaultService {
     await this.verifyAccess(workspaceId, callerAddress, profileId);
 
     const result = await this.pgPool.query(
-      `SELECT walrus_blob_id, version FROM vault_secrets
+      `SELECT walrus_blob_id, seal_policy_id, version FROM vault_secrets
        WHERE workspace_id = $1 AND profile_id = $2 AND key = $3`,
       [workspaceId, profileId, key],
     );
@@ -80,11 +84,12 @@ export class VaultService {
       return null;
     }
 
-    const { walrus_blob_id, version } = result.rows[0];
+    const { walrus_blob_id, seal_policy_id, version } = result.rows[0];
 
     return {
       blobId: walrus_blob_id,
       downloadUrl: `${this.configService.get('WALRUS_AGGREGATOR_URL')}/v1/${walrus_blob_id}`,
+      sealPolicyId: seal_policy_id,
       version,
     };
   }
@@ -97,7 +102,7 @@ export class VaultService {
     await this.verifyAccess(workspaceId, callerAddress, profileId);
 
     const result = await this.pgPool.query(
-      `SELECT key, walrus_blob_id, version, created_at, updated_at
+      `SELECT key, walrus_blob_id, seal_policy_id, version, created_at, updated_at
        FROM vault_secrets
        WHERE workspace_id = $1 AND profile_id = $2
        ORDER BY created_at DESC`,
@@ -108,6 +113,7 @@ export class VaultService {
       secrets: result.rows.map((row) => ({
         key: row.key,
         blobId: row.walrus_blob_id,
+        sealPolicyId: row.seal_policy_id,
         version: row.version,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -124,8 +130,9 @@ export class VaultService {
   ): Promise<any> {
     await this.verifyAccess(workspaceId, callerAddress, profileId);
 
-    // Upload new encrypted blob to Walrus
-    const uploadResult = await this.walrusClient.uploadBlob(dto.encryptedData);
+    // Decode base64 → Buffer and upload to Walrus
+    const blobBuffer = Buffer.from(dto.encryptedData, 'base64');
+    const uploadResult = await this.walrusClient.uploadBlob(blobBuffer);
 
     // Update metadata with optimistic locking
     const result = await this.pgPool.query(
