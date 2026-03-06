@@ -1,3 +1,4 @@
+use crate::alerts::AlertEngine;
 use crate::enricher::Enricher;
 use crate::handlers::{audit, defi, governance, nft};
 use crate::webhook::WebhookDispatcher;
@@ -10,11 +11,12 @@ pub struct EventRouter {
     pool: PgPool,
     enricher: Arc<Enricher>,
     webhook: Option<Arc<WebhookDispatcher>>,
+    alert_engine: Arc<AlertEngine>,
 }
 
 impl EventRouter {
-    pub fn new(pool: PgPool, enricher: Arc<Enricher>) -> Self {
-        Self { pool, enricher, webhook: None }
+    pub fn new(pool: PgPool, enricher: Arc<Enricher>, alert_engine: Arc<AlertEngine>) -> Self {
+        Self { pool, enricher, webhook: None, alert_engine }
     }
 
     pub fn with_webhook(mut self, webhook: Arc<WebhookDispatcher>) -> Self {
@@ -87,6 +89,34 @@ impl EventRouter {
             }
         }
 
+        // Check alert engine for whale alerts (before enrichment / webhook)
+        {
+            let data = event.get("parsedJson").unwrap_or(event);
+            let address_for_alert = Self::extract_address(event).unwrap_or("0x0");
+            let amount = data
+                .get("amount")
+                .or_else(|| data.get("value"))
+                .and_then(|a| a.as_str().and_then(|s| s.parse::<i64>().ok()).or_else(|| a.as_i64()))
+                .unwrap_or(0);
+            let token = data
+                .get("coinType")
+                .or_else(|| data.get("token"))
+                .and_then(|t| t.as_str());
+            let tx_digest = event
+                .get("id")
+                .and_then(|id| id.get("txDigest"))
+                .and_then(|d| d.as_str())
+                .unwrap_or("unknown");
+
+            if let Err(e) = self
+                .alert_engine
+                .check_and_alert(address_for_alert, event_type, amount, token, tx_digest)
+                .await
+            {
+                tracing::warn!("Alert engine error: {}", e);
+            }
+        }
+
         // After handler writes, resolve address -> profile_id for enrichment
         let address = Self::extract_address(event)
             .unwrap_or("0x0")
@@ -149,7 +179,9 @@ mod tests {
         let pool = crate::db::create_pool(&database_url).await.unwrap();
         let cache = crate::cache::AddressCache::new();
         let enricher = Arc::new(crate::enricher::Enricher::new(cache, pool.clone()));
-        let router = EventRouter::new(pool, enricher);
+        let config = crate::config::Config::from_env().unwrap();
+        let alert_engine = Arc::new(crate::alerts::AlertEngine::new(config, pool.clone()));
+        let router = EventRouter::new(pool, enricher, alert_engine);
 
         let event = json!({
             "type": "0x123::profile::AuditEventV1",

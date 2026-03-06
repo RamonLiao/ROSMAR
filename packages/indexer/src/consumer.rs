@@ -203,7 +203,8 @@ mod tests {
         let pool = crate::db::create_pool(&config.database_url).await.unwrap();
         let cache = crate::cache::AddressCache::new();
         let enricher = Arc::new(crate::enricher::Enricher::new(cache, pool.clone()));
-        let router = Arc::new(crate::router::EventRouter::new(pool.clone(), enricher));
+        let alert_engine = Arc::new(crate::alerts::AlertEngine::new(config.clone(), pool.clone()));
+        let router = Arc::new(crate::router::EventRouter::new(pool.clone(), enricher, alert_engine));
         let consumer = CheckpointConsumer::new(config, pool, router);
 
         let checkpoint = consumer.fetch_checkpoint(0).await.unwrap();

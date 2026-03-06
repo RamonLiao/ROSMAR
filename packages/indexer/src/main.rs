@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Preloaded {} profiles into cache", preloaded);
 
     // Initialize alert engine
-    let _alert_engine = alerts::AlertEngine::new(config.clone(), pool.clone());
+    let alert_engine = Arc::new(alerts::AlertEngine::new(config.clone(), pool.clone()));
     tracing::info!("Alert engine initialized");
 
     // Create webhook dispatcher
@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create event router
     let router = Arc::new(
-        router::EventRouter::new(pool.clone(), enricher.clone())
+        router::EventRouter::new(pool.clone(), enricher.clone(), alert_engine)
             .with_webhook(webhook_dispatcher),
     );
     tracing::info!("Event router initialized");
