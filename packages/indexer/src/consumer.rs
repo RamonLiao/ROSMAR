@@ -1,8 +1,10 @@
 use crate::config::Config;
+use crate::router::EventRouter;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::PgPool;
+use std::sync::Arc;
 
 /// Checkpoint consumer — polls Sui fullnode for new checkpoints
 pub struct CheckpointConsumer {
@@ -10,6 +12,7 @@ pub struct CheckpointConsumer {
     rpc_url: String,
     pool: PgPool,
     config: Config,
+    router: Arc<EventRouter>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -33,12 +36,13 @@ struct RpcRequest {
 }
 
 impl CheckpointConsumer {
-    pub fn new(config: Config, pool: PgPool) -> Self {
+    pub fn new(config: Config, pool: PgPool, router: Arc<EventRouter>) -> Self {
         Self {
             client: Client::new(),
             rpc_url: config.sui_rpc_url.clone(),
             pool,
             config,
+            router,
         }
     }
 
@@ -134,10 +138,11 @@ impl CheckpointConsumer {
         // Extract events from transaction
         let events = self.extract_events(&tx_data)?;
 
-        // Route events to appropriate handlers
+        // Route events to appropriate handlers via EventRouter
         for event in events {
-            // This will be handled by router module
-            tracing::trace!("Event: {:?}", event);
+            if let Err(e) = self.router.route_event(&event).await {
+                tracing::error!("Error routing event: {}", e);
+            }
         }
 
         Ok(())
@@ -196,7 +201,8 @@ mod tests {
     async fn test_fetch_checkpoint() {
         let config = Config::from_env().unwrap();
         let pool = crate::db::create_pool(&config.database_url).await.unwrap();
-        let consumer = CheckpointConsumer::new(config, pool);
+        let router = Arc::new(crate::router::EventRouter::new(pool.clone()));
+        let consumer = CheckpointConsumer::new(config, pool, router);
 
         let checkpoint = consumer.fetch_checkpoint(0).await.unwrap();
         assert!(checkpoint.is_some());

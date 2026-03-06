@@ -8,6 +8,7 @@ mod handlers;
 mod router;
 mod writer;
 
+use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -44,11 +45,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Alert engine initialized");
 
     // Create event router
-    let _router = router::EventRouter::new(pool.clone());
+    let router = Arc::new(router::EventRouter::new(pool.clone()));
     tracing::info!("Event router initialized");
 
     // Create checkpoint consumer
-    let consumer = consumer::CheckpointConsumer::new(config.clone(), pool.clone());
+    let consumer = consumer::CheckpointConsumer::new(config.clone(), pool.clone(), router);
 
     // Get starting checkpoint
     let start_checkpoint = db::get_last_checkpoint(&pool).await?;
