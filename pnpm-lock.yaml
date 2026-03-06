@@ -178,13 +178,16 @@ importers:
         version: 5.2.2(react-hook-form@7.71.1(react@19.2.3))
       '@mysten/dapp-kit':
         specifier: ^1.0.3
-        version: 1.0.3(@mysten/sui@2.4.0(typescript@5.9.3))(@tanstack/react-query@5.90.21(react@19.2.3))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(immer@11.1.4)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@5.9.3)(use-sync-external-store@1.6.0(react@19.2.3))
+        version: 1.0.3(@mysten/sui@2.6.0(typescript@5.9.3))(@tanstack/react-query@5.90.21(react@19.2.3))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(immer@11.1.4)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@5.9.3)(use-sync-external-store@1.6.0(react@19.2.3))
       '@mysten/enoki':
         specifier: ^1.0.3
-        version: 1.0.3(@mysten/sui@2.4.0(typescript@5.9.3))(@types/react@19.2.14)(react@19.2.3)
+        version: 1.0.3(@mysten/sui@2.6.0(typescript@5.9.3))(@types/react@19.2.14)(react@19.2.3)
+      '@mysten/seal':
+        specifier: ^1.1.0
+        version: 1.1.0(@mysten/sui@2.6.0(typescript@5.9.3))
       '@mysten/sui':
-        specifier: ^2.4.0
-        version: 2.4.0(typescript@5.9.3)
+        specifier: ^2.6.0
+        version: 2.6.0(typescript@5.9.3)
       '@mysten/zklogin':
         specifier: ^0.8.1
         version: 0.8.1(typescript@5.9.3)
@@ -1223,6 +1226,11 @@ packages:
   '@mysten/ledgerjs-hw-app-sui@0.7.1':
     resolution: {integrity: sha512-2KfPyTzdIeSq4auepS56T09rPE2dHz2VX3G9rFnYjayzynJtNd9tzKWPRpjpCEdBGjp8wg0kEzAeHSOwB0P/Kg==}
 
+  '@mysten/seal@1.1.0':
+    resolution: {integrity: sha512-EXNBRCApmfhI2KPnYIUI8AxYzg/RAv49yzZZ1BX0CzAIKeXUfqd1Bj1sK7/VNem2/gPaYJYRFsUfVvEZXIp1lw==}
+    peerDependencies:
+      '@mysten/sui': ^2.5.0
+
   '@mysten/signers@1.0.1':
     resolution: {integrity: sha512-R23Q5Nm4z4ydmGSbTcS9omw2pPA522WVwkOHiF+n0NJMm/icNlMmM7rTPzA0I6LkUDx1WE+ScEfF9knuAgc/1A==}
     engines: {node: '>=22'}
@@ -1240,6 +1248,10 @@ packages:
 
   '@mysten/sui@2.4.0':
     resolution: {integrity: sha512-2EG5+lTypWMgU3lWyKlcjopQ++Ae9BkoROOBVcJ6mYwM5o1IcKnoc7rFqr94KQClYmBFV2aFz5+aKm5okatoBw==}
+    engines: {node: '>=22'}
+
+  '@mysten/sui@2.6.0':
+    resolution: {integrity: sha512-Dp3z7mDuUCXGgldQ3/AtC1iDiK48XTuAi//fPrHdxEaMl+f5VLjbYtB+mlKNC1SVYLKOUjTeF/RA9qfEBY++pA==}
     engines: {node: '>=22'}
 
   '@mysten/utils@0.3.1':
@@ -7987,12 +7999,12 @@ snapshots:
       '@mysten/utils': 0.3.1
       '@scure/base': 2.0.0
 
-  '@mysten/dapp-kit@1.0.3(@mysten/sui@2.4.0(typescript@5.9.3))(@tanstack/react-query@5.90.21(react@19.2.3))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(immer@11.1.4)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@5.9.3)(use-sync-external-store@1.6.0(react@19.2.3))':
+  '@mysten/dapp-kit@1.0.3(@mysten/sui@2.6.0(typescript@5.9.3))(@tanstack/react-query@5.90.21(react@19.2.3))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(immer@11.1.4)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@5.9.3)(use-sync-external-store@1.6.0(react@19.2.3))':
     dependencies:
-      '@mysten/slush-wallet': 1.0.2(@mysten/sui@2.4.0(typescript@5.9.3))(typescript@5.9.3)
-      '@mysten/sui': 2.4.0(typescript@5.9.3)
+      '@mysten/slush-wallet': 1.0.2(@mysten/sui@2.6.0(typescript@5.9.3))(typescript@5.9.3)
+      '@mysten/sui': 2.6.0(typescript@5.9.3)
       '@mysten/utils': 0.3.1
-      '@mysten/wallet-standard': 0.20.1(@mysten/sui@2.4.0(typescript@5.9.3))
+      '@mysten/wallet-standard': 0.20.1(@mysten/sui@2.6.0(typescript@5.9.3))
       '@radix-ui/react-dialog': 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@radix-ui/react-dropdown-menu': 2.1.16(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@radix-ui/react-slot': 1.2.4(@types/react@19.2.14)(react@19.2.3)
@@ -8028,7 +8040,30 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@mysten/enoki@1.0.3(@mysten/sui@2.6.0(typescript@5.9.3))(@types/react@19.2.14)(react@19.2.3)':
+    dependencies:
+      '@mysten/signers': 1.0.1(@mysten/sui@2.6.0(typescript@5.9.3))
+      '@mysten/sui': 2.6.0(typescript@5.9.3)
+      '@mysten/utils': 0.3.1
+      '@mysten/wallet-standard': 0.20.1(@mysten/sui@2.6.0(typescript@5.9.3))
+      '@nanostores/react': 1.0.0(nanostores@1.1.0)(react@19.2.3)
+      '@wallet-standard/ui': 1.0.1
+      idb-keyval: 6.2.2
+      nanostores: 1.1.0
+    optionalDependencies:
+      '@types/react': 19.2.14
+      react: 19.2.3
+    transitivePeerDependencies:
+      - supports-color
+
   '@mysten/ledgerjs-hw-app-sui@0.7.1': {}
+
+  '@mysten/seal@1.1.0(@mysten/sui@2.6.0(typescript@5.9.3))':
+    dependencies:
+      '@mysten/bcs': 2.0.2
+      '@mysten/sui': 2.6.0(typescript@5.9.3)
+      '@noble/curves': 2.0.1
+      '@noble/hashes': 2.0.1
 
   '@mysten/signers@1.0.1(@mysten/sui@2.4.0(typescript@5.9.3))':
     dependencies:
@@ -8041,11 +8076,22 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@mysten/slush-wallet@1.0.2(@mysten/sui@2.4.0(typescript@5.9.3))(typescript@5.9.3)':
+  '@mysten/signers@1.0.1(@mysten/sui@2.6.0(typescript@5.9.3))':
     dependencies:
-      '@mysten/sui': 2.4.0(typescript@5.9.3)
+      '@google-cloud/kms': 5.3.0
+      '@mysten/ledgerjs-hw-app-sui': 0.7.1
+      '@mysten/sui': 2.6.0(typescript@5.9.3)
+      '@noble/curves': 2.0.1
+      '@noble/hashes': 2.0.1
+      asn1-ts: 11.0.5
+    transitivePeerDependencies:
+      - supports-color
+
+  '@mysten/slush-wallet@1.0.2(@mysten/sui@2.6.0(typescript@5.9.3))(typescript@5.9.3)':
+    dependencies:
+      '@mysten/sui': 2.6.0(typescript@5.9.3)
       '@mysten/utils': 0.3.1
-      '@mysten/wallet-standard': 0.20.1(@mysten/sui@2.4.0(typescript@5.9.3))
+      '@mysten/wallet-standard': 0.20.1(@mysten/sui@2.6.0(typescript@5.9.3))
       '@mysten/window-wallet-core': 0.1.3(typescript@5.9.3)
       valibot: 1.2.0(typescript@5.9.3)
     transitivePeerDependencies:
@@ -8094,6 +8140,28 @@ snapshots:
       - '@gql.tada/vue-support'
       - typescript
 
+  '@mysten/sui@2.6.0(typescript@5.9.3)':
+    dependencies:
+      '@graphql-typed-document-node/core': 3.2.0(graphql@16.12.0)
+      '@mysten/bcs': 2.0.2
+      '@mysten/utils': 0.3.1
+      '@noble/curves': 2.0.1
+      '@noble/hashes': 2.0.1
+      '@protobuf-ts/grpcweb-transport': 2.11.1
+      '@protobuf-ts/runtime': 2.11.1
+      '@protobuf-ts/runtime-rpc': 2.11.1
+      '@scure/base': 2.0.0
+      '@scure/bip32': 2.0.1
+      '@scure/bip39': 2.0.1
+      gql.tada: 1.9.0(graphql@16.12.0)(typescript@5.9.3)
+      graphql: 16.12.0
+      poseidon-lite: 0.2.1
+      valibot: 1.2.0(typescript@5.9.3)
+    transitivePeerDependencies:
+      - '@gql.tada/svelte-support'
+      - '@gql.tada/vue-support'
+      - typescript
+
   '@mysten/utils@0.3.1':
     dependencies:
       '@scure/base': 2.0.0
@@ -8101,6 +8169,11 @@ snapshots:
   '@mysten/wallet-standard@0.20.1(@mysten/sui@2.4.0(typescript@5.9.3))':
     dependencies:
       '@mysten/sui': 2.4.0(typescript@5.9.3)
+      '@wallet-standard/core': 1.1.1
+
+  '@mysten/wallet-standard@0.20.1(@mysten/sui@2.6.0(typescript@5.9.3))':
+    dependencies:
+      '@mysten/sui': 2.6.0(typescript@5.9.3)
       '@wallet-standard/core': 1.1.1
 
   '@mysten/window-wallet-core@0.1.3(typescript@5.9.3)':
@@ -11016,7 +11089,7 @@ snapshots:
       '@next/eslint-plugin-next': 16.1.6
       eslint: 9.39.2(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.2(jiti@2.6.1))
       eslint-plugin-import: 2.32.0(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.2(jiti@2.6.1))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.2(jiti@2.6.1))
       eslint-plugin-react: 7.37.5(eslint@9.39.2(jiti@2.6.1))
@@ -11043,7 +11116,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1)):
+  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.2(jiti@2.6.1)):
     dependencies:
       '@nolyfill/is-core-module': 1.0.39
       debug: 4.4.3
@@ -11058,13 +11131,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.12.1(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1)):
+  eslint-module-utils@2.12.1(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.2(jiti@2.6.1)):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
       eslint: 9.39.2(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.2(jiti@2.6.1))
     transitivePeerDependencies:
       - supports-color
 
@@ -11079,7 +11152,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 9.39.2(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
-      eslint-module-utils: 2.12.1(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1))
+      eslint-module-utils: 2.12.1(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.2(jiti@2.6.1))
       hasown: 2.0.2
       is-core-module: 2.16.1
       is-glob: 4.0.3
