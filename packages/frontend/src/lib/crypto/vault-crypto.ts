@@ -85,6 +85,55 @@ export async function decrypt(
   return new TextDecoder().decode(plainBuffer);
 }
 
+/**
+ * Encrypt raw bytes with AES-GCM.
+ * Same as encrypt() but for binary data (files).
+ * Returns: salt (16B) || iv (12B) || ciphertext
+ */
+export async function encryptBytes(
+  data: Uint8Array,
+  signature: string,
+): Promise<Uint8Array> {
+  const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
+  const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
+  const key = await deriveKey(signature, salt);
+
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    data,
+  );
+
+  const result = new Uint8Array(SALT_BYTES + IV_BYTES + ciphertext.byteLength);
+  result.set(salt, 0);
+  result.set(iv, SALT_BYTES);
+  result.set(new Uint8Array(ciphertext), SALT_BYTES + IV_BYTES);
+  return result;
+}
+
+/**
+ * Decrypt to raw bytes (for file downloads).
+ * Same as decrypt() but returns Uint8Array instead of string.
+ */
+export async function decryptBytes(
+  data: Uint8Array,
+  signature: string,
+): Promise<Uint8Array> {
+  const salt = data.slice(0, SALT_BYTES);
+  const iv = data.slice(SALT_BYTES, SALT_BYTES + IV_BYTES);
+  const ciphertext = data.slice(SALT_BYTES + IV_BYTES);
+
+  const key = await deriveKey(signature, salt);
+
+  const plainBuffer = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    ciphertext,
+  );
+
+  return new Uint8Array(plainBuffer);
+}
+
 /** Convert Uint8Array to base64 for transport */
 export function toBase64(data: Uint8Array): string {
   return btoa(String.fromCharCode(...data));
