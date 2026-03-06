@@ -14,6 +14,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import { Bell, ChevronDown, LogOut, User } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useRouter } from "next/navigation";
+import { resetSealInstances } from "@/lib/crypto/seal-crypto";
 
 export function Topbar() {
   const router = useRouter();
@@ -21,6 +22,7 @@ export function Topbar() {
   const { activeWorkspace, workspaces, setActiveWorkspace } = useWorkspaceStore();
 
   const handleLogout = () => {
+    resetSealInstances();
     logout();
     router.push("/login");
   };
