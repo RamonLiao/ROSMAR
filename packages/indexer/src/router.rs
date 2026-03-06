@@ -1,5 +1,5 @@
 use crate::enricher::Enricher;
-use crate::handlers::{audit, defi, nft};
+use crate::handlers::{audit, defi, governance, nft};
 use serde_json::Value;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -13,6 +13,17 @@ pub struct EventRouter {
 impl EventRouter {
     pub fn new(pool: PgPool, enricher: Arc<Enricher>) -> Self {
         Self { pool, enricher }
+    }
+
+    /// Check if an event type is a governance event
+    fn is_governance_event(event_type: &str) -> bool {
+        event_type.contains("VoteEvent")
+            || event_type.contains("ProposalEvent")
+            || event_type.contains("DelegateEvent")
+            || event_type.contains("GovernanceEvent")
+            || event_type.contains("vote")
+            || event_type.contains("proposal")
+            || event_type.contains("delegate")
     }
 
     /// Extract the primary address from an event's parsedJson
@@ -55,6 +66,11 @@ impl EventRouter {
                 || t.contains("StakeEvent")
                 || t.contains("UnstakeEvent") => {
                 defi::handle_defi_event(&self.pool, event).await?;
+            }
+
+            // Governance events
+            t if Self::is_governance_event(t) => {
+                governance::handle_governance_event(&self.pool, event).await?;
             }
 
             // Unknown event type - log and skip
