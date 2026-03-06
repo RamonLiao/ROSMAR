@@ -16,6 +16,7 @@ import { VaultModule } from './vault/vault.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { NotificationModule } from './notification/notification.module';
 import { TicketModule } from './ticket/ticket.module';
+import { TestAuthModule } from './auth/test-auth.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { TicketModule } from './ticket/ticket.module';
     MessagingModule,
     NotificationModule,
     TicketModule,
+    ...(process.env.NODE_ENV === 'test' ? [TestAuthModule] : []),
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -348,6 +348,15 @@ export class AuthService {
     return this.issueTokens(user);
   }
 
+  /**
+   * Test-only login: resolve/create membership and issue tokens directly.
+   * Only callable when TestAuthModule is loaded (NODE_ENV=test).
+   */
+  async testLogin(address: string): Promise<AuthResponse> {
+    const user = await this.resolveOrCreateMembership(address);
+    return this.issueTokens(user);
+  }
+
   async validateUser(payload: UserPayload): Promise<UserPayload> {
     // This is called by passport strategies
     return payload;
