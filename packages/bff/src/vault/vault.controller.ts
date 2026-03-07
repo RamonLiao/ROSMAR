@@ -6,23 +6,24 @@ import {
   Delete,
   Body,
   Param,
-  Query,
   UseGuards,
 } from '@nestjs/common';
 import { VaultService } from './vault.service';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { RbacGuard, RequirePermissions, WRITE, DELETE } from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
-import { UserPayload } from '../auth/auth.service';
+import type { UserPayload } from '../auth/auth.service';
 
-export class StoreSecretDto {
+export class StoreSecretBodyDto {
   profileId: string;
   key: string;
-  encryptedData: Buffer;
+  encryptedData: string; // base64
+  sealPolicyId?: string;
+  expiresAt?: string; // ISO date string
 }
 
-export class UpdateSecretDto {
-  encryptedData: Buffer;
+export class UpdateSecretBodyDto {
+  encryptedData: string; // base64
   expectedVersion: number;
 }
 
@@ -34,19 +35,25 @@ export class VaultController {
   @Post('secrets')
   @RequirePermissions(WRITE)
   async storeSecret(
-    @User() user: import('../auth/auth.service').UserPayload,
-    @Body() dto: import('./vault.controller').StoreSecretDto,
+    @User() user: UserPayload,
+    @Body() dto: StoreSecretBodyDto,
   ) {
     return this.vaultService.storeSecret(
       user.workspaceId,
       user.address,
-      dto,
+      {
+        profileId: dto.profileId,
+        key: dto.key,
+        encryptedData: Buffer.from(dto.encryptedData, 'base64'),
+        sealPolicyId: dto.sealPolicyId,
+        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
+      },
     );
   }
 
   @Get('secrets/:profileId/:key')
   async getSecret(
-    @User() user: import('../auth/auth.service').UserPayload,
+    @User() user: UserPayload,
     @Param('profileId') profileId: string,
     @Param('key') key: string,
   ) {
@@ -60,7 +67,7 @@ export class VaultController {
 
   @Get('secrets/:profileId')
   async listSecrets(
-    @User() user: import('../auth/auth.service').UserPayload,
+    @User() user: UserPayload,
     @Param('profileId') profileId: string,
   ) {
     return this.vaultService.listSecrets(
@@ -73,24 +80,27 @@ export class VaultController {
   @Put('secrets/:profileId/:key')
   @RequirePermissions(WRITE)
   async updateSecret(
-    @User() user: import('../auth/auth.service').UserPayload,
+    @User() user: UserPayload,
     @Param('profileId') profileId: string,
     @Param('key') key: string,
-    @Body() dto: import('./vault.controller').UpdateSecretDto,
+    @Body() dto: UpdateSecretBodyDto,
   ) {
     return this.vaultService.updateSecret(
       user.workspaceId,
       user.address,
       profileId,
       key,
-      dto,
+      {
+        encryptedData: Buffer.from(dto.encryptedData, 'base64'),
+        expectedVersion: dto.expectedVersion,
+      },
     );
   }
 
   @Delete('secrets/:profileId/:key')
   @RequirePermissions(DELETE)
   async deleteSecret(
-    @User() user: import('../auth/auth.service').UserPayload,
+    @User() user: UserPayload,
     @Param('profileId') profileId: string,
     @Param('key') key: string,
     @Body('expectedVersion') expectedVersion: number,
@@ -101,6 +111,19 @@ export class VaultController {
       profileId,
       key,
       expectedVersion,
+    );
+  }
+
+  @Get('secrets/:profileId/:key/audit')
+  async getAuditLog(
+    @User() user: UserPayload,
+    @Param('profileId') profileId: string,
+    @Param('key') key: string,
+  ) {
+    return this.vaultService.getAccessLog(
+      user.workspaceId,
+      profileId,
+      key,
     );
   }
 }

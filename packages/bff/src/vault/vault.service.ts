@@ -1,13 +1,15 @@
-// @ts-nocheck
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../prisma/prisma.service';
 import { WalrusClient } from './walrus.client';
-import { Pool } from 'pg';
+import { SuiClientService } from '../blockchain/sui.client';
 
 export interface StoreSecretDto {
   profileId: string;
   key: string;
-  encryptedData: Buffer; // Client-side encrypted blob
+  encryptedData: Buffer;
+  sealPolicyId?: string;
+  expiresAt?: Date;
 }
 
 export interface UpdateSecretDto {
@@ -17,40 +19,52 @@ export interface UpdateSecretDto {
 
 @Injectable()
 export class VaultService {
-  private pgPool: Pool;
+  // Policy rule constants (match Move contract)
+  private readonly RULE_WORKSPACE_MEMBER = 0;
+  private readonly RULE_SPECIFIC_ADDRESS = 1;
+  private readonly RULE_ROLE_BASED = 2;
 
   constructor(
     private readonly walrusClient: WalrusClient,
     private readonly configService: ConfigService,
-  ) {
-    this.pgPool = new Pool({
-      connectionString: this.configService.get<string>('DATABASE_URL'),
-    });
-  }
+    private readonly prisma: PrismaService,
+    private readonly suiClient: SuiClientService,
+  ) {}
 
-  /**
-   * Store encrypted blob to Walrus (BFF never sees plaintext)
-   * Client must encrypt data before sending
-   */
   async storeSecret(
     workspaceId: string,
     callerAddress: string,
     dto: StoreSecretDto,
   ): Promise<any> {
-    await this.verifyAccess(workspaceId, callerAddress, dto.profileId);
+    await this.verifyPolicyAccess(workspaceId, callerAddress, null);
 
-    // Upload encrypted blob to Walrus
     const uploadResult = await this.walrusClient.uploadBlob(dto.encryptedData);
 
-    // Store metadata in PostgreSQL (blob_id only, no plaintext)
-    await this.pgPool.query(
-      `INSERT INTO vault_secrets (
-        workspace_id, profile_id, key, walrus_blob_id, version, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, 1, now(), now())
-      ON CONFLICT (workspace_id, profile_id, key)
-      DO UPDATE SET walrus_blob_id = $4, version = vault_secrets.version + 1, updated_at = now()`,
-      [workspaceId, dto.profileId, dto.key, uploadResult.blobId],
-    );
+    const secret = await this.prisma.vaultSecret.upsert({
+      where: {
+        workspaceId_profileId_key: {
+          workspaceId,
+          profileId: dto.profileId,
+          key: dto.key,
+        },
+      },
+      update: {
+        walrusBlobId: uploadResult.blobId,
+        sealPolicyId: dto.sealPolicyId ?? null,
+        expiresAt: dto.expiresAt ?? null,
+        version: { increment: 1 },
+      },
+      create: {
+        workspaceId,
+        profileId: dto.profileId,
+        key: dto.key,
+        walrusBlobId: uploadResult.blobId,
+        sealPolicyId: dto.sealPolicyId ?? null,
+        expiresAt: dto.expiresAt ?? null,
+      },
+    });
+
+    await this.logAccess(workspaceId, secret.id, callerAddress, 'create');
 
     return {
       blobId: uploadResult.blobId,
@@ -58,34 +72,27 @@ export class VaultService {
     };
   }
 
-  /**
-   * Get encrypted blob URL from Walrus
-   * Client must decrypt after download
-   */
   async getSecret(
     workspaceId: string,
     callerAddress: string,
     profileId: string,
     key: string,
   ): Promise<any> {
-    await this.verifyAccess(workspaceId, callerAddress, profileId);
+    const secret = await this.prisma.vaultSecret.findUnique({
+      where: {
+        workspaceId_profileId_key: { workspaceId, profileId, key },
+      },
+    });
 
-    const result = await this.pgPool.query(
-      `SELECT walrus_blob_id, version FROM vault_secrets
-       WHERE workspace_id = $1 AND profile_id = $2 AND key = $3`,
-      [workspaceId, profileId, key],
-    );
+    if (!secret) return null;
 
-    if (result.rows.length === 0) {
-      return null;
-    }
-
-    const { walrus_blob_id, version } = result.rows[0];
+    await this.verifyPolicyAccess(workspaceId, callerAddress, secret.sealPolicyId);
+    await this.logAccess(workspaceId, secret.id, callerAddress, 'read');
 
     return {
-      blobId: walrus_blob_id,
-      downloadUrl: `${this.configService.get('WALRUS_AGGREGATOR_URL')}/v1/${walrus_blob_id}`,
-      version,
+      blobId: secret.walrusBlobId,
+      downloadUrl: `${this.configService.get('WALRUS_AGGREGATOR_URL')}/v1/${secret.walrusBlobId}`,
+      version: secret.version,
     };
   }
 
@@ -94,23 +101,22 @@ export class VaultService {
     callerAddress: string,
     profileId: string,
   ): Promise<any> {
-    await this.verifyAccess(workspaceId, callerAddress, profileId);
+    await this.verifyPolicyAccess(workspaceId, callerAddress, null);
 
-    const result = await this.pgPool.query(
-      `SELECT key, walrus_blob_id, version, created_at, updated_at
-       FROM vault_secrets
-       WHERE workspace_id = $1 AND profile_id = $2
-       ORDER BY created_at DESC`,
-      [workspaceId, profileId],
-    );
+    const secrets = await this.prisma.vaultSecret.findMany({
+      where: { workspaceId, profileId },
+      orderBy: { createdAt: 'desc' },
+    });
 
     return {
-      secrets: result.rows.map((row) => ({
-        key: row.key,
-        blobId: row.walrus_blob_id,
-        version: row.version,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
+      secrets: secrets.map((s) => ({
+        key: s.key,
+        blobId: s.walrusBlobId,
+        version: s.version,
+        sealPolicyId: s.sealPolicyId,
+        expiresAt: s.expiresAt,
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
       })),
     };
   }
@@ -122,28 +128,41 @@ export class VaultService {
     key: string,
     dto: UpdateSecretDto,
   ): Promise<any> {
-    await this.verifyAccess(workspaceId, callerAddress, profileId);
+    const existing = await this.prisma.vaultSecret.findUnique({
+      where: {
+        workspaceId_profileId_key: { workspaceId, profileId, key },
+      },
+    });
 
-    // Upload new encrypted blob to Walrus
+    if (!existing) throw new Error('Secret not found');
+
+    await this.verifyPolicyAccess(workspaceId, callerAddress, existing.sealPolicyId);
+
     const uploadResult = await this.walrusClient.uploadBlob(dto.encryptedData);
 
-    // Update metadata with optimistic locking
-    const result = await this.pgPool.query(
-      `UPDATE vault_secrets
-       SET walrus_blob_id = $1, version = version + 1, updated_at = now()
-       WHERE workspace_id = $2 AND profile_id = $3 AND key = $4 AND version = $5
-       RETURNING version`,
-      [uploadResult.blobId, workspaceId, profileId, key, dto.expectedVersion],
-    );
+    const updated = await this.prisma.vaultSecret.updateMany({
+      where: {
+        workspaceId,
+        profileId,
+        key,
+        version: dto.expectedVersion,
+      },
+      data: {
+        walrusBlobId: uploadResult.blobId,
+        version: { increment: 1 },
+      },
+    });
 
-    if (result.rows.length === 0) {
+    if (updated.count === 0) {
       throw new Error('Version mismatch or secret not found');
     }
+
+    await this.logAccess(workspaceId, existing.id, callerAddress, 'update');
 
     return {
       blobId: uploadResult.blobId,
       url: uploadResult.url,
-      version: result.rows[0].version,
+      version: dto.expectedVersion + 1,
     };
   }
 
@@ -154,36 +173,115 @@ export class VaultService {
     key: string,
     expectedVersion: number,
   ): Promise<any> {
-    await this.verifyAccess(workspaceId, callerAddress, profileId);
+    const existing = await this.prisma.vaultSecret.findUnique({
+      where: {
+        workspaceId_profileId_key: { workspaceId, profileId, key },
+      },
+    });
 
-    const result = await this.pgPool.query(
-      `DELETE FROM vault_secrets
-       WHERE workspace_id = $1 AND profile_id = $2 AND key = $3 AND version = $4
-       RETURNING walrus_blob_id`,
-      [workspaceId, profileId, key, expectedVersion],
-    );
+    if (!existing) throw new Error('Secret not found');
 
-    if (result.rows.length === 0) {
+    await this.verifyPolicyAccess(workspaceId, callerAddress, existing.sealPolicyId);
+
+    const deleted = await this.prisma.vaultSecret.deleteMany({
+      where: {
+        workspaceId,
+        profileId,
+        key,
+        version: expectedVersion,
+      },
+    });
+
+    if (deleted.count === 0) {
       throw new Error('Version mismatch or secret not found');
     }
 
+    await this.logAccess(workspaceId, existing.id, callerAddress, 'delete');
+
     return {
       success: true,
-      deletedBlobId: result.rows[0].walrus_blob_id,
+      deletedBlobId: existing.walrusBlobId,
     };
   }
 
-  private async verifyAccess(
+  async getAccessLog(workspaceId: string, profileId: string, key: string) {
+    const secret = await this.prisma.vaultSecret.findUnique({
+      where: {
+        workspaceId_profileId_key: { workspaceId, profileId, key },
+      },
+    });
+    if (!secret) return { logs: [] };
+
+    const logs = await this.prisma.vaultAccessLog.findMany({
+      where: { workspaceId, secretId: secret.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    return { logs };
+  }
+
+  async verifyPolicyAccess(
     workspaceId: string,
     callerAddress: string,
-    profileId: string,
+    sealPolicyId: string | null,
   ): Promise<void> {
-    // TODO: Check if caller has MANAGE permission for this profile's vault
-    // Query workspace membership and permissions
-    const hasAccess = true; // Mock
+    const member = await this.prisma.workspaceMember.findUnique({
+      where: {
+        workspaceId_address: { workspaceId, address: callerAddress },
+      },
+    });
 
-    if (!hasAccess) {
+    if (!member || (member.permissions & 16) === 0) {
       throw new UnauthorizedException('No access to this vault');
     }
+
+    // If no seal policy, workspace membership is sufficient
+    if (!sealPolicyId) return;
+
+    // Fetch policy object from chain
+    const policyObj = await this.suiClient.getObject(sealPolicyId);
+    const fields = (policyObj?.data?.content as any)?.fields;
+    if (!fields) return; // Policy not found on-chain, fall back to membership check
+
+    const ruleType = Number(fields.rule_type);
+
+    if (ruleType === this.RULE_WORKSPACE_MEMBER) {
+      return;
+    }
+
+    if (ruleType === this.RULE_SPECIFIC_ADDRESS) {
+      const allowed: string[] = fields.allowed_addresses ?? [];
+      if (!allowed.includes(callerAddress)) {
+        throw new UnauthorizedException(
+          'Your address is not in the allowed list for this vault item',
+        );
+      }
+      return;
+    }
+
+    if (ruleType === this.RULE_ROLE_BASED) {
+      const minLevel = Number(fields.min_role_level);
+      if (member.roleLevel < minLevel) {
+        throw new UnauthorizedException(
+          `Requires role level ${minLevel}, you have ${member.roleLevel}`,
+        );
+      }
+      return;
+    }
+
+    throw new UnauthorizedException('Unknown policy rule type');
+  }
+
+  private async logAccess(
+    workspaceId: string,
+    secretId: string,
+    actor: string,
+    action: string,
+    metadata?: any,
+  ) {
+    await this.prisma.vaultAccessLog.create({
+      data: { workspaceId, secretId, actor, action, metadata },
+    });
   }
 }
