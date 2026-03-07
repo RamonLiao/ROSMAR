@@ -12,6 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DealDocuments } from "@/components/deal/deal-documents";
 import { ArrowLeft, Pencil, X, Loader2, DollarSign } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useDeal, useUpdateDeal } from "@/lib/hooks/use-deals";
@@ -139,109 +141,125 @@ export default function DealDetailPage({
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Overview</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {editing ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {isClosed && (
-                <div className="sm:col-span-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                  This deal is closed. Only the stage can be changed.
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Overview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {editing ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {isClosed && (
+                    <div className="sm:col-span-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                      This deal is closed. Only the stage can be changed.
+                    </div>
+                  )}
+                  <div className="grid gap-2">
+                    <Label>Title</Label>
+                    <Input
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      disabled={isClosed}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Amount USD</Label>
+                    <Input
+                      type="number"
+                      value={amountUsd}
+                      onChange={(e) => setAmountUsd(e.target.value)}
+                      disabled={isClosed}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Stage</Label>
+                    <Select value={stage} onValueChange={setStage}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DEAL_STAGES.map((s) => (
+                          <SelectItem key={s.value} value={s.value}>
+                            {s.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Profile ID</Label>
+                    <Input
+                      value={deal.profileId}
+                      disabled
+                      className="text-muted-foreground"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <div className="text-sm text-muted-foreground">Amount</div>
+                    <div className="mt-1 flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-green-600" />
+                      <span className="text-lg font-semibold">
+                        {Number(deal.amountUsd).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">Stage</div>
+                    <div className="mt-1 font-medium">{stageLabel}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">Profile</div>
+                    <div className="mt-1 text-sm break-all">{deal.profileId}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">Created</div>
+                    <div className="mt-1">
+                      {new Date(deal.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
                 </div>
               )}
-              <div className="grid gap-2">
-                <Label>Title</Label>
-                <Input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  disabled={isClosed}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Amount USD</Label>
-                <Input
-                  type="number"
-                  value={amountUsd}
-                  onChange={(e) => setAmountUsd(e.target.value)}
-                  disabled={isClosed}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Stage</Label>
-                <Select value={stage} onValueChange={setStage}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DEAL_STAGES.map((s) => (
-                      <SelectItem key={s.value} value={s.value}>
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label>Profile ID</Label>
-                <Input
-                  value={deal.profileId}
-                  disabled
-                  className="text-muted-foreground"
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <div className="text-sm text-muted-foreground">Amount</div>
-                <div className="mt-1 flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-green-600" />
-                  <span className="text-lg font-semibold">
-                    {Number(deal.amountUsd).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Stage</div>
-                <div className="mt-1 font-medium">{stageLabel}</div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Profile</div>
-                <div className="mt-1 text-sm break-all">{deal.profileId}</div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Created</div>
-                <div className="mt-1">
-                  {new Date(deal.createdAt).toLocaleDateString()}
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Notes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {editing ? (
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add notes..."
-              rows={4}
-              disabled={isClosed}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-              {deal.notes || "No notes"}
-            </p>
-          )}
-        </CardContent>
-      </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Notes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {editing ? (
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Add notes..."
+                  rows={4}
+                  disabled={isClosed}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                  {deal.notes || "No notes"}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="documents">
+          <DealDocuments
+            dealId={deal.id}
+            workspaceId={deal.workspaceId}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

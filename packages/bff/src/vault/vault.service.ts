@@ -2,43 +2,45 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalrusClient } from './walrus.client';
+import { SuiClientService } from '../blockchain/sui.client';
 
-export interface StoreSecretInput {
+export interface StoreSecretDto {
   profileId: string;
   key: string;
-  encryptedData: string;
-  vaultType: 'note' | 'file';
+  encryptedData: Buffer;
   sealPolicyId?: string;
-  fileName?: string;
-  mimeType?: string;
-  fileSize?: number;
+  expiresAt?: Date;
 }
 
-export interface UpdateSecretInput {
-  encryptedData: string;
+export interface UpdateSecretDto {
+  encryptedData: Buffer;
   expectedVersion: number;
 }
 
 @Injectable()
 export class VaultService {
+  // Policy rule constants (match Move contract)
+  private readonly RULE_WORKSPACE_MEMBER = 0;
+  private readonly RULE_SPECIFIC_ADDRESS = 1;
+  private readonly RULE_ROLE_BASED = 2;
+
   constructor(
     private readonly walrusClient: WalrusClient,
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly suiClient: SuiClientService,
   ) {}
 
   async storeSecret(
     workspaceId: string,
     callerAddress: string,
-    dto: StoreSecretInput,
-  ) {
-    await this.verifyAccess(workspaceId, callerAddress);
+    dto: StoreSecretDto,
+  ): Promise<any> {
+    await this.verifyPolicyAccess(workspaceId, callerAddress, null);
 
-    const uploadResult = await this.walrusClient.uploadBlob(
-      Buffer.from(dto.encryptedData, 'base64'),
-    );
+    const uploadResult = await this.walrusClient.uploadBlob(dto.encryptedData);
 
-    await this.prisma.vaultSecret.upsert({
+    const secret = await this.prisma.vaultSecret.upsert({
       where: {
         workspaceId_profileId_key: {
           workspaceId,
@@ -46,30 +48,28 @@ export class VaultService {
           key: dto.key,
         },
       },
+      update: {
+        walrusBlobId: uploadResult.blobId,
+        sealPolicyId: dto.sealPolicyId ?? null,
+        expiresAt: dto.expiresAt ?? null,
+        version: { increment: 1 },
+      },
       create: {
         workspaceId,
         profileId: dto.profileId,
         key: dto.key,
         walrusBlobId: uploadResult.blobId,
-        sealPolicyId: dto.sealPolicyId,
-        vaultType: dto.vaultType,
-        fileName: dto.fileName,
-        mimeType: dto.mimeType,
-        fileSize: dto.fileSize,
-        version: 1,
-      },
-      update: {
-        walrusBlobId: uploadResult.blobId,
-        sealPolicyId: dto.sealPolicyId,
-        vaultType: dto.vaultType,
-        fileName: dto.fileName,
-        mimeType: dto.mimeType,
-        fileSize: dto.fileSize,
-        version: { increment: 1 },
+        sealPolicyId: dto.sealPolicyId ?? null,
+        expiresAt: dto.expiresAt ?? null,
       },
     });
 
-    return { blobId: uploadResult.blobId, url: uploadResult.url };
+    await this.logAccess(workspaceId, secret.id, callerAddress, 'create');
+
+    return {
+      blobId: uploadResult.blobId,
+      url: uploadResult.url,
+    };
   }
 
   async getSecret(
@@ -77,9 +77,7 @@ export class VaultService {
     callerAddress: string,
     profileId: string,
     key: string,
-  ) {
-    await this.verifyAccess(workspaceId, callerAddress);
-
+  ): Promise<any> {
     const secret = await this.prisma.vaultSecret.findUnique({
       where: {
         workspaceId_profileId_key: { workspaceId, profileId, key },
@@ -88,20 +86,13 @@ export class VaultService {
 
     if (!secret) return null;
 
-    const aggregatorUrl = this.configService.get(
-      'WALRUS_AGGREGATOR_URL',
-      'https://aggregator.walrus-testnet.walrus.space',
-    );
+    await this.verifyPolicyAccess(workspaceId, callerAddress, secret.sealPolicyId);
+    await this.logAccess(workspaceId, secret.id, callerAddress, 'read');
 
     return {
       blobId: secret.walrusBlobId,
-      downloadUrl: `${aggregatorUrl}/v1/${secret.walrusBlobId}`,
+      downloadUrl: `${this.configService.get('WALRUS_AGGREGATOR_URL')}/v1/${secret.walrusBlobId}`,
       version: secret.version,
-      vaultType: secret.vaultType,
-      sealPolicyId: secret.sealPolicyId,
-      fileName: secret.fileName,
-      mimeType: secret.mimeType,
-      fileSize: secret.fileSize,
     };
   }
 
@@ -109,8 +100,8 @@ export class VaultService {
     workspaceId: string,
     callerAddress: string,
     profileId: string,
-  ) {
-    await this.verifyAccess(workspaceId, callerAddress);
+  ): Promise<any> {
+    await this.verifyPolicyAccess(workspaceId, callerAddress, null);
 
     const secrets = await this.prisma.vaultSecret.findMany({
       where: { workspaceId, profileId },
@@ -122,11 +113,8 @@ export class VaultService {
         key: s.key,
         blobId: s.walrusBlobId,
         version: s.version,
-        vaultType: s.vaultType,
         sealPolicyId: s.sealPolicyId,
-        fileName: s.fileName,
-        mimeType: s.mimeType,
-        fileSize: s.fileSize,
+        expiresAt: s.expiresAt,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
       })),
@@ -138,16 +126,27 @@ export class VaultService {
     callerAddress: string,
     profileId: string,
     key: string,
-    dto: UpdateSecretInput,
-  ) {
-    await this.verifyAccess(workspaceId, callerAddress);
+    dto: UpdateSecretDto,
+  ): Promise<any> {
+    const existing = await this.prisma.vaultSecret.findUnique({
+      where: {
+        workspaceId_profileId_key: { workspaceId, profileId, key },
+      },
+    });
 
-    const uploadResult = await this.walrusClient.uploadBlob(
-      Buffer.from(dto.encryptedData, 'base64'),
-    );
+    if (!existing) throw new Error('Secret not found');
+
+    await this.verifyPolicyAccess(workspaceId, callerAddress, existing.sealPolicyId);
+
+    const uploadResult = await this.walrusClient.uploadBlob(dto.encryptedData);
 
     const updated = await this.prisma.vaultSecret.updateMany({
-      where: { workspaceId, profileId, key, version: dto.expectedVersion },
+      where: {
+        workspaceId,
+        profileId,
+        key,
+        version: dto.expectedVersion,
+      },
       data: {
         walrusBlobId: uploadResult.blobId,
         version: { increment: 1 },
@@ -157,6 +156,8 @@ export class VaultService {
     if (updated.count === 0) {
       throw new Error('Version mismatch or secret not found');
     }
+
+    await this.logAccess(workspaceId, existing.id, callerAddress, 'update');
 
     return {
       blobId: uploadResult.blobId,
@@ -171,30 +172,116 @@ export class VaultService {
     profileId: string,
     key: string,
     expectedVersion: number,
-  ) {
-    await this.verifyAccess(workspaceId, callerAddress);
+  ): Promise<any> {
+    const existing = await this.prisma.vaultSecret.findUnique({
+      where: {
+        workspaceId_profileId_key: { workspaceId, profileId, key },
+      },
+    });
+
+    if (!existing) throw new Error('Secret not found');
+
+    await this.verifyPolicyAccess(workspaceId, callerAddress, existing.sealPolicyId);
 
     const deleted = await this.prisma.vaultSecret.deleteMany({
-      where: { workspaceId, profileId, key, version: expectedVersion },
+      where: {
+        workspaceId,
+        profileId,
+        key,
+        version: expectedVersion,
+      },
     });
 
     if (deleted.count === 0) {
       throw new Error('Version mismatch or secret not found');
     }
 
-    return { success: true };
+    await this.logAccess(workspaceId, existing.id, callerAddress, 'delete');
+
+    return {
+      success: true,
+      deletedBlobId: existing.walrusBlobId,
+    };
   }
 
-  private async verifyAccess(
+  async getAccessLog(workspaceId: string, profileId: string, key: string) {
+    const secret = await this.prisma.vaultSecret.findUnique({
+      where: {
+        workspaceId_profileId_key: { workspaceId, profileId, key },
+      },
+    });
+    if (!secret) return { logs: [] };
+
+    const logs = await this.prisma.vaultAccessLog.findMany({
+      where: { workspaceId, secretId: secret.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    return { logs };
+  }
+
+  async verifyPolicyAccess(
     workspaceId: string,
     callerAddress: string,
+    sealPolicyId: string | null,
   ): Promise<void> {
     const member = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_address: { workspaceId, address: callerAddress } },
+      where: {
+        workspaceId_address: { workspaceId, address: callerAddress },
+      },
     });
 
     if (!member || (member.permissions & 16) === 0) {
       throw new UnauthorizedException('No access to this vault');
     }
+
+    // If no seal policy, workspace membership is sufficient
+    if (!sealPolicyId) return;
+
+    // Fetch policy object from chain
+    const policyObj = await this.suiClient.getObject(sealPolicyId);
+    const fields = (policyObj?.data?.content as any)?.fields;
+    if (!fields) return; // Policy not found on-chain, fall back to membership check
+
+    const ruleType = Number(fields.rule_type);
+
+    if (ruleType === this.RULE_WORKSPACE_MEMBER) {
+      return;
+    }
+
+    if (ruleType === this.RULE_SPECIFIC_ADDRESS) {
+      const allowed: string[] = fields.allowed_addresses ?? [];
+      if (!allowed.includes(callerAddress)) {
+        throw new UnauthorizedException(
+          'Your address is not in the allowed list for this vault item',
+        );
+      }
+      return;
+    }
+
+    if (ruleType === this.RULE_ROLE_BASED) {
+      const minLevel = Number(fields.min_role_level);
+      if (member.roleLevel < minLevel) {
+        throw new UnauthorizedException(
+          `Requires role level ${minLevel}, you have ${member.roleLevel}`,
+        );
+      }
+      return;
+    }
+
+    throw new UnauthorizedException('Unknown policy rule type');
+  }
+
+  private async logAccess(
+    workspaceId: string,
+    secretId: string,
+    actor: string,
+    action: string,
+    metadata?: any,
+  ) {
+    await this.prisma.vaultAccessLog.create({
+      data: { workspaceId, secretId, actor, action, metadata },
+    });
   }
 }

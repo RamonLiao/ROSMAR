@@ -3,155 +3,91 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Eye, EyeOff, Copy, Trash2, FileText, File } from "lucide-react";
-import { useVaultCrypto } from "@/lib/hooks/use-vault-crypto";
-import type { VaultSecretSummary } from "@/lib/hooks/use-vault";
+import { Badge } from "@/components/ui/badge";
+import { Lock, Unlock, Clock, Eye, EyeOff } from "lucide-react";
 
-interface VaultItemCardProps {
-  secret: VaultSecretSummary;
-  profileId: string;
-  onDeleted?: () => void;
+interface VaultItem {
+  key: string;
+  blobId: string;
+  version: number;
+  sealPolicyId?: string | null;
+  expiresAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export function VaultItemCard({
-  secret,
-  profileId,
-  onDeleted,
-}: VaultItemCardProps) {
-  const [decryptedText, setDecryptedText] = useState<string | null>(null);
+interface VaultItemCardProps {
+  item: VaultItem;
+  onDecrypt?: (key: string) => Promise<string | null>;
+  onDelete?: (key: string, version: number) => Promise<void>;
+}
+
+export function VaultItemCard({ item, onDecrypt, onDelete }: VaultItemCardProps) {
+  const [decryptedValue, setDecryptedValue] = useState<string | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const { decryptSecret, removeSecret } = useVaultCrypto();
-
-  const isNote = secret.key.startsWith("note:");
-  const isFile = secret.key.startsWith("file:");
-  const displayName = secret.key.replace(/^(note|file):/, "");
+  const [showValue, setShowValue] = useState(false);
 
   const handleDecrypt = async () => {
-    if (decryptedText !== null) {
-      // Toggle visibility off
-      setDecryptedText(null);
+    if (decryptedValue) {
+      setShowValue(!showValue);
       return;
     }
-
     setIsDecrypting(true);
-    setError(null);
-
     try {
-      const decrypted = await decryptSecret({
-        profileId,
-        key: secret.key,
-        sealPolicyId: secret.sealPolicyId ?? "",
-      });
-
-      const text = new TextDecoder().decode(decrypted);
-
-      if (isNote) {
-        try {
-          const parsed = JSON.parse(text);
-          setDecryptedText(parsed.content ?? text);
-        } catch {
-          setDecryptedText(text);
-        }
-      } else {
-        setDecryptedText(text);
+      const value = await onDecrypt?.(item.key);
+      if (value) {
+        setDecryptedValue(value);
+        setShowValue(true);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Decryption failed");
     } finally {
       setIsDecrypting(false);
     }
   };
 
-  const handleCopy = async () => {
-    if (decryptedText) {
-      await navigator.clipboard.writeText(decryptedText);
-    }
-  };
-
-  const handleDelete = async () => {
-    setIsDeleting(true);
-    try {
-      await removeSecret({
-        profileId,
-        key: secret.key,
-        expectedVersion: secret.version,
-      });
-      onDeleted?.();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed");
-    } finally {
-      setIsDeleting(false);
-    }
-  };
+  const isExpired =
+    item.expiresAt && new Date(item.expiresAt) < new Date();
 
   return (
-    <Card>
-      <CardContent className="flex items-start gap-3 pt-4">
-        <div className="mt-0.5">
-          {isNote ? (
-            <FileText className="h-4 w-4 text-muted-foreground" />
+    <Card className={isExpired ? "opacity-50" : ""}>
+      <CardContent className="flex items-center justify-between py-3">
+        <div className="flex items-center gap-3">
+          {item.sealPolicyId ? (
+            <Lock className="h-4 w-4 text-amber-500" />
           ) : (
-            <File className="h-4 w-4 text-muted-foreground" />
+            <Unlock className="h-4 w-4 text-muted-foreground" />
+          )}
+          <div>
+            <p className="font-medium text-sm">{item.key}</p>
+            <p className="text-xs text-muted-foreground">
+              v{item.version} &middot; {new Date(item.updatedAt).toLocaleDateString()}
+            </p>
+          </div>
+          {item.expiresAt && (
+            <Badge variant="outline" className="text-xs gap-1">
+              <Clock className="h-3 w-3" />
+              {isExpired ? "Expired" : new Date(item.expiresAt).toLocaleDateString()}
+            </Badge>
           )}
         </div>
 
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{displayName}</p>
-          <p className="text-xs text-muted-foreground">
-            v{secret.version} | {new Date(secret.updatedAt).toLocaleDateString()}
-          </p>
-
-          {decryptedText !== null && (
-            <pre className="mt-2 whitespace-pre-wrap break-words rounded bg-muted p-2 text-xs max-h-40 overflow-auto">
-              {decryptedText}
-            </pre>
+        <div className="flex gap-2">
+          {showValue && decryptedValue && (
+            <code className="rounded bg-muted px-2 py-1 text-xs max-w-[200px] truncate">
+              {decryptedValue}
+            </code>
           )}
-
-          {error && (
-            <p className="mt-1 text-xs text-destructive">{error}</p>
-          )}
-        </div>
-
-        <div className="flex gap-1">
           <Button
-            variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            variant="ghost"
             onClick={handleDecrypt}
-            disabled={isDecrypting}
-            title={decryptedText !== null ? "Hide" : "Decrypt"}
+            disabled={isDecrypting || !!isExpired}
+            title={showValue ? "Hide" : "Decrypt"}
           >
-            {decryptedText !== null ? (
+            {showValue ? (
               <EyeOff className="h-4 w-4" />
             ) : (
               <Eye className="h-4 w-4" />
             )}
-          </Button>
-
-          {decryptedText !== null && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={handleCopy}
-              title="Copy"
-            >
-              <Copy className="h-4 w-4" />
-            </Button>
-          )}
-
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-destructive"
-            onClick={handleDelete}
-            disabled={isDeleting}
-            title="Delete"
-          >
-            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </CardContent>

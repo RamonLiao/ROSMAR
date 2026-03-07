@@ -8,53 +8,22 @@ import {
   Param,
   UseGuards,
 } from '@nestjs/common';
-import { IsString, IsOptional, IsInt, IsIn, IsNumber } from 'class-validator';
 import { VaultService } from './vault.service';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { RbacGuard, RequirePermissions, WRITE, DELETE } from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
-import type { UserPayload } from '../auth/auth.service';
+// UserPayload used inline as import() type in decorated params to avoid isolatedModules error
 
-export class StoreSecretDto {
-  @IsString()
+export class StoreSecretBodyDto {
   profileId: string;
-
-  @IsString()
   key: string;
-
-  @IsString()
   encryptedData: string; // base64
-
-  @IsIn(['note', 'file'])
-  vaultType: 'note' | 'file';
-
-  @IsOptional()
-  @IsString()
   sealPolicyId?: string;
-
-  @IsOptional()
-  @IsString()
-  fileName?: string;
-
-  @IsOptional()
-  @IsString()
-  mimeType?: string;
-
-  @IsOptional()
-  @IsNumber()
-  fileSize?: number;
+  expiresAt?: string; // ISO date string
 }
 
-export class UpdateSecretDto {
-  @IsString()
+export class UpdateSecretBodyDto {
   encryptedData: string; // base64
-
-  @IsInt()
-  expectedVersion: number;
-}
-
-export class DeleteSecretDto {
-  @IsInt()
   expectedVersion: number;
 }
 
@@ -65,48 +34,96 @@ export class VaultController {
 
   @Post('secrets')
   @RequirePermissions(WRITE)
-  async storeSecret(@User() user: UserPayload, @Body() dto: StoreSecretDto) {
-    return this.vaultService.storeSecret(user.workspaceId, user.address, dto);
+  async storeSecret(
+    @User() user: import('../auth/auth.service').UserPayload,
+    @Body() dto: StoreSecretBodyDto,
+  ) {
+    return this.vaultService.storeSecret(
+      user.workspaceId,
+      user.address,
+      {
+        profileId: dto.profileId,
+        key: dto.key,
+        encryptedData: Buffer.from(dto.encryptedData, 'base64'),
+        sealPolicyId: dto.sealPolicyId,
+        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
+      },
+    );
   }
 
   @Get('secrets/:profileId/:key')
   async getSecret(
-    @User() user: UserPayload,
+    @User() user: import('../auth/auth.service').UserPayload,
     @Param('profileId') profileId: string,
     @Param('key') key: string,
   ) {
-    return this.vaultService.getSecret(user.workspaceId, user.address, profileId, key);
+    return this.vaultService.getSecret(
+      user.workspaceId,
+      user.address,
+      profileId,
+      key,
+    );
   }
 
   @Get('secrets/:profileId')
   async listSecrets(
-    @User() user: UserPayload,
+    @User() user: import('../auth/auth.service').UserPayload,
     @Param('profileId') profileId: string,
   ) {
-    return this.vaultService.listSecrets(user.workspaceId, user.address, profileId);
+    return this.vaultService.listSecrets(
+      user.workspaceId,
+      user.address,
+      profileId,
+    );
   }
 
   @Put('secrets/:profileId/:key')
   @RequirePermissions(WRITE)
   async updateSecret(
-    @User() user: UserPayload,
+    @User() user: import('../auth/auth.service').UserPayload,
     @Param('profileId') profileId: string,
     @Param('key') key: string,
-    @Body() dto: UpdateSecretDto,
+    @Body() dto: UpdateSecretBodyDto,
   ) {
-    return this.vaultService.updateSecret(user.workspaceId, user.address, profileId, key, dto);
+    return this.vaultService.updateSecret(
+      user.workspaceId,
+      user.address,
+      profileId,
+      key,
+      {
+        encryptedData: Buffer.from(dto.encryptedData, 'base64'),
+        expectedVersion: dto.expectedVersion,
+      },
+    );
   }
 
   @Delete('secrets/:profileId/:key')
   @RequirePermissions(DELETE)
   async deleteSecret(
-    @User() user: UserPayload,
+    @User() user: import('../auth/auth.service').UserPayload,
     @Param('profileId') profileId: string,
     @Param('key') key: string,
-    @Body() dto: DeleteSecretDto,
+    @Body('expectedVersion') expectedVersion: number,
   ) {
     return this.vaultService.deleteSecret(
-      user.workspaceId, user.address, profileId, key, dto.expectedVersion,
+      user.workspaceId,
+      user.address,
+      profileId,
+      key,
+      expectedVersion,
+    );
+  }
+
+  @Get('secrets/:profileId/:key/audit')
+  async getAuditLog(
+    @User() user: import('../auth/auth.service').UserPayload,
+    @Param('profileId') profileId: string,
+    @Param('key') key: string,
+  ) {
+    return this.vaultService.getAccessLog(
+      user.workspaceId,
+      profileId,
+      key,
     );
   }
 }
