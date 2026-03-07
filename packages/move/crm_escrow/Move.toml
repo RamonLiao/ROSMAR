@@ -1,0 +1,11 @@
+[package]
+name = "crm_escrow"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+crm_core = { local = "../crm_core" }
+crm_data = { local = "../crm_data" }
+
+[addresses]
+crm_escrow = "0x0"
