@@ -14,6 +14,8 @@ import { useRouter } from "next/navigation";
 import { useProfile, useUpdateProfileTags, useProfileOrganizations } from "@/lib/hooks/use-profiles";
 import { useSendMessage, useMessageHistory } from "@/lib/hooks/use-messaging";
 import { Textarea } from "@/components/ui/textarea";
+import { WalletsTab } from "@/components/profile/wallets-tab";
+import { NetWorthCard } from "@/components/profile/net-worth-card";
 
 export default function ProfileDetailPage({
   params,
@@ -244,6 +246,7 @@ export default function ProfileDetailPage({
             <TabsTrigger value="assets">Assets</TabsTrigger>
             <TabsTrigger value="notes">Notes</TabsTrigger>
             <TabsTrigger value="orgs">Related Orgs</TabsTrigger>
+            <TabsTrigger value="wallets">Wallets</TabsTrigger>
           </TabsList>
         </div>
 
@@ -391,6 +394,11 @@ export default function ProfileDetailPage({
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="wallets" className="space-y-4">
+          <NetWorthCard profileId={id} />
+          <WalletsTab profileId={id} />
         </TabsContent>
       </Tabs>
     </div>

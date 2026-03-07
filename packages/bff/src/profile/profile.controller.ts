@@ -14,6 +14,7 @@ import { SessionGuard } from '../auth/guards/session.guard';
 import { RbacGuard, RequirePermissions, WRITE, DELETE } from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
 import { UserPayload } from '../auth/auth.service';
+import { CreateWalletDto } from './dto/wallet.dto';
 
 export class CreateProfileDto {
   primaryAddress: string;
@@ -112,5 +113,35 @@ export class ProfileController {
       id,
       expectedVersion,
     );
+  }
+
+  // ── Wallet endpoints ──────────────────────────────────────
+
+  @Post(':id/wallets')
+  @RequirePermissions(WRITE)
+  async addWallet(
+    @Param('id') id: string,
+    @Body() dto: CreateWalletDto,
+  ) {
+    return this.profileService.addWallet(id, dto);
+  }
+
+  @Get(':id/wallets')
+  async listWallets(@Param('id') id: string) {
+    return this.profileService.listWallets(id);
+  }
+
+  @Delete(':id/wallets/:walletId')
+  @RequirePermissions(DELETE)
+  async removeWallet(
+    @Param('id') id: string,
+    @Param('walletId') walletId: string,
+  ) {
+    return this.profileService.removeWallet(id, walletId);
+  }
+
+  @Get(':id/net-worth')
+  async getNetWorth(@Param('id') id: string) {
+    return this.profileService.getNetWorth(id);
   }
 }

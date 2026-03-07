@@ -10,11 +10,34 @@ jest.mock('../blockchain/sui.client', () => ({
 jest.mock('../blockchain/tx-builder.service', () => ({
   TxBuilderService: jest.fn().mockImplementation(() => ({})),
 }));
+jest.mock('../blockchain/evm-resolver.service', () => ({
+  EvmResolverService: jest.fn().mockImplementation(() => ({
+    resolveEns: jest.fn(),
+    lookupAddress: jest.fn(),
+  })),
+}));
+jest.mock('../blockchain/solana-resolver.service', () => ({
+  SolanaResolverService: jest.fn().mockImplementation(() => ({
+    resolveSns: jest.fn(),
+    lookupAddress: jest.fn(),
+  })),
+}));
+jest.mock('../blockchain/balance-aggregator.service', () => ({
+  BalanceAggregatorService: jest.fn().mockImplementation(() => ({
+    getNetWorth: jest.fn(),
+  })),
+}));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { SuiClientService } = require('../blockchain/sui.client');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { TxBuilderService } = require('../blockchain/tx-builder.service');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { EvmResolverService } = require('../blockchain/evm-resolver.service');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { SolanaResolverService } = require('../blockchain/solana-resolver.service');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { BalanceAggregatorService } = require('../blockchain/balance-aggregator.service');
 
 describe('ProfileService - Assets & Timeline', () => {
   let service: ProfileService;
@@ -39,6 +62,9 @@ describe('ProfileService - Assets & Timeline', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: SuiClientService, useValue: {} },
         { provide: TxBuilderService, useValue: {} },
+        { provide: EvmResolverService, useValue: { resolveEns: jest.fn(), lookupAddress: jest.fn() } },
+        { provide: SolanaResolverService, useValue: { resolveSns: jest.fn(), lookupAddress: jest.fn() } },
+        { provide: BalanceAggregatorService, useValue: { getNetWorth: jest.fn() } },
         { provide: ConfigService, useValue: { get: () => '' } },
       ],
     }).compile();

@@ -1,9 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { SuiClientService } from '../blockchain/sui.client';
 import { TxBuilderService } from '../blockchain/tx-builder.service';
+import { EvmResolverService } from '../blockchain/evm-resolver.service';
+import { SolanaResolverService } from '../blockchain/solana-resolver.service';
+import { BalanceAggregatorService } from '../blockchain/balance-aggregator.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateWalletDto } from './dto/wallet.dto';
 
 export interface CreateProfileDto {
   primaryAddress: string;
@@ -26,6 +30,9 @@ export class ProfileService {
     private readonly suiClient: SuiClientService,
     private readonly txBuilder: TxBuilderService,
     private readonly configService: ConfigService,
+    private readonly evmResolver: EvmResolverService,
+    private readonly solanaResolver: SolanaResolverService,
+    private readonly balanceAggregator: BalanceAggregatorService,
   ) {
     // gRPC client for reads (to Rust Core)
     const coreGrpcUrl = this.configService.get<string>(
@@ -252,5 +259,57 @@ export class ProfileService {
       success: true,
       txDigest: result.digest,
     };
+  }
+
+  // ── Wallet CRUD ──────────────────────────────────────────────
+
+  async addWallet(profileId: string, dto: CreateWalletDto) {
+    // Verify profile exists
+    await this.prisma.profile.findUniqueOrThrow({
+      where: { id: profileId },
+    });
+
+    // Auto-resolve ENS/SNS names
+    let ensName = dto.ensName ?? null;
+    let snsName = dto.snsName ?? null;
+
+    if (dto.chain === 'evm' && !ensName) {
+      ensName = await this.evmResolver.lookupAddress(dto.address);
+    }
+    if (dto.chain === 'solana' && !snsName) {
+      snsName = await this.solanaResolver.lookupAddress(dto.address);
+    }
+
+    return this.prisma.profileWallet.create({
+      data: {
+        profileId,
+        chain: dto.chain,
+        address: dto.address,
+        ensName,
+        snsName,
+      },
+    });
+  }
+
+  async listWallets(profileId: string) {
+    return this.prisma.profileWallet.findMany({
+      where: { profileId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async removeWallet(profileId: string, walletId: string) {
+    const wallet = await this.prisma.profileWallet.findFirst({
+      where: { id: walletId, profileId },
+    });
+    if (!wallet) {
+      throw new NotFoundException('Wallet not found');
+    }
+    await this.prisma.profileWallet.delete({ where: { id: walletId } });
+    return { success: true };
+  }
+
+  async getNetWorth(profileId: string) {
+    return this.balanceAggregator.getNetWorth(profileId);
   }
 }
