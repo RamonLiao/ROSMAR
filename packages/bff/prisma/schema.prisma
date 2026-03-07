@@ -13,12 +13,15 @@ model Workspace {
   ownerAddress  String   @map("owner_address")
   createdAt     DateTime @default(now()) @map("created_at")
 
-  members       WorkspaceMember[]
-  profiles      Profile[]
-  organizations Organization[]
-  deals         Deal[]
-  segments      Segment[]
-  campaigns     Campaign[]
+  members         WorkspaceMember[]
+  profiles        Profile[]
+  organizations   Organization[]
+  deals           Deal[]
+  segments        Segment[]
+  campaigns       Campaign[]
+  vaultSecrets    VaultSecret[]
+  vaultAccessLogs VaultAccessLog[]
+  dealDocuments   DealDocument[]
 
   @@map("workspaces")
 }
@@ -84,8 +87,9 @@ model Deal {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  workspace   Workspace @relation(fields: [workspaceId], references: [id])
-  profile     Profile   @relation(fields: [profileId], references: [id])
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id])
+  profile     Profile        @relation(fields: [profileId], references: [id])
+  documents   DealDocument[]
 
   @@map("deals")
 }
@@ -149,4 +153,60 @@ model SegmentMembership {
 
   @@id([segmentId, profileId])
   @@map("segment_memberships")
+}
+
+model VaultSecret {
+  id           String    @id @default(uuid())
+  workspaceId  String    @map("workspace_id")
+  profileId    String    @map("profile_id")
+  key          String
+  sealBlobId   String?   @map("seal_blob_id")
+  sealPolicyId String?   @map("seal_policy_id")
+  walrusBlobId String?   @map("walrus_blob_id")
+  version      Int       @default(1)
+  expiresAt    DateTime? @map("expires_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, profileId, key])
+  @@map("vault_secrets")
+}
+
+model VaultAccessLog {
+  id          String   @id @default(uuid())
+  workspaceId String   @map("workspace_id")
+  secretId    String   @map("secret_id")
+  actor       String
+  action      String
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, secretId])
+  @@index([actor])
+  @@map("vault_access_logs")
+}
+
+model DealDocument {
+  id           String   @id @default(uuid())
+  dealId       String   @map("deal_id")
+  workspaceId  String   @map("workspace_id")
+  name         String
+  walrusBlobId String   @map("walrus_blob_id")
+  sealPolicyId String?  @map("seal_policy_id")
+  mimeType     String?  @map("mime_type")
+  fileSize     Int?     @map("file_size")
+  uploadedBy   String   @map("uploaded_by")
+  version      Int      @default(1)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  deal         Deal      @relation(fields: [dealId], references: [id])
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([dealId])
+  @@map("deal_documents")
 }
