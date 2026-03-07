@@ -266,10 +266,56 @@ export class CampaignService {
       },
     });
 
+    // Count workflow executions by status
+    const [totalEntries, completedCount, failedCount] = await Promise.all([
+      this.prisma.workflowExecution.count({ where: { campaignId } }),
+      this.prisma.workflowExecution.count({
+        where: { campaignId, status: 'completed' },
+      }),
+      this.prisma.workflowExecution.count({
+        where: { campaignId, status: 'failed' },
+      }),
+    ]);
+
+    // Per-step metrics from action logs
+    const actionLogs = await this.prisma.workflowActionLog.findMany({
+      where: { campaignId },
+      select: { stepIndex: true, actionType: true, status: true },
+    });
+
+    const stepMap = new Map<
+      number,
+      { actionType: string; successCount: number; failCount: number }
+    >();
+
+    for (const log of actionLogs) {
+      let entry = stepMap.get(log.stepIndex);
+      if (!entry) {
+        entry = { actionType: log.actionType, successCount: 0, failCount: 0 };
+        stepMap.set(log.stepIndex, entry);
+      }
+      if (log.status === 'success') entry.successCount++;
+      else if (log.status === 'failed') entry.failCount++;
+    }
+
+    const perStep = Array.from(stepMap.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([stepIndex, data]) => ({ stepIndex, ...data }));
+
+    const conversionRate =
+      totalEntries > 0
+        ? Math.round((completedCount / totalEntries) * 10000) / 100
+        : 0;
+
     return {
       campaignId,
       status: campaign.status,
       segmentSize: campaign.segment._count.memberships,
+      totalEntries,
+      completedCount,
+      failedCount,
+      perStep,
+      conversionRate,
     };
   }
 }

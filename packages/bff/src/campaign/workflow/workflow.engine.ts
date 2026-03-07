@@ -3,6 +3,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SendTelegramAction } from './actions/send-telegram.action';
 import { SendDiscordAction } from './actions/send-discord.action';
 import { AirdropTokenAction } from './actions/airdrop-token.action';
+import { GrantDiscordRoleAction } from './actions/grant-discord-role.action';
+import { IssuePoapAction } from './actions/issue-poap.action';
+import { AiGenerateContentAction } from './actions/ai-generate-content.action';
 
 export interface WorkflowStep {
   type: string;
@@ -20,11 +23,17 @@ export class WorkflowEngine {
     private readonly sendTelegramAction: SendTelegramAction,
     private readonly sendDiscordAction: SendDiscordAction,
     private readonly airdropTokenAction: AirdropTokenAction,
+    private readonly grantDiscordRoleAction: GrantDiscordRoleAction,
+    private readonly issuePoapAction: IssuePoapAction,
+    private readonly aiGenerateContentAction: AiGenerateContentAction,
   ) {
     this.actions = new Map();
     this.actions.set('send_telegram', this.sendTelegramAction);
     this.actions.set('send_discord', this.sendDiscordAction);
     this.actions.set('airdrop_token', this.airdropTokenAction);
+    this.actions.set('grant_discord_role', this.grantDiscordRoleAction);
+    this.actions.set('issue_poap', this.issuePoapAction);
+    this.actions.set('ai_generate_content', this.aiGenerateContentAction);
   }
 
   async startWorkflow(

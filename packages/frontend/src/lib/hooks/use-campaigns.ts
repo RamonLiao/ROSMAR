@@ -105,11 +105,43 @@ export function usePauseCampaign() {
   });
 }
 
+export interface PerStepStat {
+  stepIndex: number;
+  actionType: string;
+  successCount: number;
+  failCount: number;
+}
+
+export interface CampaignStatsResponse {
+  campaignId: string;
+  status: string;
+  segmentSize: number;
+  totalEntries: number;
+  completedCount: number;
+  failedCount: number;
+  perStep: PerStepStat[];
+  conversionRate: number;
+}
+
 export function useCampaignStats(id: string) {
   return useQuery({
     queryKey: ['campaign-stats', id],
-    queryFn: () => apiClient.get<{ campaignId: string; status: string; segmentSize: number }>(`/campaigns/${id}/stats`),
+    queryFn: () => apiClient.get<CampaignStatsResponse>(`/campaigns/${id}/stats`),
     enabled: !!id,
+  });
+}
+
+export function usePlaybookTemplates() {
+  return useQuery({
+    queryKey: ['playbook-templates'],
+    queryFn: () =>
+      apiClient.get<Array<{
+        id: string;
+        name: string;
+        description: string;
+        triggerType: string;
+        steps: WorkflowStep[];
+      }>>('/campaigns/templates/playbooks'),
   });
 }
 

@@ -229,6 +229,7 @@ model WorkflowActionLog {
   actionType String   @map("action_type")
   status     String   @default("pending")
   error      String?
+  metadata   Json?
   createdAt  DateTime @default(now()) @map("created_at")
 
   campaign Campaign @relation(fields: [campaignId], references: [id])

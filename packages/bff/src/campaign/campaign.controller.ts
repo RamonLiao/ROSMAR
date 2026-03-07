@@ -16,6 +16,7 @@ import { RbacGuard, RequirePermissions, WRITE } from '../auth/guards/rbac.guard'
 import { User } from '../auth/decorators/user.decorator';
 import type { UserPayload } from '../auth/auth.service';
 import { CreateTriggerDto, UpdateTriggerDto } from './trigger/trigger.dto';
+import { PLAYBOOK_TEMPLATES } from './template/playbook-templates';
 
 export class CreateCampaignDto {
   name: string;
@@ -36,6 +37,11 @@ export class UpdateCampaignDto {
 @UseGuards(SessionGuard, RbacGuard)
 export class CampaignController {
   constructor(private readonly campaignService: CampaignService) {}
+
+  @Get('templates/playbooks')
+  async getPlaybookTemplates() {
+    return PLAYBOOK_TEMPLATES;
+  }
 
   @Post()
   @RequirePermissions(WRITE)
