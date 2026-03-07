@@ -91,6 +91,31 @@ export class TriggerMatcherService {
     }
   }
 
+  @OnEvent('quest.completed')
+  async handleQuestCompleted(event: { questId: string; profileId: string }): Promise<void> {
+    const triggers = await this.prisma.campaignTrigger.findMany({
+      where: { triggerType: 'quest_completed', isEnabled: true },
+      include: { campaign: true },
+    });
+
+    for (const trigger of triggers) {
+      if (trigger.campaign.status !== 'active') continue;
+
+      const config = trigger.triggerConfig as Record<string, unknown>;
+      if (config.questId && config.questId !== event.questId) continue;
+
+      this.logger.log(
+        `Quest trigger matched: ${trigger.id} -> campaign ${trigger.campaignId}`,
+      );
+
+      await this.workflowEngine.startWorkflow(
+        trigger.campaignId,
+        trigger.campaign.workflowSteps as any[],
+        [event.profileId],
+      );
+    }
+  }
+
   private matchesConfig(
     config: Record<string, unknown>,
     eventData: Record<string, unknown>,

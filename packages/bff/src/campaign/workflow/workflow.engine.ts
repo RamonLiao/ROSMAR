@@ -6,6 +6,7 @@ import { AirdropTokenAction } from './actions/airdrop-token.action';
 import { GrantDiscordRoleAction } from './actions/grant-discord-role.action';
 import { IssuePoapAction } from './actions/issue-poap.action';
 import { AiGenerateContentAction } from './actions/ai-generate-content.action';
+import { AssignQuestAction } from './actions/assign-quest.action';
 
 export interface WorkflowStep {
   type: string;
@@ -26,6 +27,7 @@ export class WorkflowEngine {
     private readonly grantDiscordRoleAction: GrantDiscordRoleAction,
     private readonly issuePoapAction: IssuePoapAction,
     private readonly aiGenerateContentAction: AiGenerateContentAction,
+    private readonly assignQuestAction: AssignQuestAction,
   ) {
     this.actions = new Map();
     this.actions.set('send_telegram', this.sendTelegramAction);
@@ -34,6 +36,7 @@ export class WorkflowEngine {
     this.actions.set('grant_discord_role', this.grantDiscordRoleAction);
     this.actions.set('issue_poap', this.issuePoapAction);
     this.actions.set('ai_generate_content', this.aiGenerateContentAction);
+    this.actions.set('assign_quest', this.assignQuestAction);
   }
 
   async startWorkflow(

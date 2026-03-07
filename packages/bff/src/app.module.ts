@@ -24,6 +24,7 @@ import { EngagementModule } from './engagement/engagement.module';
 import { AgentModule } from './agent/agent.module';
 import { SocialModule } from './social/social.module';
 import { BroadcastModule } from './broadcast/broadcast.module';
+import { QuestModule } from './quest/quest.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { BroadcastModule } from './broadcast/broadcast.module';
     AgentModule,
     SocialModule,
     BroadcastModule,
+    QuestModule,
     ...(process.env.NODE_ENV === 'test' ? [TestAuthModule] : []),
   ],
   controllers: [AppController],
