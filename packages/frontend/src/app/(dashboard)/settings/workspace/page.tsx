@@ -12,12 +12,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Save, Fingerprint, CheckCircle2, Bot } from "lucide-react";
+import { Loader2, Save, Fingerprint, CheckCircle2, Bot, Fuel } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspace, useUpdateWorkspace } from "@/lib/hooks/use-workspaces";
 import { usePasskeyRegisterOptions, usePasskeyRegisterVerify } from "@/lib/hooks/use-passkey";
 import { useAiConfig, useUpdateAiConfig } from "@/lib/hooks/use-ai-settings";
+import { useGasSettings } from "@/lib/hooks/use-gas-settings";
 import { startRegistration } from "@simplewebauthn/browser";
 
 function AiConfigSection() {
@@ -160,6 +161,9 @@ export default function WorkspaceSettingsPage() {
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+
+  // Gas station settings
+  const { settings: gasSettings, updateSettings: updateGasSettings } = useGasSettings();
 
   // Passkey registration
   const passkeyRegOptions = usePasskeyRegisterOptions();
@@ -308,6 +312,69 @@ export default function WorkspaceSettingsPage() {
       </Card>
 
       <AiConfigSection />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Fuel className="h-5 w-5" />
+            Gas Station
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Automatically sponsor gas fees for users with low SUI balance. Uses Enoki sponsored transactions.
+          </p>
+
+          <div className="flex items-center justify-between">
+            <Label htmlFor="gas-enabled">Enable Gas Sponsorship</Label>
+            <Button
+              id="gas-enabled"
+              variant={gasSettings.enabled ? "default" : "outline"}
+              size="sm"
+              onClick={() => updateGasSettings({ enabled: !gasSettings.enabled })}
+            >
+              {gasSettings.enabled ? "Enabled" : "Disabled"}
+            </Button>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="gas-threshold">Minimum SUI Balance Threshold</Label>
+              <Input
+                id="gas-threshold"
+                type="number"
+                step="0.01"
+                min="0"
+                value={gasSettings.thresholdSui}
+                onChange={(e) =>
+                  updateGasSettings({ thresholdSui: parseFloat(e.target.value) || 0 })
+                }
+                disabled={!gasSettings.enabled}
+              />
+              <p className="text-xs text-muted-foreground">
+                Wallets below this balance will receive sponsored transactions (default: 0.1 SUI)
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="gas-daily-limit">Daily Sponsored TX Limit</Label>
+              <Input
+                id="gas-daily-limit"
+                type="number"
+                min="0"
+                value={gasSettings.dailyLimit}
+                onChange={(e) =>
+                  updateGasSettings({ dailyLimit: parseInt(e.target.value) || 0 })
+                }
+                disabled={!gasSettings.enabled}
+              />
+              <p className="text-xs text-muted-foreground">
+                Maximum sponsored transactions per day for this workspace
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

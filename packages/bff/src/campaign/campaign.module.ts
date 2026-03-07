@@ -7,6 +7,7 @@ import { SendDiscordAction } from './workflow/actions/send-discord.action';
 import { AirdropTokenAction } from './workflow/actions/airdrop-token.action';
 import { SuiClientService } from '../blockchain/sui.client';
 import { TxBuilderService } from '../blockchain/tx-builder.service';
+import { TriggerMatcherService } from './trigger/trigger-matcher.service';
 import { AuthModule } from '../auth/auth.module';
 import { NotificationModule } from '../notification/notification.module';
 
@@ -19,6 +20,7 @@ import { NotificationModule } from '../notification/notification.module';
     SendTelegramAction,
     SendDiscordAction,
     AirdropTokenAction,
+    TriggerMatcherService,
     SuiClientService,
     TxBuilderService,
   ],

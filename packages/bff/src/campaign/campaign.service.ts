@@ -209,6 +209,53 @@ export class CampaignService {
     return { success: true };
   }
 
+  // --- Trigger CRUD ---
+
+  async createTrigger(
+    campaignId: string,
+    dto: { triggerType: string; triggerConfig: Record<string, unknown>; isEnabled?: boolean },
+  ): Promise<any> {
+    // Verify campaign exists
+    await this.prisma.campaign.findUniqueOrThrow({ where: { id: campaignId } });
+
+    return this.prisma.campaignTrigger.create({
+      data: {
+        campaignId,
+        triggerType: dto.triggerType,
+        triggerConfig: dto.triggerConfig as any,
+        isEnabled: dto.isEnabled ?? true,
+      },
+    });
+  }
+
+  async listTriggers(campaignId: string): Promise<any[]> {
+    return this.prisma.campaignTrigger.findMany({
+      where: { campaignId },
+      orderBy: { triggerType: 'asc' },
+    });
+  }
+
+  async updateTrigger(
+    campaignId: string,
+    triggerId: string,
+    dto: { triggerConfig?: Record<string, unknown>; isEnabled?: boolean },
+  ): Promise<any> {
+    const data: any = {};
+    if (dto.triggerConfig !== undefined) data.triggerConfig = dto.triggerConfig;
+    if (dto.isEnabled !== undefined) data.isEnabled = dto.isEnabled;
+
+    return this.prisma.campaignTrigger.update({
+      where: { id: triggerId, campaignId },
+      data,
+    });
+  }
+
+  async deleteTrigger(campaignId: string, triggerId: string): Promise<any> {
+    return this.prisma.campaignTrigger.delete({
+      where: { id: triggerId, campaignId },
+    });
+  }
+
   async getCampaignStats(campaignId: string): Promise<any> {
     const campaign = await this.prisma.campaign.findUniqueOrThrow({
       where: { id: campaignId },
