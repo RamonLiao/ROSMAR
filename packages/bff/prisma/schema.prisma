@@ -27,7 +27,12 @@ model Workspace {
   notifications   Notification[]
   tickets         Ticket[]
   auditLogs       AuditLog[]
-  broadcasts      Broadcast[]
+  broadcasts        Broadcast[]
+  escrows           Escrow[]          @relation("WorkspaceEscrows")
+  saftTemplates     SaftTemplate[]    @relation("WorkspaceSaftTemplates")
+  quests            Quest[]           @relation("WorkspaceQuests")
+  lookalikeResults  LookalikeResult[] @relation("WorkspaceLookalikes")
+  gdprDeletionLogs  GdprDeletionLog[] @relation("WorkspaceGdprLogs")
 
   @@map("workspaces")
 }
@@ -72,6 +77,10 @@ model Profile {
   workflowActionLogs WorkflowActionLog[]
   wallets            ProfileWallet[]
   socialLinks        SocialLink[]
+  questCompletions   QuestCompletion[]
+  gdprStatus         String   @default("NONE") @map("gdpr_status")
+  gdprScheduledAt    DateTime? @map("gdpr_scheduled_at")
+  gdprCompletedAt    DateTime? @map("gdpr_completed_at")
 
   @@map("profiles")
 }
@@ -110,6 +119,7 @@ model Deal {
   workspace   Workspace      @relation(fields: [workspaceId], references: [id])
   profile     Profile        @relation(fields: [profileId], references: [id])
   documents   DealDocument[]
+  escrows     Escrow[]
 
   @@map("deals")
 }
@@ -125,9 +135,11 @@ model Segment {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  workspace       Workspace @relation(fields: [workspaceId], references: [id])
-  memberships     SegmentMembership[]
-  campaigns       Campaign[]
+  workspace        Workspace @relation(fields: [workspaceId], references: [id])
+  memberships      SegmentMembership[]
+  campaigns        Campaign[]
+  lookalikeSeed    LookalikeResult[] @relation("LookalikeSeed")
+  lookalikeResult  LookalikeResult[] @relation("LookalikeResult")
 
   @@map("segments")
 }
@@ -508,4 +520,178 @@ model BroadcastDelivery {
 
   @@index([broadcastId, channel])
   @@map("broadcast_deliveries")
+}
+
+// ── P4: Escrow ──────────────────────────────────
+
+model Escrow {
+  id               String    @id @default(uuid())
+  workspaceId      String    @map("workspace_id")
+  dealId           String    @map("deal_id")
+  suiObjectId      String?   @map("sui_object_id")
+  payer            String
+  payee            String
+  tokenType        String    @default("SUI") @map("token_type")
+  totalAmount      Decimal   @map("total_amount")
+  releasedAmount   Decimal   @default(0) @map("released_amount")
+  refundedAmount   Decimal   @default(0) @map("refunded_amount")
+  state            String    @default("CREATED")
+  arbiterThreshold Int       @default(1) @map("arbiter_threshold")
+  expiryAt         DateTime? @map("expiry_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  version          Int       @default(0)
+
+  deal             Deal      @relation(fields: [dealId], references: [id])
+  workspace        Workspace @relation("WorkspaceEscrows", fields: [workspaceId], references: [id])
+  vestingSchedule  VestingSchedule?
+  arbitrators      EscrowArbitrator[]
+  saftTemplates    SaftTemplate[]
+
+  @@map("escrows")
+}
+
+model VestingSchedule {
+  id              String    @id @default(uuid())
+  escrowId        String    @unique @map("escrow_id")
+  vestingType     String    @map("vesting_type")
+  cliffMs         BigInt    @default(0) @map("cliff_ms")
+  totalDurationMs BigInt    @default(0) @map("total_duration_ms")
+  startTime       DateTime? @map("start_time")
+  milestones      Json      @default("[]")
+
+  escrow          Escrow    @relation(fields: [escrowId], references: [id])
+
+  @@map("vesting_schedules")
+}
+
+model EscrowArbitrator {
+  id       String @id @default(uuid())
+  escrowId String @map("escrow_id")
+  address  String
+
+  escrow   Escrow @relation(fields: [escrowId], references: [id])
+
+  @@unique([escrowId, address])
+  @@map("escrow_arbitrators")
+}
+
+model SaftTemplate {
+  id           String   @id @default(uuid())
+  workspaceId  String   @map("workspace_id")
+  escrowId     String?  @map("escrow_id")
+  name         String
+  terms        Json
+  walrusBlobId String?  @map("walrus_blob_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  escrow       Escrow?   @relation(fields: [escrowId], references: [id])
+  workspace    Workspace @relation("WorkspaceSaftTemplates", fields: [workspaceId], references: [id])
+
+  @@map("saft_templates")
+}
+
+// ── P4: Quest ───────────────────────────────────
+
+model Quest {
+  id           String   @id @default(uuid())
+  workspaceId  String   @map("workspace_id")
+  name         String
+  description  String?
+  isActive     Boolean  @default(true) @map("is_active")
+  rewardType   String   @default("BADGE") @map("reward_type")
+  rewardConfig Json     @default("{}") @map("reward_config")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  workspace    Workspace       @relation("WorkspaceQuests", fields: [workspaceId], references: [id])
+  steps        QuestStep[]
+  completions  QuestCompletion[]
+
+  @@map("quests")
+}
+
+model QuestStep {
+  id                 String @id @default(uuid())
+  questId            String @map("quest_id")
+  orderIndex         Int    @map("order_index")
+  title              String
+  description        String?
+  actionType         String @map("action_type")
+  actionConfig       Json   @default("{}") @map("action_config")
+  verificationMethod String @default("INDEXER") @map("verification_method")
+  chain              String @default("SUI")
+
+  quest              Quest   @relation(fields: [questId], references: [id])
+  stepCompletions    QuestStepCompletion[]
+
+  @@map("quest_steps")
+}
+
+model QuestCompletion {
+  id          String   @id @default(uuid())
+  questId     String   @map("quest_id")
+  profileId   String   @map("profile_id")
+  badgeSuiId  String?  @map("badge_sui_id")
+  completedAt DateTime @default(now()) @map("completed_at")
+
+  quest       Quest   @relation(fields: [questId], references: [id])
+  profile     Profile @relation(fields: [profileId], references: [id])
+
+  @@unique([questId, profileId])
+  @@map("quest_completions")
+}
+
+model QuestStepCompletion {
+  id          String   @id @default(uuid())
+  stepId      String   @map("step_id")
+  profileId   String   @map("profile_id")
+  txDigest    String?  @map("tx_digest")
+  verifiedBy  String   @map("verified_by")
+  completedAt DateTime @default(now()) @map("completed_at")
+
+  step        QuestStep @relation(fields: [stepId], references: [id])
+
+  @@unique([stepId, profileId])
+  @@map("quest_step_completions")
+}
+
+// ── P4: Lookalike ───────────────────────────────
+
+model LookalikeResult {
+  id              String   @id @default(uuid())
+  workspaceId     String   @map("workspace_id")
+  seedSegmentId   String   @map("seed_segment_id")
+  resultSegmentId String?  @map("result_segment_id")
+  topK            Int      @map("top_k")
+  algorithm       String   @default("knn-cosine")
+  centroid        Json
+  results         Json
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  workspace       Workspace @relation("WorkspaceLookalikes", fields: [workspaceId], references: [id])
+  seedSegment     Segment   @relation("LookalikeSeed", fields: [seedSegmentId], references: [id])
+  resultSegment   Segment?  @relation("LookalikeResult", fields: [resultSegmentId], references: [id])
+
+  @@map("lookalike_results")
+}
+
+// ── P4: GDPR ────────────────────────────────────
+
+model GdprDeletionLog {
+  id             String    @id @default(uuid())
+  workspaceId    String    @map("workspace_id")
+  profileId      String    @map("profile_id")
+  requestedBy    String    @map("requested_by")
+  legalBasis     String    @map("legal_basis")
+  dataCategories Json      @map("data_categories")
+  scheduledAt    DateTime  @map("scheduled_at")
+  executedAt     DateTime? @map("executed_at")
+  cancelledAt    DateTime? @map("cancelled_at")
+  status         String    @default("PENDING")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  workspace      Workspace @relation("WorkspaceGdprLogs", fields: [workspaceId], references: [id])
+
+  @@map("gdpr_deletion_logs")
 }
