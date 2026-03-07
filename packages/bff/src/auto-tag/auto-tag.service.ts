@@ -48,7 +48,8 @@ export class AutoTagService {
         AND event_type = ANY(${eventTypes}::text[])
         AND (${since}::timestamptz IS NULL OR time >= ${since}::timestamptz)
     `;
-    return Number(rows[0]?.cnt ?? 0) >= (rule.minCount ?? 0);
+    const minCount = 'minCount' in rule ? rule.minCount : 0;
+    return Number(rows[0]?.cnt ?? 0) >= minCount;
   }
 
   private periodToDate(period: string): Date | null {
