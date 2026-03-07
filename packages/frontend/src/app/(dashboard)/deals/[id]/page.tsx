@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DealDocuments } from "@/components/deal/deal-documents";
+import { EscrowTabContent } from "@/components/deal/escrow-tab-content";
 import { ArrowLeft, Pencil, X, Loader2, DollarSign } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useDeal, useUpdateDeal } from "@/lib/hooks/use-deals";
@@ -145,6 +146,7 @@ export default function DealDetailPage({
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="escrow">Escrow</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -258,6 +260,10 @@ export default function DealDetailPage({
             dealId={deal.id}
             workspaceId={deal.workspaceId as string}
           />
+        </TabsContent>
+
+        <TabsContent value="escrow">
+          <EscrowTabContent dealId={deal.id} />
         </TabsContent>
       </Tabs>
     </div>
