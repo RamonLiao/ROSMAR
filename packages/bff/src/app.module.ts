@@ -26,12 +26,20 @@ import { SocialModule } from './social/social.module';
 import { BroadcastModule } from './broadcast/broadcast.module';
 import { QuestModule } from './quest/quest.module';
 import { GdprModule } from './gdpr/gdpr.module';
+import { CacheModule } from './common/cache/cache.module';
+import { HealthModule } from './common/health/health.module';
+import { LoggingModule } from './common/logging/logging.module';
+import { ThrottleConfig } from './common/throttle/throttle.config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     EventEmitterModule.forRoot(),
+    ThrottleConfig,
     PrismaModule,
+    CacheModule,
+    HealthModule,
+    LoggingModule,
     AuthModule,
     BlockchainModule,
     WorkspaceModule,
