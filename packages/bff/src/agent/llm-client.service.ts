@@ -1,7 +1,7 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
-import { generateText, streamText, type LanguageModel, type GenerateTextResult, type StreamTextResult } from 'ai';
+import { generateText, streamText, stepCountIs, type LanguageModel, type GenerateTextResult, type StreamTextResult, type StopCondition } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 
@@ -66,7 +66,7 @@ export class LlmClientService {
 
   async generate(
     workspaceId: string,
-    params: { system?: string; prompt: string; tools?: any },
+    params: { system?: string; prompt: string; tools?: any; maxSteps?: number },
   ): Promise<GenerateTextResult<any, any>> {
     const config = await this.resolveConfig(workspaceId);
     return generateText({
@@ -74,6 +74,7 @@ export class LlmClientService {
       system: params.system,
       prompt: params.prompt,
       tools: params.tools,
+      ...(params.maxSteps ? { stopWhen: stepCountIs(params.maxSteps) } : {}),
     });
   }
 

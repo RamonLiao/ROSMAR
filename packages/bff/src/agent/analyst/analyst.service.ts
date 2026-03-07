@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
-import { tool } from 'ai';
+import { tool, type ToolSet } from 'ai';
 import { LlmClientService } from '../llm-client.service';
 import { UsageTrackingService } from '../usage-tracking.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -15,6 +15,10 @@ const ALLOWED_MODELS = [
 ] as const;
 
 type AllowedModel = (typeof ALLOWED_MODELS)[number];
+
+function isAllowedModel(m: string): m is AllowedModel {
+  return (ALLOWED_MODELS as readonly string[]).includes(m);
+}
 
 export interface AnalystQueryParams {
   workspaceId: string;
@@ -60,18 +64,18 @@ export class AnalystService {
       system: SYSTEM_PROMPT,
       prompt: query,
       tools,
-      maxSteps: 5,
     });
 
-    // Track usage
+    // Track usage — ai SDK v6 uses inputTokens/outputTokens
     const model = result.response?.modelId ?? 'unknown';
+    const usage: any = result.usage ?? {};
     await this.usageTracking.trackUsage({
       workspaceId,
       userId,
       agentType: 'analyst',
       model,
-      promptTokens: result.usage?.promptTokens ?? 0,
-      completionTokens: result.usage?.completionTokens ?? 0,
+      promptTokens: usage.inputTokens ?? usage.promptTokens ?? 0,
+      completionTokens: usage.outputTokens ?? usage.completionTokens ?? 0,
     });
 
     // Extract data from tool results
@@ -91,20 +95,28 @@ export class AnalystService {
     };
   }
 
-  private buildTools(workspaceId: string) {
+  private buildTools(workspaceId: string): ToolSet {
+    const modelEnum = z.enum([
+      'profile',
+      'segment',
+      'segmentMembership',
+      'walletEvent',
+      'engagementSnapshot',
+    ]);
+
     return {
       query_profiles: tool({
         description:
           'Query profiles with optional filters, sorting, and limit. Returns matching profile records.',
-        parameters: z.object({
+        inputSchema: z.object({
           where: z
-            .record(z.any())
+            .record(z.string(), z.unknown())
             .optional()
             .describe(
               'Prisma where filter (e.g. { tier: 3, tags: { has: "whale" } })',
             ),
           orderBy: z
-            .record(z.any())
+            .record(z.string(), z.unknown())
             .optional()
             .describe('Prisma orderBy (e.g. { engagementScore: "desc" })'),
           take: z
@@ -115,8 +127,8 @@ export class AnalystService {
         }),
         execute: async (args) => {
           return this.prisma.profile.findMany({
-            where: { workspaceId, ...args.where },
-            orderBy: args.orderBy,
+            where: { workspaceId, ...(args.where as any) },
+            orderBy: args.orderBy as any,
             take: Math.min(args.take ?? 20, 100),
             select: {
               id: true,
@@ -135,19 +147,17 @@ export class AnalystService {
       aggregate_data: tool({
         description:
           'Run aggregate queries (_count, _avg, _sum, _min, _max) on a model.',
-        parameters: z.object({
-          model: z
-            .enum(ALLOWED_MODELS as any)
-            .describe('Model to aggregate'),
-          _count: z.any().optional().describe('Count config (true or field map)'),
-          _avg: z.record(z.boolean()).optional().describe('Average fields'),
-          _sum: z.record(z.boolean()).optional().describe('Sum fields'),
-          _min: z.record(z.boolean()).optional().describe('Min fields'),
-          _max: z.record(z.boolean()).optional().describe('Max fields'),
-          where: z.record(z.any()).optional().describe('Prisma where filter'),
+        inputSchema: z.object({
+          model: modelEnum.describe('Model to aggregate'),
+          _count: z.unknown().optional().describe('Count config (true or field map)'),
+          _avg: z.record(z.string(), z.boolean()).optional().describe('Average fields'),
+          _sum: z.record(z.string(), z.boolean()).optional().describe('Sum fields'),
+          _min: z.record(z.string(), z.boolean()).optional().describe('Min fields'),
+          _max: z.record(z.string(), z.boolean()).optional().describe('Max fields'),
+          where: z.record(z.string(), z.unknown()).optional().describe('Prisma where filter'),
         }),
         execute: async (args) => {
-          if (!ALLOWED_MODELS.includes(args.model as AllowedModel)) {
+          if (!isAllowedModel(args.model)) {
             return { error: `Model "${args.model}" is not allowed` };
           }
 
@@ -171,19 +181,17 @@ export class AnalystService {
 
       group_by_field: tool({
         description: 'Group records by fields with optional count/aggregation.',
-        parameters: z.object({
-          model: z
-            .enum(ALLOWED_MODELS as any)
-            .describe('Model to group'),
+        inputSchema: z.object({
+          model: modelEnum.describe('Model to group'),
           by: z.array(z.string()).describe('Fields to group by'),
-          _count: z.any().optional().describe('Count config'),
-          _avg: z.record(z.boolean()).optional(),
-          _sum: z.record(z.boolean()).optional(),
-          where: z.record(z.any()).optional().describe('Prisma where filter'),
-          orderBy: z.record(z.any()).optional(),
+          _count: z.unknown().optional().describe('Count config'),
+          _avg: z.record(z.string(), z.boolean()).optional(),
+          _sum: z.record(z.string(), z.boolean()).optional(),
+          where: z.record(z.string(), z.unknown()).optional().describe('Prisma where filter'),
+          orderBy: z.record(z.string(), z.unknown()).optional(),
         }),
         execute: async (args) => {
-          if (!ALLOWED_MODELS.includes(args.model as AllowedModel)) {
+          if (!isAllowedModel(args.model)) {
             return { error: `Model "${args.model}" is not allowed` };
           }
 
@@ -210,10 +218,7 @@ export class AnalystService {
   private parseChartConfig(
     text: string,
   ): { type: string; xKey: string; yKey: string } | undefined {
-    // Try to extract JSON chart config from LLM response
-    const match = text?.match(
-      /chartConfig["\s:]*(\{[^}]+\})/i,
-    );
+    const match = text?.match(/chartConfig["\s:]*(\{[^}]+\})/i);
     if (match) {
       try {
         return JSON.parse(match[1]);

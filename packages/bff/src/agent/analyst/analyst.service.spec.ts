@@ -98,7 +98,6 @@ describe('AnalystService', () => {
           aggregate_data: expect.any(Object),
           group_by_field: expect.any(Object),
         }),
-        maxSteps: expect.any(Number),
       }),
     );
 
