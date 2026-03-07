@@ -1,0 +1,184 @@
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { SuiClientService } from './sui.client';
+import { PrismaService } from '../prisma/prisma.service';
+import Moralis from 'moralis';
+
+export interface TokenBalance {
+  symbol: string;
+  name: string;
+  balance: string;
+  decimals: number;
+  usdPrice: number;
+  usdValue: number;
+}
+
+export interface ChainBalance {
+  chain: string;
+  address: string;
+  balanceUsd: number;
+  tokens: TokenBalance[];
+}
+
+export interface NetWorthResult {
+  totalUsd: number;
+  breakdown: ChainBalance[];
+}
+
+@Injectable()
+export class BalanceAggregatorService implements OnModuleInit {
+  private readonly logger = new Logger(BalanceAggregatorService.name);
+  private moralisInitialized = false;
+
+  constructor(
+    private readonly suiClient: SuiClientService,
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  async onModuleInit() {
+    const apiKey = this.configService.get<string>('MORALIS_API_KEY');
+    if (apiKey) {
+      try {
+        await Moralis.start({ apiKey });
+        this.moralisInitialized = true;
+      } catch (err) {
+        this.logger.warn(`Moralis init failed: ${err}`);
+      }
+    }
+  }
+
+  /** Get all token balances for a SUI address */
+  async getSuiBalance(address: string): Promise<ChainBalance> {
+    try {
+      const balances = await this.suiClient.getClient().getAllBalances({
+        owner: address,
+      });
+
+      const tokens: TokenBalance[] = balances.map((b: any) => {
+        const coinType = b.coinType as string;
+        const symbol = coinType.split('::').pop() || coinType;
+        return {
+          symbol,
+          name: symbol,
+          balance: b.totalBalance,
+          decimals: 9, // SUI uses 9 decimals
+          usdPrice: 0, // TODO: price oracle
+          usdValue: 0,
+        };
+      });
+
+      const balanceUsd = tokens.reduce((sum, t) => sum + t.usdValue, 0);
+
+      return { chain: 'sui', address, balanceUsd, tokens };
+    } catch (err) {
+      this.logger.warn(`Failed to get SUI balance for ${address}: ${err}`);
+      return { chain: 'sui', address, balanceUsd: 0, tokens: [] };
+    }
+  }
+
+  /** Get all token balances for an EVM address via Moralis */
+  async getEvmBalance(address: string): Promise<ChainBalance> {
+    try {
+      const response =
+        await Moralis.EvmApi.wallets.getWalletTokenBalancesPrice({
+          address,
+          chain: '0x1', // Ethereum mainnet
+        });
+
+      const tokens: TokenBalance[] = response.result.map((t: any) => ({
+        symbol: t.symbol,
+        name: t.name,
+        balance: t.balance,
+        decimals: t.decimals,
+        usdPrice: t.usdPrice ?? 0,
+        usdValue: t.usdValue ?? 0,
+      }));
+
+      const balanceUsd = tokens.reduce((sum, t) => sum + t.usdValue, 0);
+
+      return { chain: 'evm', address, balanceUsd, tokens };
+    } catch (err) {
+      this.logger.warn(`Failed to get EVM balance for ${address}: ${err}`);
+      return { chain: 'evm', address, balanceUsd: 0, tokens: [] };
+    }
+  }
+
+  /** Get all token balances for a Solana address via Moralis */
+  async getSolanaBalance(address: string): Promise<ChainBalance> {
+    try {
+      const response =
+        await Moralis.SolApi.account.getPortfolio({
+          address,
+          network: 'mainnet',
+        });
+
+      const tokens: TokenBalance[] = (response?.result?.tokens ?? []).map(
+        (t: any) => ({
+          symbol: t.symbol ?? 'Unknown',
+          name: t.name ?? 'Unknown',
+          balance: t.amount ?? '0',
+          decimals: t.decimals ?? 0,
+          usdPrice: 0,
+          usdValue: 0,
+        }),
+      );
+
+      // Add native SOL
+      const nativeSol = response?.result?.nativeBalance;
+      if (nativeSol) {
+        tokens.unshift({
+          symbol: 'SOL',
+          name: 'Solana',
+          balance: nativeSol.lamports ?? '0',
+          decimals: 9,
+          usdPrice: 0,
+          usdValue: 0,
+        });
+      }
+
+      const balanceUsd = tokens.reduce((sum, t) => sum + t.usdValue, 0);
+
+      return { chain: 'solana', address, balanceUsd, tokens };
+    } catch (err) {
+      this.logger.warn(
+        `Failed to get Solana balance for ${address}: ${err}`,
+      );
+      return { chain: 'solana', address, balanceUsd: 0, tokens: [] };
+    }
+  }
+
+  /** Aggregate net worth across all wallets linked to a profile */
+  async getNetWorth(profileId: string): Promise<NetWorthResult> {
+    const wallets = await this.prisma.profileWallet.findMany({
+      where: { profileId },
+    });
+
+    if (wallets.length === 0) {
+      return { totalUsd: 0, breakdown: [] };
+    }
+
+    const balancePromises = wallets.map((w) => {
+      switch (w.chain) {
+        case 'sui':
+          return this.getSuiBalance(w.address);
+        case 'evm':
+          return this.getEvmBalance(w.address);
+        case 'solana':
+          return this.getSolanaBalance(w.address);
+        default:
+          return Promise.resolve<ChainBalance>({
+            chain: w.chain,
+            address: w.address,
+            balanceUsd: 0,
+            tokens: [],
+          });
+      }
+    });
+
+    const breakdown = await Promise.all(balancePromises);
+    const totalUsd = breakdown.reduce((sum, b) => sum + b.balanceUsd, 0);
+
+    return { totalUsd, breakdown };
+  }
+}
