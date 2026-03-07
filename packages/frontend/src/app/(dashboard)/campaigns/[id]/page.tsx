@@ -15,6 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CampaignStats } from "@/components/campaign/campaign-stats";
+import { AiSuggestButton } from "@/components/campaign/ai-suggest-button";
+import { ActionPlanWizard } from "@/components/campaign/action-plan-wizard";
 import { ArrowLeft, Settings, Pencil, X, Loader2, Play, Pause } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
@@ -190,6 +192,7 @@ export default function CampaignDetailPage({
             Pause
           </Button>
         ) : null}
+        <ActionPlanWizard />
         <Button
           variant="outline"
           onClick={() => router.push(`/campaigns/${id}/workflow`)}
@@ -241,7 +244,13 @@ export default function CampaignDetailPage({
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label>Description</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Description</Label>
+                  <AiSuggestButton
+                    segmentDescription={campaign.segment?.name}
+                    onContentGenerated={(content) => setDescription(content)}
+                  />
+                </div>
                 <Textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
