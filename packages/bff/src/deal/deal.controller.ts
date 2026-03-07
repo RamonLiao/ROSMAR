@@ -3,16 +3,18 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Body,
   Param,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { DealService } from './deal.service';
+import { DealDocumentService } from './deal-document.service';
 import { SessionGuard } from '../auth/guards/session.guard';
-import { RbacGuard, RequirePermissions, WRITE } from '../auth/guards/rbac.guard';
+import { RbacGuard, RequirePermissions, WRITE, DELETE } from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
-import { UserPayload } from '../auth/auth.service';
+// UserPayload used inline as import() type in decorated params to avoid isolatedModules error
 
 export class CreateDealDto {
   profileId: string;
@@ -28,10 +30,21 @@ export class UpdateDealDto {
   expectedVersion: number;
 }
 
+export class UploadDocumentBodyDto {
+  name: string;
+  encryptedData: string;
+  sealPolicyId?: string;
+  mimeType?: string;
+  fileSize?: number;
+}
+
 @Controller('deals')
 @UseGuards(SessionGuard, RbacGuard)
 export class DealController {
-  constructor(private readonly dealService: DealService) {}
+  constructor(
+    private readonly dealService: DealService,
+    private readonly dealDocumentService: DealDocumentService,
+  ) {}
 
   @Post()
   @RequirePermissions(WRITE)
@@ -96,6 +109,48 @@ export class DealController {
       user.address,
       id,
       stage,
+      expectedVersion,
+    );
+  }
+
+  // --- Deal Documents ---
+
+  @Post(':id/documents')
+  @RequirePermissions(WRITE)
+  async uploadDocument(
+    @Param('id') dealId: string,
+    @Body() body: UploadDocumentBodyDto,
+    @User() user: import('../auth/auth.service').UserPayload,
+  ) {
+    return this.dealDocumentService.uploadDocument(
+      user.workspaceId,
+      user.address,
+      { dealId, ...body },
+    );
+  }
+
+  @Get(':id/documents')
+  async listDocuments(
+    @Param('id') dealId: string,
+    @User() user: import('../auth/auth.service').UserPayload,
+  ) {
+    return this.dealDocumentService.listDocuments(
+      user.workspaceId,
+      user.address,
+      dealId,
+    );
+  }
+
+  @Delete('documents/:docId')
+  @RequirePermissions(DELETE)
+  async deleteDocument(
+    @Param('docId') docId: string,
+    @Body('expectedVersion') expectedVersion: number,
+    @User() user: import('../auth/auth.service').UserPayload,
+  ) {
+    return this.dealDocumentService.deleteDocument(
+      user.workspaceId,
+      docId,
       expectedVersion,
     );
   }

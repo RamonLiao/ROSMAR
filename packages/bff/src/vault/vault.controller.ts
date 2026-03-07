@@ -12,7 +12,7 @@ import { VaultService } from './vault.service';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { RbacGuard, RequirePermissions, WRITE, DELETE } from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
-import type { UserPayload } from '../auth/auth.service';
+// UserPayload used inline as import() type in decorated params to avoid isolatedModules error
 
 export class StoreSecretBodyDto {
   profileId: string;
@@ -35,7 +35,7 @@ export class VaultController {
   @Post('secrets')
   @RequirePermissions(WRITE)
   async storeSecret(
-    @User() user: UserPayload,
+    @User() user: import('../auth/auth.service').UserPayload,
     @Body() dto: StoreSecretBodyDto,
   ) {
     return this.vaultService.storeSecret(
@@ -53,7 +53,7 @@ export class VaultController {
 
   @Get('secrets/:profileId/:key')
   async getSecret(
-    @User() user: UserPayload,
+    @User() user: import('../auth/auth.service').UserPayload,
     @Param('profileId') profileId: string,
     @Param('key') key: string,
   ) {
@@ -67,7 +67,7 @@ export class VaultController {
 
   @Get('secrets/:profileId')
   async listSecrets(
-    @User() user: UserPayload,
+    @User() user: import('../auth/auth.service').UserPayload,
     @Param('profileId') profileId: string,
   ) {
     return this.vaultService.listSecrets(
@@ -80,7 +80,7 @@ export class VaultController {
   @Put('secrets/:profileId/:key')
   @RequirePermissions(WRITE)
   async updateSecret(
-    @User() user: UserPayload,
+    @User() user: import('../auth/auth.service').UserPayload,
     @Param('profileId') profileId: string,
     @Param('key') key: string,
     @Body() dto: UpdateSecretBodyDto,
@@ -100,7 +100,7 @@ export class VaultController {
   @Delete('secrets/:profileId/:key')
   @RequirePermissions(DELETE)
   async deleteSecret(
-    @User() user: UserPayload,
+    @User() user: import('../auth/auth.service').UserPayload,
     @Param('profileId') profileId: string,
     @Param('key') key: string,
     @Body('expectedVersion') expectedVersion: number,
@@ -116,7 +116,7 @@ export class VaultController {
 
   @Get('secrets/:profileId/:key/audit')
   async getAuditLog(
-    @User() user: UserPayload,
+    @User() user: import('../auth/auth.service').UserPayload,
     @Param('profileId') profileId: string,
     @Param('key') key: string,
   ) {
