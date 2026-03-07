@@ -256,7 +256,7 @@ export default function DealDetailPage({
         <TabsContent value="documents">
           <DealDocuments
             dealId={deal.id}
-            workspaceId={deal.workspaceId}
+            workspaceId={deal.workspaceId as string}
           />
         </TabsContent>
       </Tabs>

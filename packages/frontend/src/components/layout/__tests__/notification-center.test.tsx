@@ -3,12 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import { NotificationCenter } from "../notification-center";
 
-const mockMarkRead = vi.fn();
-const mockMarkAllRead = vi.fn();
+const mockMarkRead = { mutate: vi.fn() };
+const mockMarkAllRead = { mutate: vi.fn() };
 
 vi.mock("@/lib/hooks/use-notifications", () => ({
   useNotifications: () => ({
-    notifications: [
+    data: [
       {
         id: "1",
         type: "whale_alert",
@@ -18,11 +18,13 @@ vi.mock("@/lib/hooks/use-notifications", () => ({
         createdAt: new Date().toISOString(),
       },
     ],
-    unreadCount: 1,
     isLoading: false,
-    markRead: mockMarkRead,
-    markAllRead: mockMarkAllRead,
   }),
+  useUnreadCount: () => ({
+    data: { count: 1 },
+  }),
+  useMarkRead: () => mockMarkRead,
+  useMarkAllRead: () => mockMarkAllRead,
 }));
 
 describe("NotificationCenter", () => {

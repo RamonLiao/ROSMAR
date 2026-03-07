@@ -3,18 +3,18 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Key, File as FileIcon } from 'lucide-react';
-import { useVaultSecrets, type VaultType } from '@/lib/hooks/use-vault';
+import { useVaultSecrets } from '@/lib/hooks/use-vault';
 import { VaultItemCard } from './vault-item-card';
 
 interface VaultItemListProps {
   profileId: string;
-  vaultType: VaultType;
+  vaultType: 'note' | 'file';
 }
 
 export function VaultItemList({ profileId, vaultType }: VaultItemListProps) {
-  const { data, isLoading } = useVaultSecrets(profileId || undefined);
+  const { data: secrets, isLoading } = useVaultSecrets(profileId || undefined);
 
-  const filtered = data?.secrets?.filter((s) => s.vaultType === vaultType) ?? [];
+  const filtered = secrets ?? [];
   const icon = vaultType === 'note' ? <Key className="h-4 w-4" /> : <FileIcon className="h-4 w-4" />;
   const title = vaultType === 'note' ? 'Saved Secrets' : 'Uploaded Files';
   const emptyText = vaultType === 'note' ? 'No encrypted notes yet' : 'No encrypted files yet';
@@ -38,7 +38,17 @@ export function VaultItemList({ profileId, vaultType }: VaultItemListProps) {
         ) : filtered.length > 0 ? (
           <div className="space-y-2">
             {filtered.map((s) => (
-              <VaultItemCard key={s.key} secret={s} profileId={profileId} />
+              <VaultItemCard
+                key={s.key}
+                item={{
+                  key: s.key,
+                  blobId: s.blobId,
+                  version: s.version,
+                  sealPolicyId: s.sealPolicyId,
+                  createdAt: s.createdAt,
+                  updatedAt: s.updatedAt,
+                }}
+              />
             ))}
           </div>
         ) : (

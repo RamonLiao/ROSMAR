@@ -37,14 +37,14 @@ export default function VaultPage() {
 
         <TabsContent value="notes" className="space-y-4">
           <div className="grid gap-6 md:grid-cols-2">
-            <VaultItemForm mode="note" profileId={profileId} />
+            <VaultItemForm profileId={profileId} />
             <VaultItemList profileId={profileId} vaultType="note" />
           </div>
         </TabsContent>
 
         <TabsContent value="files" className="space-y-4">
           <div className="grid gap-6 md:grid-cols-2">
-            <VaultItemForm mode="file" profileId={profileId} />
+            <VaultItemForm profileId={profileId} />
             <VaultItemList profileId={profileId} vaultType="file" />
           </div>
         </TabsContent>

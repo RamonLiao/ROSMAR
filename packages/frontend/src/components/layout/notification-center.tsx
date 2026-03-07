@@ -9,11 +9,14 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Bell } from "lucide-react";
-import { useNotifications } from "@/lib/hooks/use-notifications";
+import { useNotifications, useUnreadCount, useMarkRead, useMarkAllRead } from "@/lib/hooks/use-notifications";
 
 export function NotificationCenter() {
-  const { notifications, unreadCount, markRead, markAllRead } =
-    useNotifications();
+  const { data: notifications = [] } = useNotifications();
+  const { data: unreadData } = useUnreadCount();
+  const markRead = useMarkRead();
+  const markAllRead = useMarkAllRead();
+  const unreadCount = unreadData?.count ?? 0;
 
   return (
     <Popover>
@@ -38,7 +41,7 @@ export function NotificationCenter() {
               variant="ghost"
               size="sm"
               className="text-xs"
-              onClick={() => markAllRead()}
+              onClick={() => markAllRead.mutate()}
             >
               Mark all read
             </Button>
@@ -57,7 +60,7 @@ export function NotificationCenter() {
                   className={`w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors ${
                     !n.isRead ? "bg-muted/30" : ""
                   } ${n.type === "whale_alert" ? "border-l-2 border-l-amber-500" : ""}`}
-                  onClick={() => !n.isRead && markRead(n.id)}
+                  onClick={() => !n.isRead && markRead.mutate(n.id)}
                 >
                   <p className="text-sm font-medium">{n.title}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
