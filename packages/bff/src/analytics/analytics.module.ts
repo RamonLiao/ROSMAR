@@ -2,9 +2,10 @@ import { Module } from '@nestjs/common';
 import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
 import { AuthModule } from '../auth/auth.module';
+import { EngagementModule } from '../engagement/engagement.module';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, EngagementModule],
   controllers: [AnalyticsController],
   providers: [AnalyticsService],
 })

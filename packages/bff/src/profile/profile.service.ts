@@ -164,6 +164,62 @@ export class ProfileService {
     };
   }
 
+  async getAssets(profileId: string) {
+    const rows = await this.prisma.$queryRaw<
+      { collection: string | null; event_type: string; cnt: bigint; total_amount: number | null }[]
+    >`
+      SELECT
+        collection,
+        event_type,
+        COUNT(*) AS cnt,
+        SUM(amount)::float AS total_amount
+      FROM wallet_events
+      WHERE profile_id = ${profileId}
+      GROUP BY collection, event_type
+      ORDER BY cnt DESC
+    `;
+
+    const nftTypes = ['MintNFTEvent', 'TransferObject'];
+    const defiTypes = ['SwapEvent', 'AddLiquidityEvent', 'StakeEvent', 'UnstakeEvent'];
+
+    return {
+      nfts: rows
+        .filter((r) => nftTypes.includes(r.event_type))
+        .map((r) => ({
+          collection: r.collection ?? 'Unknown',
+          count: Number(r.cnt),
+          eventType: r.event_type,
+        })),
+      defi: rows
+        .filter((r) => defiTypes.includes(r.event_type))
+        .map((r) => ({
+          type: r.event_type,
+          count: Number(r.cnt),
+          totalAmount: r.total_amount ?? 0,
+        })),
+      governance: rows
+        .filter((r) => ['VoteEvent', 'DelegateEvent'].includes(r.event_type))
+        .map((r) => ({
+          type: r.event_type,
+          count: Number(r.cnt),
+        })),
+    };
+  }
+
+  async getTimeline(profileId: string, limit = 20, offset = 0) {
+    const [events, total] = await Promise.all([
+      this.prisma.walletEvent.findMany({
+        where: { profileId },
+        orderBy: { time: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      this.prisma.walletEvent.count({ where: { profileId } }),
+    ]);
+
+    return { events, total };
+  }
+
   async archive(
     workspaceId: string,
     callerAddress: string,

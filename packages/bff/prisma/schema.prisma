@@ -311,3 +311,40 @@ model AuditLog {
   @@index([txDigest])
   @@map("audit_logs")
 }
+
+// ─── Wave 1 Models ───────────────────────────────
+
+model WalletEvent {
+  id              String   @id @default(uuid())
+  time            DateTime
+  address         String
+  eventType       String   @map("event_type")
+  collection      String?
+  token           String?
+  amount          Decimal? @db.Decimal(36, 18)
+  txDigest        String   @map("tx_digest")
+  contractAddress String?  @map("contract_address")
+  rawData         Json?    @map("raw_data")
+  profileId       String?  @map("profile_id")
+  workspaceId     String?  @map("workspace_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([address, time])
+  @@index([profileId, eventType])
+  @@index([workspaceId, time])
+  @@index([txDigest])
+  @@map("wallet_events")
+}
+
+model EngagementSnapshot {
+  id          String   @id @default(uuid())
+  profileId   String   @map("profile_id")
+  workspaceId String   @map("workspace_id")
+  score       Int
+  breakdown   Json
+  calculatedAt DateTime @map("calculated_at")
+
+  @@index([profileId, calculatedAt])
+  @@index([workspaceId, calculatedAt])
+  @@map("engagement_snapshots")
+}

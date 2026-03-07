@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EngagementService, ScoreResult } from '../engagement/engagement.service';
 
 export interface ScoreBucket {
   range: string;
@@ -20,7 +21,14 @@ export interface PipelineStage {
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly engagementService: EngagementService,
+  ) {}
+
+  async getScoreBreakdown(profileId: string): Promise<ScoreResult> {
+    return this.engagementService.calculateScore(profileId);
+  }
 
   async getScoreDistribution(workspaceId: string): Promise<ScoreBucket[]> {
     const rows = await this.prisma.$queryRaw<

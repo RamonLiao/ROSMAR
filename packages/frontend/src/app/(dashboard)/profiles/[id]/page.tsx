@@ -248,7 +248,7 @@ export default function ProfileDetailPage({
         </div>
 
         <TabsContent value="activity">
-          <ProfileTimeline events={[]} />
+          <ProfileTimeline profileId={params.id} />
         </TabsContent>
 
         <TabsContent value="messages">
@@ -334,7 +334,7 @@ export default function ProfileDetailPage({
         </TabsContent>
 
         <TabsContent value="assets">
-          <AssetGallery assets={[]} />
+          <AssetGallery profileId={params.id} />
         </TabsContent>
 
         <TabsContent value="notes">

@@ -1,31 +1,52 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-
-interface TimelineEvent {
-  time: string;
-  eventType: string;
-  collection?: string;
-  token?: string;
-  amount?: number;
-  txDigest: string;
-}
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useProfileTimeline } from "@/lib/hooks/use-profile-assets";
 
 interface ProfileTimelineProps {
-  events: TimelineEvent[];
+  profileId: string;
 }
 
 const eventTypeColors: Record<string, string> = {
-  transfer: "bg-blue-500",
-  mint: "bg-green-500",
-  burn: "bg-red-500",
-  swap: "bg-purple-500",
-  stake: "bg-yellow-500",
+  SwapEvent: "bg-purple-500",
+  MintNFTEvent: "bg-green-500",
+  TransferObject: "bg-blue-500",
+  StakeEvent: "bg-yellow-500",
+  UnstakeEvent: "bg-orange-500",
+  VoteEvent: "bg-indigo-500",
+  DelegateEvent: "bg-teal-500",
+  AddLiquidityEvent: "bg-pink-500",
 };
 
-export function ProfileTimeline({ events }: ProfileTimelineProps) {
+export function ProfileTimeline({ profileId }: ProfileTimelineProps) {
+  const [limit, setLimit] = useState(20);
+  const { data, isLoading } = useProfileTimeline(profileId, limit);
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Activity Timeline</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const events = data?.events ?? [];
+  const total = data?.total ?? 0;
+
   return (
     <Card>
       <CardHeader>
@@ -35,13 +56,17 @@ export function ProfileTimeline({ events }: ProfileTimelineProps) {
         <ScrollArea className="h-[400px]">
           <div className="space-y-4">
             {events.length === 0 ? (
-              <p className="text-center text-muted-foreground">No activity yet</p>
+              <p className="text-center text-muted-foreground">
+                No activity yet
+              </p>
             ) : (
-              events.map((event, index) => (
-                <div key={index} className="flex gap-4 border-l-2 pl-4">
+              events.map((event) => (
+                <div key={event.id} className="flex gap-4 border-l-2 pl-4">
                   <div className="flex-shrink-0">
                     <Badge
-                      className={eventTypeColors[event.eventType] || "bg-gray-500"}
+                      className={
+                        eventTypeColors[event.eventType] || "bg-gray-500"
+                      }
                     >
                       {event.eventType}
                     </Badge>
@@ -56,9 +81,9 @@ export function ProfileTimeline({ events }: ProfileTimelineProps) {
                         {new Date(event.time).toLocaleDateString()}
                       </span>
                     </div>
-                    {event.amount && (
+                    {event.amount != null && (
                       <p className="text-sm text-muted-foreground">
-                        Amount: {event.amount}
+                        Amount: {Number(event.amount).toLocaleString()}
                       </p>
                     )}
                     <p className="text-xs font-mono text-muted-foreground">
@@ -70,6 +95,17 @@ export function ProfileTimeline({ events }: ProfileTimelineProps) {
             )}
           </div>
         </ScrollArea>
+        {events.length < total && (
+          <div className="mt-4 text-center">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setLimit((prev) => prev + 20)}
+            >
+              Load more ({total - events.length} remaining)
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

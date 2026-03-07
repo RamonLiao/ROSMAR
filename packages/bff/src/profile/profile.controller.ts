@@ -50,6 +50,20 @@ export class ProfileController {
     return this.profileService.getProfile(id);
   }
 
+  @Get(':id/assets')
+  async getAssets(@Param('id') id: string) {
+    return this.profileService.getAssets(id);
+  }
+
+  @Get(':id/timeline')
+  async getTimeline(
+    @Param('id') id: string,
+    @Query('limit') limit = 20,
+    @Query('offset') offset = 0,
+  ) {
+    return this.profileService.getTimeline(id, +limit, +offset);
+  }
+
   @Get()
   async listProfiles(
     @User() user: import('../auth/auth.service').UserPayload,

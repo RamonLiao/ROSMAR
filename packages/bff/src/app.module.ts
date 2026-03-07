@@ -19,6 +19,8 @@ import { NotificationModule } from './notification/notification.module';
 import { TicketModule } from './ticket/ticket.module';
 import { TestAuthModule } from './auth/test-auth.module';
 import { WebhookModule } from './webhook/webhook.module';
+import { AutoTagModule } from './auto-tag/auto-tag.module';
+import { EngagementModule } from './engagement/engagement.module';
 
 @Module({
   imports: [
@@ -39,6 +41,8 @@ import { WebhookModule } from './webhook/webhook.module';
     NotificationModule,
     TicketModule,
     WebhookModule,
+    AutoTagModule,
+    EngagementModule,
     ...(process.env.NODE_ENV === 'test' ? [TestAuthModule] : []),
   ],
   controllers: [AppController],

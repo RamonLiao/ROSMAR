@@ -6,9 +6,9 @@ export interface Notification {
   type: string;
   title: string;
   body: string;
-  read: boolean;
+  isRead: boolean;
   createdAt: string;
-  [key: string]: unknown;
+  metadata?: Record<string, unknown>;
 }
 
 export function useNotifications() {
