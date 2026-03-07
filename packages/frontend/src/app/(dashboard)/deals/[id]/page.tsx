@@ -3,6 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DealDocuments } from "@/components/deal/deal-documents";
 import { ArrowLeft, DollarSign, Calendar, TrendingUp } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -20,6 +22,7 @@ export default function DealDetailPage({ params }: { params: { id: string } }) {
     closeDate: "2026-03-15",
     description:
       "Partnership opportunity with enterprise client for Web3 CRM integration",
+    workspaceId: "mock-workspace-id",
   };
 
   return (
@@ -71,23 +74,39 @@ export default function DealDetailPage({ params }: { params: { id: string } }) {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Description</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p>{deal.description}</p>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
+        </TabsList>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Profile</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="font-medium">{deal.profileName}</p>
-        </CardContent>
-      </Card>
+        <TabsContent value="overview" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Description</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p>{deal.description}</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Profile</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="font-medium">{deal.profileName}</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="documents">
+          <DealDocuments
+            dealId={deal.id}
+            workspaceId={deal.workspaceId}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
