@@ -27,6 +27,7 @@ model Workspace {
   notifications   Notification[]
   tickets         Ticket[]
   auditLogs       AuditLog[]
+  broadcasts      Broadcast[]
 
   @@map("workspaces")
 }
@@ -69,6 +70,8 @@ model Profile {
   messages           Message[]
   workflowExecutions WorkflowExecution[]
   workflowActionLogs WorkflowActionLog[]
+  wallets            ProfileWallet[]
+  socialLinks        SocialLink[]
 
   @@map("profiles")
 }
@@ -158,6 +161,7 @@ model Campaign {
   segment            Segment   @relation(fields: [segmentId], references: [id])
   workflowExecutions WorkflowExecution[]
   workflowActionLogs WorkflowActionLog[]
+  triggers           CampaignTrigger[]
 
   @@map("campaigns")
 }
@@ -390,4 +394,117 @@ model DealDocument {
 
   @@index([dealId])
   @@map("deal_documents")
+}
+
+// ─── P3 Models ───────────────────────────────────
+
+model LlmUsageLog {
+  id               String   @id @default(uuid())
+  workspaceId      String   @map("workspace_id")
+  userId           String   @map("user_id")
+  agentType        String   @map("agent_type")
+  model            String
+  promptTokens     Int      @map("prompt_tokens")
+  completionTokens Int      @map("completion_tokens")
+  estimatedCostUsd Decimal  @map("estimated_cost_usd") @db.Decimal(10, 6)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([workspaceId, createdAt])
+  @@map("llm_usage_logs")
+}
+
+model WorkspaceAiConfig {
+  workspaceId       String   @id @map("workspace_id")
+  provider          String   @default("anthropic")
+  apiKeyEncrypted   String?  @map("api_key_encrypted")
+  monthlyQuotaUsd   Decimal  @default(10) @map("monthly_quota_usd") @db.Decimal(10, 2)
+  usedQuotaUsd      Decimal  @default(0) @map("used_quota_usd") @db.Decimal(10, 2)
+  quotaResetAt      DateTime @map("quota_reset_at")
+  isEnabled         Boolean  @default(true) @map("is_enabled")
+
+  @@map("workspace_ai_configs")
+}
+
+model CampaignTrigger {
+  id            String  @id @default(uuid())
+  campaignId    String  @map("campaign_id")
+  triggerType   String  @map("trigger_type")
+  triggerConfig Json    @map("trigger_config")
+  isEnabled     Boolean @default(true) @map("is_enabled")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+
+  @@index([triggerType, isEnabled])
+  @@map("campaign_triggers")
+}
+
+model ProfileWallet {
+  id        String   @id @default(uuid())
+  profileId String   @map("profile_id")
+  chain     String
+  address   String
+  ensName   String?  @map("ens_name")
+  snsName   String?  @map("sns_name")
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  profile Profile @relation(fields: [profileId], references: [id])
+
+  @@unique([profileId, chain, address])
+  @@index([address])
+  @@map("profile_wallets")
+}
+
+model SocialLink {
+  id                  String   @id @default(uuid())
+  profileId           String   @map("profile_id")
+  platform            String
+  platformUserId      String   @map("platform_user_id")
+  platformUsername     String?  @map("platform_username")
+  oauthTokenEncrypted String?  @map("oauth_token_encrypted")
+  verified            Boolean  @default(false)
+  linkedAt            DateTime @default(now()) @map("linked_at")
+
+  profile Profile @relation(fields: [profileId], references: [id])
+
+  @@unique([profileId, platform])
+  @@index([platform, platformUserId])
+  @@map("social_links")
+}
+
+model Broadcast {
+  id          String    @id @default(uuid())
+  workspaceId String    @map("workspace_id")
+  title       String
+  content     String
+  contentHtml String?   @map("content_html")
+  channels    Json
+  segmentId   String?   @map("segment_id")
+  status      String    @default("draft")
+  scheduledAt DateTime? @map("scheduled_at")
+  sentAt      DateTime? @map("sent_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  workspace  Workspace          @relation(fields: [workspaceId], references: [id])
+  deliveries BroadcastDelivery[]
+
+  @@index([workspaceId, status])
+  @@map("broadcasts")
+}
+
+model BroadcastDelivery {
+  id                String    @id @default(uuid())
+  broadcastId       String    @map("broadcast_id")
+  channel           String
+  platformMessageId String?   @map("platform_message_id")
+  status            String    @default("pending")
+  error             String?
+  deliveredAt       DateTime? @map("delivered_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  broadcast Broadcast @relation(fields: [broadcastId], references: [id])
+
+  @@index([broadcastId, channel])
+  @@map("broadcast_deliveries")
 }
