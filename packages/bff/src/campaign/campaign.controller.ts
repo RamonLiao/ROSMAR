@@ -3,6 +3,8 @@ import {
   Get,
   Post,
   Put,
+  Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -13,6 +15,7 @@ import { SessionGuard } from '../auth/guards/session.guard';
 import { RbacGuard, RequirePermissions, WRITE } from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
 import type { UserPayload } from '../auth/auth.service';
+import { CreateTriggerDto, UpdateTriggerDto } from './trigger/trigger.dto';
 
 export class CreateCampaignDto {
   name: string;
@@ -111,5 +114,40 @@ export class CampaignController {
   @Get(':id/stats')
   async getStats(@Param('id') id: string) {
     return this.campaignService.getCampaignStats(id);
+  }
+
+  // --- Trigger CRUD ---
+
+  @Post(':id/triggers')
+  @RequirePermissions(WRITE)
+  async createTrigger(
+    @Param('id') id: string,
+    @Body() dto: CreateTriggerDto,
+  ) {
+    return this.campaignService.createTrigger(id, dto);
+  }
+
+  @Get(':id/triggers')
+  async listTriggers(@Param('id') id: string) {
+    return this.campaignService.listTriggers(id);
+  }
+
+  @Patch(':id/triggers/:triggerId')
+  @RequirePermissions(WRITE)
+  async updateTrigger(
+    @Param('id') id: string,
+    @Param('triggerId') triggerId: string,
+    @Body() dto: UpdateTriggerDto,
+  ) {
+    return this.campaignService.updateTrigger(id, triggerId, dto);
+  }
+
+  @Delete(':id/triggers/:triggerId')
+  @RequirePermissions(WRITE)
+  async deleteTrigger(
+    @Param('id') id: string,
+    @Param('triggerId') triggerId: string,
+  ) {
+    return this.campaignService.deleteTrigger(id, triggerId);
   }
 }

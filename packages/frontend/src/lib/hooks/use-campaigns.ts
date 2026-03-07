@@ -112,3 +112,57 @@ export function useCampaignStats(id: string) {
     enabled: !!id,
   });
 }
+
+// --- Trigger CRUD ---
+
+export interface CampaignTrigger {
+  id: string;
+  campaignId: string;
+  triggerType: string;
+  triggerConfig: Record<string, unknown>;
+  isEnabled: boolean;
+}
+
+export function useCampaignTriggers(campaignId: string) {
+  return useQuery({
+    queryKey: ['campaign-triggers', campaignId],
+    queryFn: () => apiClient.get<CampaignTrigger[]>(`/campaigns/${campaignId}/triggers`),
+    enabled: !!campaignId,
+  });
+}
+
+export function useCreateTrigger() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ campaignId, ...data }: { campaignId: string; triggerType: string; triggerConfig: Record<string, unknown>; isEnabled?: boolean }) =>
+      apiClient.post<CampaignTrigger>(`/campaigns/${campaignId}/triggers`, data),
+    onSuccess: (_, { campaignId }) => {
+      queryClient.invalidateQueries({ queryKey: ['campaign-triggers', campaignId] });
+    },
+  });
+}
+
+export function useUpdateTrigger() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ campaignId, triggerId, ...data }: { campaignId: string; triggerId: string; triggerConfig?: Record<string, unknown>; isEnabled?: boolean }) =>
+      apiClient.patch<CampaignTrigger>(`/campaigns/${campaignId}/triggers/${triggerId}`, data),
+    onSuccess: (_, { campaignId }) => {
+      queryClient.invalidateQueries({ queryKey: ['campaign-triggers', campaignId] });
+    },
+  });
+}
+
+export function useDeleteTrigger() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ campaignId, triggerId }: { campaignId: string; triggerId: string }) =>
+      apiClient.delete(`/campaigns/${campaignId}/triggers/${triggerId}`),
+    onSuccess: (_, { campaignId }) => {
+      queryClient.invalidateQueries({ queryKey: ['campaign-triggers', campaignId] });
+    },
+  });
+}
