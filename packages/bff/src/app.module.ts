@@ -22,6 +22,7 @@ import { WebhookModule } from './webhook/webhook.module';
 import { AutoTagModule } from './auto-tag/auto-tag.module';
 import { EngagementModule } from './engagement/engagement.module';
 import { AgentModule } from './agent/agent.module';
+import { SocialModule } from './social/social.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { AgentModule } from './agent/agent.module';
     AutoTagModule,
     EngagementModule,
     AgentModule,
+    SocialModule,
     ...(process.env.NODE_ENV === 'test' ? [TestAuthModule] : []),
   ],
   controllers: [AppController],
