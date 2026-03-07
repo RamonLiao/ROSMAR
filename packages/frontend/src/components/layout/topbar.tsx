@@ -11,8 +11,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { Bell, ChevronDown, LogOut, User } from "lucide-react";
+import { ChevronDown, LogOut, User } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationCenter } from "@/components/layout/notification-center";
 import { useRouter } from "next/navigation";
 
 export function Topbar() {
@@ -58,9 +59,7 @@ export function Topbar() {
 
       <div className="flex items-center gap-2">
         <ThemeToggle />
-        <Button variant="ghost" size="icon">
-          <Bell className="h-5 w-5" />
-        </Button>
+        <NotificationCenter />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
