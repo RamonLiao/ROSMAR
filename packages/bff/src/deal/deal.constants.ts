@@ -14,3 +14,18 @@ export const DEAL_STAGES = {
 } as const;
 
 export type DealStage = keyof typeof DEAL_STAGES;
+
+/**
+ * Valid stage transitions — BFF-side state machine guard.
+ * "disputed" is a P4 addition for escrow dispute flows.
+ */
+export const VALID_TRANSITIONS: Record<string, string[]> = {
+  prospecting: ['qualification'],
+  qualification: ['proposal'],
+  proposal: ['negotiation'],
+  negotiation: ['closed_won', 'closed_lost', 'disputed'],
+  closed_won: ['closed'],
+  closed_lost: ['closed'],
+  disputed: ['negotiation', 'closed_won', 'closed_lost'],
+  closed: [],
+};

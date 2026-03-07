@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SuiClientService } from '../blockchain/sui.client';
 import { TxBuilderService } from '../blockchain/tx-builder.service';
 import { NotificationService } from '../notification/notification.service';
+import { VALID_TRANSITIONS } from './deal.constants';
 
 export interface CreateDealDto {
   profileId: string;
@@ -211,6 +212,14 @@ export class DealService {
     const deal = await this.prisma.deal.findUniqueOrThrow({
       where: { id: dealId },
     });
+
+    // State machine guard (T11)
+    const allowed = VALID_TRANSITIONS[deal.stage];
+    if (!allowed || !allowed.includes(stage)) {
+      throw new BadRequestException(
+        `Invalid transition: ${deal.stage} → ${stage}`,
+      );
+    }
 
     if (!deal.suiObjectId && !this.isDryRun) {
       throw new NotFoundException('Deal has no on-chain object ID');
