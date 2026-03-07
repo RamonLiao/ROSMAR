@@ -14,6 +14,8 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { BlockchainModule } from './blockchain/blockchain.module';
 import { AutoTagModule } from './auto-tag/auto-tag.module';
 import { EngagementModule } from './engagement/engagement.module';
+import { WebhookModule } from './webhook/webhook.module';
+import { NotificationModule } from './notification/notification.module';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { EngagementModule } from './engagement/engagement.module';
     AnalyticsModule,
     AutoTagModule,
     EngagementModule,
+    WebhookModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
