@@ -158,6 +158,7 @@ model Campaign {
   segment            Segment   @relation(fields: [segmentId], references: [id])
   workflowExecutions WorkflowExecution[]
   workflowActionLogs WorkflowActionLog[]
+  triggers           CampaignTrigger[]
 
   @@map("campaigns")
 }
@@ -314,6 +315,21 @@ model AuditLog {
   @@index([workspaceId, objectType, objectId])
   @@index([txDigest])
   @@map("audit_logs")
+}
+
+// ─── P3 Models ──────────────────────────────────
+
+model CampaignTrigger {
+  id            String  @id @default(uuid())
+  campaignId    String  @map("campaign_id")
+  triggerType   String  @map("trigger_type")
+  triggerConfig Json    @map("trigger_config")
+  isEnabled     Boolean @default(true) @map("is_enabled")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+
+  @@index([triggerType, isEnabled])
+  @@map("campaign_triggers")
 }
 
 // ─── Wave 1 Models ───────────────────────────────
