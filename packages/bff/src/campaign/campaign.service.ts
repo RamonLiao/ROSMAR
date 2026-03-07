@@ -222,7 +222,7 @@ export class CampaignService {
       data: {
         campaignId,
         triggerType: dto.triggerType,
-        triggerConfig: dto.triggerConfig,
+        triggerConfig: dto.triggerConfig as any,
         isEnabled: dto.isEnabled ?? true,
       },
     });
