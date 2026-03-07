@@ -44,7 +44,7 @@ export function useEngagementSettings() {
               k,
               Math.round((v / sum) * 100) / 100,
             ]),
-          ) as EngagementWeights;
+          ) as unknown as EngagementWeights;
           localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
           return normalized;
         }

@@ -99,11 +99,11 @@ export default function ProfileDetailPage({
         </TabsList>
 
         <TabsContent value="activity">
-          <ProfileTimeline events={mockEvents} />
+          <ProfileTimeline profileId={params.id} />
         </TabsContent>
 
         <TabsContent value="assets">
-          <AssetGallery assets={mockAssets} />
+          <AssetGallery profileId={params.id} />
         </TabsContent>
 
         <TabsContent value="notes">
