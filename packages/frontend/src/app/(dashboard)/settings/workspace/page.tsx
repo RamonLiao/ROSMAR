@@ -5,12 +5,153 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Save, Fingerprint, CheckCircle2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Loader2, Save, Fingerprint, CheckCircle2, Bot } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspace, useUpdateWorkspace } from "@/lib/hooks/use-workspaces";
 import { usePasskeyRegisterOptions, usePasskeyRegisterVerify } from "@/lib/hooks/use-passkey";
+import { useAiConfig, useUpdateAiConfig } from "@/lib/hooks/use-ai-settings";
 import { startRegistration } from "@simplewebauthn/browser";
+
+function AiConfigSection() {
+  const { data: aiConfig, isLoading: aiLoading } = useAiConfig();
+  const updateAiConfig = useUpdateAiConfig();
+  const [apiKey, setApiKey] = useState("");
+
+  const quotaPercent = aiConfig
+    ? Math.min(100, (aiConfig.usedQuotaUsd / aiConfig.monthlyQuotaUsd) * 100)
+    : 0;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Bot className="h-5 w-5" />
+          AI Configuration
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {aiLoading ? (
+          <div className="flex items-center gap-2 text-muted-foreground py-4">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading AI config...
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Enable AI Features</Label>
+                <p className="text-sm text-muted-foreground">
+                  Allow AI agents to process data in this workspace
+                </p>
+              </div>
+              <Button
+                variant={aiConfig?.isEnabled ? "default" : "outline"}
+                size="sm"
+                onClick={() =>
+                  updateAiConfig.mutate({ isEnabled: !aiConfig?.isEnabled })
+                }
+              >
+                {aiConfig?.isEnabled ? "Enabled" : "Disabled"}
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Provider</Label>
+              <Select
+                value={aiConfig?.provider ?? "anthropic"}
+                onValueChange={(value) =>
+                  updateAiConfig.mutate({ provider: value })
+                }
+              >
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
+                  <SelectItem value="openai">OpenAI (GPT)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ai-api-key">API Key (BYOK - optional)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="ai-api-key"
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder={
+                    aiConfig?.hasApiKey
+                      ? "Key saved - enter new key to replace"
+                      : "Use platform key (leave empty)"
+                  }
+                />
+                <Button
+                  variant="outline"
+                  disabled={!apiKey.trim() || updateAiConfig.isPending}
+                  onClick={() => {
+                    updateAiConfig.mutate({ apiKey: apiKey.trim() });
+                    setApiKey("");
+                  }}
+                >
+                  {updateAiConfig.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Bring your own API key for unlimited usage, or use the platform
+                key within your monthly quota.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <Label>Monthly Usage</Label>
+                <span className="text-muted-foreground">
+                  ${aiConfig?.usedQuotaUsd.toFixed(2)} / $
+                  {aiConfig?.monthlyQuotaUsd.toFixed(2)}
+                </span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-muted">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    quotaPercent > 90
+                      ? "bg-destructive"
+                      : quotaPercent > 70
+                        ? "bg-yellow-500"
+                        : "bg-primary"
+                  }`}
+                  style={{ width: `${quotaPercent}%` }}
+                />
+              </div>
+            </div>
+
+            {updateAiConfig.isSuccess && (
+              <p className="text-sm text-green-600">AI config saved.</p>
+            )}
+            {updateAiConfig.isError && (
+              <p className="text-sm text-destructive">
+                Failed: {(updateAiConfig.error as Error).message}
+              </p>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function WorkspaceSettingsPage() {
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace);
@@ -165,6 +306,8 @@ export default function WorkspaceSettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      <AiConfigSection />
 
       <Card>
         <CardHeader>
