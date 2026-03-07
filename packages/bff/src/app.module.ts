@@ -23,6 +23,7 @@ import { AutoTagModule } from './auto-tag/auto-tag.module';
 import { EngagementModule } from './engagement/engagement.module';
 import { AgentModule } from './agent/agent.module';
 import { SocialModule } from './social/social.module';
+import { BroadcastModule } from './broadcast/broadcast.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { SocialModule } from './social/social.module';
     EngagementModule,
     AgentModule,
     SocialModule,
+    BroadcastModule,
     ...(process.env.NODE_ENV === 'test' ? [TestAuthModule] : []),
   ],
   controllers: [AppController],
