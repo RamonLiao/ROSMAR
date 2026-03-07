@@ -10,6 +10,7 @@ import {
   usePipelineSummary,
 } from "@/lib/hooks/use-analytics";
 import { Loader2, AlertCircle } from "lucide-react";
+import { AnalystChat } from "@/components/analytics/analyst-chat";
 
 function formatCurrency(amount: number) {
   if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(1)}M`;
@@ -198,6 +199,17 @@ export default function AnalyticsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* AI Analyst */}
+      <div>
+        <h2 className="text-xl font-semibold tracking-tight mb-3">
+          AI Analyst
+        </h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Query your CRM data using natural language
+        </p>
+        <AnalystChat />
+      </div>
     </div>
   );
 }
