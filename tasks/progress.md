@@ -1,24 +1,24 @@
 # ROSMAR CRM — Progress
 
 ## Current Task
-P3 design complete — implementation plan ready, 35 tasks across 4 waves.
+P3 Wave 1 complete (T1-T10 merged). Ready for Wave 2.
 
 ## TODO
 
 ### P3 — AI, Automation & Ecosystem (35 tasks, 4 waves)
 
 #### Wave 1: Automation Foundation (T1-T11)
-- [ ] **T1**: Prisma schema — P3 models (LLM, triggers, wallets, social, broadcast)
-- [ ] **T2**: Install P3 deps (ai sdk, ethers, solana)
-- [ ] **T3**: P3-1 LlmClientService — API key resolution + provider setup
-- [ ] **T4**: P3-1 UsageTrackingService
-- [ ] **T5**: P3-1 Agent settings API + frontend
+- [x] **T1**: Prisma schema — P3 models (LLM, triggers, wallets, social, broadcast)
+- [x] **T2**: Install P3 deps (ai sdk, ethers, solana)
+- [x] **T3**: P3-1 LlmClientService — API key resolution + provider setup
+- [x] **T4**: P3-1 UsageTrackingService
+- [x] **T5**: P3-1 Agent settings API + frontend
 - [x] **T6**: P3-2 TriggerMatcherService — event listener
 - [x] **T7**: P3-2 SegmentDiffJob — segment_entered/exited
 - [x] **T8**: P3-2 Campaign trigger CRUD API + frontend
 - [x] **T9**: P3-8 GasSponsorListener
 - [x] **T10**: P3-8 Gas station workspace settings UI
-- [ ] **T11**: Wave 1 integration test + tsc check
+- [x] **T11**: Wave 1 integration test + tsc check (merge verified)
 
 #### Wave 2: AI Agents (T12-T17)
 - [ ] **T12**: P3-3 AnalystAgent — NL to Prisma query
@@ -62,7 +62,16 @@ P3 design complete — implementation plan ready, 35 tasks across 4 waves.
 
 ## Recently Completed (2026-03-07)
 
-### Wave 1: Data Foundation (10/10 tasks)
+### P3 Wave 1: Automation Foundation (11/11 tasks)
+- **T1-T2**: Prisma P3 schema (8 new models) + deps (ai sdk, ethers, solana)
+- **T3-T5** (P3-1): LlmClientService (BYOK + platform fallback + quota) + UsageTrackingService + AI settings API/UI
+- **T6-T8** (P3-2): TriggerMatcherService + SegmentDiffJob + trigger CRUD API/UI
+- **T9-T10** (P3-8): GasSponsorListener + gas station settings UI
+- **T11**: Merge + integration verify
+- BFF: 15 test suites, 46 tests pass | Frontend: 19 suites, 92 tests pass
+- Merge: 1 settings page conflict (AI config + gas station) + 1 duplicate schema model resolved
+
+### P2 Wave 1: Data Foundation (10/10 tasks)
 - **T0**: Prisma migration — WalletEvent + EngagementSnapshot models
 - **T1-T3** (P2-5): Auto-tag classifier + webhook listener + frontend badges
 - **T4-T6** (P2-2): Engagement score calculator + batch job + weight settings UI
