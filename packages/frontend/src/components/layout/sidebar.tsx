@@ -9,6 +9,7 @@ import {
   Handshake,
   Filter,
   Megaphone,
+  Radio,
   Ticket,
   Vault,
   BarChart3,
@@ -34,6 +35,7 @@ const navGroups = [
     items: [
       { icon: Filter, label: "Segments", href: "/segments" },
       { icon: Megaphone, label: "Campaigns", href: "/campaigns" },
+      { icon: Radio, label: "Broadcasts", href: "/broadcasts" },
       { icon: Ticket, label: "Tickets", href: "/tickets" },
     ],
   },
