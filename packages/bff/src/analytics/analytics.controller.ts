@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { RbacGuard } from '../auth/guards/rbac.guard';
@@ -14,6 +14,11 @@ export class AnalyticsController {
     @User() user: import('../auth/auth.service').UserPayload,
   ) {
     return this.analyticsService.getScoreDistribution(user.workspaceId);
+  }
+
+  @Get('profiles/:id/score')
+  async getScoreBreakdown(@Param('id') profileId: string) {
+    return this.analyticsService.getScoreBreakdown(profileId);
   }
 
   @Get('activity-heatmap')

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AutoTagService } from '../auto-tag/auto-tag.service';
+import { EngagementService } from '../engagement/engagement.service';
 
 @Injectable()
 export class ScoreRecalcJob {
@@ -9,6 +10,7 @@ export class ScoreRecalcJob {
   constructor(
     private readonly prisma: PrismaService,
     private readonly autoTagService: AutoTagService,
+    private readonly engagementService: EngagementService,
   ) {}
 
   async recalculateScores() {
@@ -30,7 +32,12 @@ export class ScoreRecalcJob {
           data: { tags: merged },
         });
 
-        // TODO: Engagement score calc (Task 5)
+        // Engagement score
+        const score = await this.engagementService.recalculateAndPersist(
+          profile.id,
+          profile.workspaceId,
+        );
+        this.logger.debug(`Profile ${profile.id} score: ${score}`);
       } catch (err) {
         this.logger.error(`Recalc failed for ${profile.id}`, err);
       }

@@ -13,6 +13,7 @@ import { SegmentModule } from './segment/segment.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { BlockchainModule } from './blockchain/blockchain.module';
 import { AutoTagModule } from './auto-tag/auto-tag.module';
+import { EngagementModule } from './engagement/engagement.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { AutoTagModule } from './auto-tag/auto-tag.module';
     SegmentModule,
     AnalyticsModule,
     AutoTagModule,
+    EngagementModule,
   ],
   controllers: [AppController],
   providers: [AppService],
