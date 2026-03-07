@@ -25,6 +25,7 @@ import { AgentModule } from './agent/agent.module';
 import { SocialModule } from './social/social.module';
 import { BroadcastModule } from './broadcast/broadcast.module';
 import { QuestModule } from './quest/quest.module';
+import { GdprModule } from './gdpr/gdpr.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { QuestModule } from './quest/quest.module';
     SocialModule,
     BroadcastModule,
     QuestModule,
+    GdprModule,
     ...(process.env.NODE_ENV === 'test' ? [TestAuthModule] : []),
   ],
   controllers: [AppController],
