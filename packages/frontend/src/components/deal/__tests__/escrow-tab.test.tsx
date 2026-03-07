@@ -38,12 +38,12 @@ let mockUseDeal: ReturnType<typeof vi.fn>;
 let mockUseEscrow: ReturnType<typeof vi.fn>;
 
 vi.mock('@/lib/hooks/use-deals', () => ({
-  useDeal: (...args: unknown[]) => mockUseDeal(...args),
+  useDeal: (...args: unknown[]) => (mockUseDeal as any)(...args),
   useUpdateDeal: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock('@/lib/hooks/use-escrow', () => ({
-  useEscrow: (...args: unknown[]) => mockUseEscrow(...args),
+  useEscrow: (...args: unknown[]) => (mockUseEscrow as any)(...args),
   useCreateEscrow: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useFundEscrow: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useReleaseEscrow: () => ({ mutateAsync: vi.fn(), isPending: false }),

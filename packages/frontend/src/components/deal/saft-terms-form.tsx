@@ -28,7 +28,7 @@ export function SaftTermsForm({ initialValues, onSubmit }: SaftTermsFormProps) {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<SaftTerms>({
+  } = useForm({
     resolver: zodResolver(saftTermsSchema),
     defaultValues: {
       tokenSymbol: "",
@@ -42,7 +42,7 @@ export function SaftTermsForm({ initialValues, onSubmit }: SaftTermsFormProps) {
   });
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-1.5">
           <Label htmlFor="tokenSymbol">Token Symbol</Label>
