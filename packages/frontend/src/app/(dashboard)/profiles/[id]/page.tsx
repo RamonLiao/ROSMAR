@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ProfileCard } from "@/components/profile/profile-card";
 import { ProfileTimeline } from "@/components/profile/profile-timeline";
 import { AssetGallery } from "@/components/profile/asset-gallery";
+import { SocialTab } from "@/components/profile/social-tab";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Pencil, X, Loader2, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -244,6 +245,7 @@ export default function ProfileDetailPage({
             <TabsTrigger value="assets">Assets</TabsTrigger>
             <TabsTrigger value="notes">Notes</TabsTrigger>
             <TabsTrigger value="orgs">Related Orgs</TabsTrigger>
+            <TabsTrigger value="social">Social</TabsTrigger>
           </TabsList>
         </div>
 
@@ -391,6 +393,10 @@ export default function ProfileDetailPage({
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="social">
+          <SocialTab profileId={id} />
         </TabsContent>
       </Tabs>
     </div>
