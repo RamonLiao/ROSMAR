@@ -6,6 +6,7 @@ module crm_escrow::escrow {
     use sui::clock::Clock;
     use sui::event;
     use sui::dynamic_field;
+    use sui::hash;
     use crm_core::capabilities::{Self, GlobalConfig, WorkspaceAdminCap};
     use crm_core::workspace::{Self, Workspace};
     use crm_escrow::vesting;
@@ -36,6 +37,12 @@ module crm_escrow::escrow {
     const EArbitratorIsPayee: u64 = 1512;
     const EMinLockDuration: u64 = 1513;
     const ENotInClaimWindow: u64 = 1515;
+    const ECommitmentExists: u64 = 1520;
+    const ENoCommitment: u64 = 1521;
+    const ERevealMismatch: u64 = 1522;
+    const ERevealDeadlinePassed: u64 = 1523;
+    #[allow(unused_const)]
+    const ECommitPhaseClosed: u64 = 1524;
 
     const MIN_LOCK_DURATION_MS: u64 = 3_600_000; // 1 hour
     const CLAIM_WINDOW_MS: u64 = 24 * 60 * 60 * 1000; // 24 hours
@@ -89,6 +96,9 @@ module crm_escrow::escrow {
         votes_refund: vector<address>,
         resolved: bool,
         resolution: u8,
+        commitments: vector<address>,
+        commitment_hashes: vector<vector<u8>>,
+        reveal_deadline_ms: u64,
     }
 
     // ===== Events =====
@@ -195,6 +205,24 @@ module crm_escrow::escrow {
             j = j + 1;
         };
         false
+    }
+
+    fun has_committed(arb: &ArbitrationState, addr: address): bool {
+        let mut i = 0;
+        while (i < arb.commitments.length()) {
+            if (arb.commitments[i] == addr) { return true };
+            i = i + 1;
+        };
+        false
+    }
+
+    fun find_commitment_index(arb: &ArbitrationState, addr: address): u64 {
+        let mut i = 0;
+        while (i < arb.commitments.length()) {
+            if (arb.commitments[i] == addr) { return i };
+            i = i + 1;
+        };
+        abort ENoCommitment
     }
 
     fun arb_threshold_reached(arb: &ArbitrationState, threshold: u64): Option<u8> {
@@ -589,6 +617,9 @@ module crm_escrow::escrow {
             votes_refund: vector[],
             resolved: false,
             resolution: 0,
+            commitments: vector[],
+            commitment_hashes: vector[],
+            reveal_deadline_ms: 0,
         };
 
         dynamic_field::add(&mut escrow.id, ARBITRATION_KEY, arb_state);
@@ -662,6 +693,138 @@ module crm_escrow::escrow {
             arb_state.resolution = decision;
 
             // Release the mutable borrow on dynamic field before accessing escrow.balance
+            let remaining = balance::value(&escrow.balance);
+            if (remaining > 0) {
+                let payout = coin::from_balance(
+                    balance::split(&mut escrow.balance, remaining),
+                    ctx,
+                );
+                if (decision == arbitration::decision_release()) {
+                    transfer::public_transfer(payout, payee);
+                    escrow.released_amount = escrow.released_amount + remaining;
+                    escrow.state = STATE_COMPLETED;
+                } else {
+                    transfer::public_transfer(payout, payer);
+                    escrow.refunded_amount = escrow.refunded_amount + remaining;
+                    escrow.state = STATE_REFUNDED;
+                };
+            };
+
+            event::emit(DisputeResolved {
+                workspace_id: ws_id,
+                escrow_id,
+                actor: sender,
+                resolution: decision,
+                timestamp: now,
+            });
+        };
+    }
+
+    /// Arbitrator commits a hash of their vote (commit-reveal mode)
+    public fun commit_vote(
+        escrow: &mut Escrow,
+        commitment_hash: vector<u8>,
+        reveal_deadline_ms: u64,
+        _clock: &Clock,
+        ctx: &TxContext,
+    ) {
+        assert_state(escrow, STATE_DISPUTED);
+
+        let sender = ctx.sender();
+
+        // Check sender is an arbitrator
+        let mut is_arb = false;
+        let mut i = 0;
+        while (i < escrow.arbitrators.length()) {
+            if (escrow.arbitrators[i] == sender) {
+                is_arb = true;
+            };
+            i = i + 1;
+        };
+        assert!(is_arb, ENotArbitrator);
+
+        let arb_state: &mut ArbitrationState = dynamic_field::borrow_mut(
+            &mut escrow.id,
+            ARBITRATION_KEY,
+        );
+
+        // Must not have already voted or committed
+        assert!(!arb_has_voted(arb_state, sender), EAlreadyVoted);
+        assert!(!has_committed(arb_state, sender), ECommitmentExists);
+
+        arb_state.commitments.push_back(sender);
+        arb_state.commitment_hashes.push_back(commitment_hash);
+        // Update reveal deadline if later than current
+        if (reveal_deadline_ms > arb_state.reveal_deadline_ms) {
+            arb_state.reveal_deadline_ms = reveal_deadline_ms;
+        };
+    }
+
+    /// Arbitrator reveals their vote (commit-reveal mode)
+    public fun reveal_vote(
+        escrow: &mut Escrow,
+        vote: u8,
+        salt: vector<u8>,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ) {
+        assert_state(escrow, STATE_DISPUTED);
+
+        let sender = ctx.sender();
+        let now = clock.timestamp_ms();
+
+        // Cache IDs before mutable borrow
+        let ws_id = escrow.workspace_id;
+        let escrow_id = object::id(escrow);
+        let payee = escrow.payee;
+        let payer = escrow.payer;
+        let threshold = escrow.arbiter_threshold;
+
+        let arb_state: &mut ArbitrationState = dynamic_field::borrow_mut(
+            &mut escrow.id,
+            ARBITRATION_KEY,
+        );
+
+        // Must have committed
+        assert!(has_committed(arb_state, sender), ENoCommitment);
+
+        // Must be before reveal deadline
+        assert!(now < arb_state.reveal_deadline_ms, ERevealDeadlinePassed);
+
+        // Verify hash: keccak256(vote_byte || salt)
+        let mut data = vector[vote];
+        data.append(salt);
+        let computed = hash::keccak256(&data);
+
+        let idx = find_commitment_index(arb_state, sender);
+        assert!(computed == arb_state.commitment_hashes[idx], ERevealMismatch);
+
+        // Remove commitment (swap-remove)
+        arb_state.commitments.swap_remove(idx);
+        arb_state.commitment_hashes.swap_remove(idx);
+
+        // Record vote (same logic as vote_on_dispute)
+        if (vote == arbitration::decision_release()) {
+            arb_state.votes_release.push_back(sender);
+        } else {
+            arb_state.votes_refund.push_back(sender);
+        };
+
+        event::emit(DisputeVoteCast {
+            workspace_id: ws_id,
+            escrow_id,
+            actor: sender,
+            vote,
+            timestamp: now,
+        });
+
+        // Check if threshold reached
+        let maybe_decision = arb_threshold_reached(arb_state, threshold);
+        if (maybe_decision.is_some()) {
+            let decision = *maybe_decision.borrow();
+            arb_state.resolved = true;
+            arb_state.resolution = decision;
+
             let remaining = balance::value(&escrow.balance);
             if (remaining > 0) {
                 let payout = coin::from_balance(

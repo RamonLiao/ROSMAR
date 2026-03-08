@@ -8,6 +8,7 @@ module crm_escrow::escrow_tests {
     use sui::clock::{Self, Clock};
     use crm_core::capabilities;
     use crm_core::workspace;
+    use sui::hash;
     use crm_escrow::escrow;
     use crm_escrow::vesting;
     use crm_escrow::arbitration;
@@ -563,6 +564,120 @@ module crm_escrow::escrow_tests {
         let mut scenario3 = ts::begin(ARB1);
         let ctx3 = ts::ctx(&mut scenario3);
         escrow::vote_on_dispute(&mut e, arbitration::decision_refund(), &clock, ctx3);
+
+        escrow::test_destroy_escrow(e);
+        clock::destroy_for_testing(clock);
+        ts::end(scenario3);
+    }
+
+    // ========== 16. test_commit_and_reveal_vote ==========
+
+    #[test]
+    fun test_commit_and_reveal_vote() {
+        let mut scenario = ts::begin(PAYER);
+        let ctx = ts::ctx(&mut scenario);
+        let mut clock = clock::create_for_testing(ctx);
+        clock::set_for_testing(&mut clock, 1000);
+
+        let mut e = setup_funded_escrow(&clock, ctx);
+        escrow::raise_dispute(&mut e, &clock, ctx);
+        ts::end(scenario);
+
+        // ARB1 commits hash(RELEASE || salt)
+        let salt = b"my_secret_salt";
+        let mut data = vector[arbitration::decision_release()];
+        data.append(salt);
+        let commitment = hash::keccak256(&data);
+
+        let mut scenario2 = ts::begin(ARB1);
+        let ctx2 = ts::ctx(&mut scenario2);
+        escrow::commit_vote(&mut e, commitment, 5000, &clock, ctx2);
+        ts::end(scenario2);
+
+        // ARB1 reveals with correct vote + salt
+        clock::set_for_testing(&mut clock, 2000);
+        let mut scenario3 = ts::begin(ARB1);
+        let ctx3 = ts::ctx(&mut scenario3);
+        escrow::reveal_vote(&mut e, arbitration::decision_release(), salt, &clock, ctx3);
+        ts::end(scenario3);
+
+        // ARB2 votes plain to reach threshold
+        let mut scenario4 = ts::begin(ARB2);
+        let ctx4 = ts::ctx(&mut scenario4);
+        escrow::vote_on_dispute(&mut e, arbitration::decision_release(), &clock, ctx4);
+        ts::end(scenario4);
+
+        assert!(escrow::state(&e) == escrow::state_completed());
+        assert!(escrow::balance_value(&e) == 0);
+
+        escrow::test_destroy_escrow(e);
+        clock::destroy_for_testing(clock);
+    }
+
+    // ========== 17. test_reveal_vote_mismatch ==========
+
+    #[test]
+    #[expected_failure(abort_code = escrow::ERevealMismatch)]
+    fun test_reveal_vote_mismatch() {
+        let mut scenario = ts::begin(PAYER);
+        let ctx = ts::ctx(&mut scenario);
+        let mut clock = clock::create_for_testing(ctx);
+        clock::set_for_testing(&mut clock, 1000);
+
+        let mut e = setup_funded_escrow(&clock, ctx);
+        escrow::raise_dispute(&mut e, &clock, ctx);
+        ts::end(scenario);
+
+        // ARB1 commits hash(RELEASE || salt)
+        let salt = b"my_secret_salt";
+        let mut data = vector[arbitration::decision_release()];
+        data.append(salt);
+        let commitment = hash::keccak256(&data);
+
+        let mut scenario2 = ts::begin(ARB1);
+        let ctx2 = ts::ctx(&mut scenario2);
+        escrow::commit_vote(&mut e, commitment, 5000, &clock, ctx2);
+        ts::end(scenario2);
+
+        // ARB1 reveals with REFUND instead of RELEASE → mismatch
+        clock::set_for_testing(&mut clock, 2000);
+        let mut scenario3 = ts::begin(ARB1);
+        let ctx3 = ts::ctx(&mut scenario3);
+        escrow::reveal_vote(&mut e, arbitration::decision_refund(), salt, &clock, ctx3);
+
+        escrow::test_destroy_escrow(e);
+        clock::destroy_for_testing(clock);
+        ts::end(scenario3);
+    }
+
+    // ========== 18. test_double_commit_fails ==========
+
+    #[test]
+    #[expected_failure(abort_code = escrow::ECommitmentExists)]
+    fun test_double_commit_fails() {
+        let mut scenario = ts::begin(PAYER);
+        let ctx = ts::ctx(&mut scenario);
+        let mut clock = clock::create_for_testing(ctx);
+        clock::set_for_testing(&mut clock, 1000);
+
+        let mut e = setup_funded_escrow(&clock, ctx);
+        escrow::raise_dispute(&mut e, &clock, ctx);
+        ts::end(scenario);
+
+        let salt = b"salt1";
+        let mut data = vector[arbitration::decision_release()];
+        data.append(salt);
+        let commitment = hash::keccak256(&data);
+
+        let mut scenario2 = ts::begin(ARB1);
+        let ctx2 = ts::ctx(&mut scenario2);
+        escrow::commit_vote(&mut e, commitment, 5000, &clock, ctx2);
+        ts::end(scenario2);
+
+        // ARB1 tries to commit again
+        let mut scenario3 = ts::begin(ARB1);
+        let ctx3 = ts::ctx(&mut scenario3);
+        escrow::commit_vote(&mut e, commitment, 6000, &clock, ctx3);
 
         escrow::test_destroy_escrow(e);
         clock::destroy_for_testing(clock);
