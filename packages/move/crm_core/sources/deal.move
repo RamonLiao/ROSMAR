@@ -9,6 +9,7 @@ module crm_core::deal {
     const EWorkspaceMismatch: u64 = 701;
     const EAlreadyArchived: u64 = 702;
     const EInvalidStage: u64 = 703;
+    const EInvalidStageTransition: u64 = 704;
 
     // AuditEvent constants
     const ACTION_CREATE: u8 = 0;
@@ -113,6 +114,7 @@ module crm_core::deal {
         assert!(deal.version == expected_version, EVersionConflict);
         assert!(!deal.is_archived, EAlreadyArchived);
         assert!(stage <= STAGE_LOST, EInvalidStage);
+        assert!(is_valid_transition(deal.stage, stage), EInvalidStageTransition);
 
         deal.title = title;
         deal.amount_usd = amount_usd;
@@ -158,6 +160,15 @@ module crm_core::deal {
             object_id: object::id(deal),
             timestamp: tx_context::epoch_timestamp_ms(ctx),
         });
+    }
+
+    // ===== Internal helpers =====
+
+    fun is_valid_transition(from: u8, to: u8): bool {
+        if (from == to) return true; // no-op is valid
+        if (from == STAGE_WON || from == STAGE_LOST) return false; // terminal — no exit
+        if (to == STAGE_LOST) return true; // can lose/abandon from any non-terminal stage
+        to == from + 1 // strictly forward one step (LEAD→QUALIFIED→PROPOSAL→NEGOTIATION→WON)
     }
 
     // Accessors
