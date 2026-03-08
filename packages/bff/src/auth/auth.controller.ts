@@ -65,7 +65,7 @@ export class AuthController {
 
   @Get('challenge')
   async getChallenge() {
-    const challenge = this.authService.generateChallenge();
+    const challenge = await this.authService.generateChallenge();
     return { challenge };
   }
 

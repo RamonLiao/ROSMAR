@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
 import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
 import { PrismaService } from '../prisma/prisma.service';
+import { CacheService } from '../common/cache/cache.service';
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -30,8 +31,6 @@ export interface AuthResponse {
 export class AuthService {
   private readonly refreshExpiresIn: string;
   private readonly suiClient: SuiJsonRpcClient;
-  /** In-memory challenge store: nonce → expiry timestamp */
-  private readonly challenges = new Map<string, number>();
   /** In-memory WebAuthn challenge store: challenge → { expiry, address? } */
   private readonly webauthnChallenges = new Map<string, { expiry: number; address?: string }>();
   private readonly rpId: string;
@@ -43,6 +42,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly cacheService: CacheService,
   ) {
     this.refreshExpiresIn = this.configService.get<string>(
       'REFRESH_TOKEN_EXPIRES_IN',
@@ -105,20 +105,19 @@ export class AuthService {
     });
   }
 
-  generateChallenge(): string {
+  async generateChallenge(): Promise<string> {
     const nonce = randomBytes(32).toString('hex');
-    this.challenges.set(nonce, Date.now() + AuthService.CHALLENGE_TTL_MS);
+    await this.cacheService.set(`challenge:${nonce}`, Date.now().toString(), 300); // 5 min TTL
     return `Sign this message to authenticate with ROSMAR CRM:\n${nonce}`;
   }
 
-  private consumeChallenge(message: string): boolean {
-    // Extract nonce from the structured message
+  private async consumeChallenge(message: string): Promise<boolean> {
     const lines = message.split('\n');
     const nonce = lines[lines.length - 1];
-    const expiry = this.challenges.get(nonce);
-    if (!expiry) return false;
-    this.challenges.delete(nonce);
-    return Date.now() < expiry;
+    const val = await this.cacheService.get<string>(`challenge:${nonce}`);
+    if (!val) return false;
+    await this.cacheService.evict(`challenge:${nonce}`);
+    return Date.now() < Number(val);
   }
 
   async walletLogin(
@@ -303,7 +302,7 @@ export class AuthService {
   ): Promise<boolean> {
     try {
       // Validate challenge nonce is fresh and unused
-      if (!this.consumeChallenge(message)) {
+      if (!(await this.consumeChallenge(message))) {
         console.error('Invalid or expired challenge');
         return false;
       }
