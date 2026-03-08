@@ -1,4 +1,5 @@
 import { Controller, Post, Get, Body, Req, Res, HttpCode, HttpStatus, UseGuards, UnauthorizedException } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { SessionGuard } from './guards/session.guard';
@@ -69,6 +70,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle([{ name: 'auth', limit: 10, ttl: 60000 }])
   @HttpCode(HttpStatus.OK)
   async walletLogin(
     @Body() dto: WalletLoginDto,
