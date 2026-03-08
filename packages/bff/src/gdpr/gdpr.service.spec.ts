@@ -40,6 +40,18 @@ describe('GdprService', () => {
       segmentMembership: {
         deleteMany: jest.fn(),
       },
+      vaultSecret: {
+        deleteMany: jest.fn(),
+      },
+      message: {
+        deleteMany: jest.fn(),
+      },
+      workflowActionLog: {
+        deleteMany: jest.fn(),
+      },
+      dealDocument: {
+        deleteMany: jest.fn(),
+      },
       $transaction: jest.fn((cb) => cb(prisma)),
     };
 
@@ -143,6 +155,10 @@ describe('GdprService', () => {
     prisma.profile.update.mockResolvedValue({});
     prisma.socialLink.deleteMany.mockResolvedValue({ count: 2 });
     prisma.segmentMembership.deleteMany.mockResolvedValue({ count: 1 });
+    prisma.vaultSecret.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.message.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.workflowActionLog.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.deal.findMany.mockResolvedValue([]);
     prisma.gdprDeletionLog.updateMany.mockResolvedValue({ count: 1 });
 
     await executorService.execute('p1');
@@ -166,6 +182,10 @@ describe('GdprService', () => {
     prisma.profile.update.mockResolvedValue({});
     prisma.socialLink.deleteMany.mockResolvedValue({ count: 3 });
     prisma.segmentMembership.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.vaultSecret.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.message.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.workflowActionLog.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.deal.findMany.mockResolvedValue([]);
     prisma.gdprDeletionLog.updateMany.mockResolvedValue({ count: 1 });
 
     await executorService.execute('p1');
@@ -219,6 +239,10 @@ describe('GdprService', () => {
     prisma.profile.update.mockResolvedValue({});
     prisma.socialLink.deleteMany.mockResolvedValue({ count: 0 });
     prisma.segmentMembership.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.vaultSecret.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.message.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.workflowActionLog.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.deal.findMany.mockResolvedValue([]);
     prisma.gdprDeletionLog.updateMany.mockResolvedValue({ count: 1 });
 
     const count = await cleanupJob.run();
