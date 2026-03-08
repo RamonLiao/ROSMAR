@@ -51,7 +51,20 @@ module crm_action::reward {
 
     // ===== Public functions =====
 
-    /// Distribute reward to a single recipient based on active campaign
+    /// @notice Distribute SUI reward to a single recipient under an active campaign
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param campaign_obj - Campaign (must be active)
+    /// @param recipient - Address to receive the reward
+    /// @param amount - Reward amount in MIST
+    /// @param reward_type - Reward category label
+    /// @param fund - SUI coin to split from
+    /// @emits RewardDistributed
+    /// @emits AuditEventV1
+    /// @aborts EWorkspaceMismatch - if campaign workspace != workspace
+    /// @aborts ECampaignNotActive - if campaign is not active
+    /// @aborts EInsufficientFunds - if fund balance < amount
     public fun distribute(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -111,7 +124,19 @@ module crm_action::reward {
         });
     }
 
-    /// Batch distribute equal rewards to multiple recipients
+    /// @notice Batch distribute equal SUI rewards to multiple recipients under an active campaign
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param campaign_obj - Campaign (must be active)
+    /// @param recipients - List of recipient addresses
+    /// @param amount_per_recipient - Amount each recipient receives
+    /// @param reward_type - Reward category label
+    /// @param fund - SUI coin to split from
+    /// @emits RewardDistributed
+    /// @aborts EWorkspaceMismatch - if campaign workspace != workspace
+    /// @aborts ECampaignNotActive - if campaign is not active
+    /// @aborts EInsufficientFunds - if fund balance < total needed
     public fun batch_distribute(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -155,8 +180,13 @@ module crm_action::reward {
     }
 
     // Accessors
+
+    /// @notice Return the workspace ID of this reward record
     public fun record_workspace_id(r: &RewardRecord): ID { r.workspace_id }
+    /// @notice Return the campaign ID of this reward record
     public fun record_campaign_id(r: &RewardRecord): ID { r.campaign_id }
+    /// @notice Return the recipient address
     public fun record_recipient(r: &RewardRecord): address { r.recipient }
+    /// @notice Return the reward amount
     public fun record_amount(r: &RewardRecord): u64 { r.amount }
 }

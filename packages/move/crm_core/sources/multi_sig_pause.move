@@ -21,8 +21,13 @@ module crm_core::multi_sig_pause {
         resolved: bool,
     }
 
-    /// Create a proposal to pause or unpause the system.
-    /// Only authorized voters can create proposals.
+    /// @notice Creates a multi-sig proposal to pause or unpause the system
+    /// @param action - ACTION_PAUSE (0) or ACTION_UNPAUSE (1)
+    /// @param reason - human-readable reason for the proposal
+    /// @param voters - list of authorized voter addresses
+    /// @param threshold - number of votes required to execute
+    /// @aborts EInvalidThreshold - threshold < 1 or > voter count
+    /// @aborts ENotAuthorized - caller is not in the voters list
     public fun create_proposal(
         action: u8,
         reason: String,
@@ -48,7 +53,12 @@ module crm_core::multi_sig_pause {
         }
     }
 
-    /// Vote on a pause proposal. When threshold is reached, config is paused/unpaused.
+    /// @notice Casts a vote on a pause proposal; executes pause/unpause when threshold is reached
+    /// @param proposal - the pause proposal to vote on
+    /// @param config - global config (modified if threshold reached)
+    /// @aborts EAlreadyResolved - proposal already resolved
+    /// @aborts ENotAuthorized - caller is not in the voters list
+    /// @aborts EAlreadyVoted - caller has already voted
     public fun vote(
         proposal: &mut PauseProposal,
         config: &mut GlobalConfig,
@@ -83,9 +93,13 @@ module crm_core::multi_sig_pause {
     }
 
     // Accessors
+    /// @notice Returns whether the proposal has been resolved
     public fun is_resolved(p: &PauseProposal): bool { p.resolved }
+    /// @notice Returns the number of signers who have voted
     public fun signer_count(p: &PauseProposal): u64 { p.signers.length() }
+    /// @notice Returns the PAUSE action constant (0)
     public fun action_pause(): u8 { ACTION_PAUSE }
+    /// @notice Returns the UNPAUSE action constant (1)
     public fun action_unpause(): u8 { ACTION_UNPAUSE }
 
     #[test_only]

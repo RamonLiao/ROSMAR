@@ -4,8 +4,11 @@ module crm_core::admin_recovery {
 
     const ENotWorkspaceOwner: u64 = 900;
 
-    /// Recovers a new WorkspaceAdminCap for the workspace owner.
-    /// Only callable by the original workspace creator (owner field).
+    /// @notice Recovers a new WorkspaceAdminCap for the workspace owner
+    /// @param config - global config (pause check)
+    /// @param workspace - workspace to recover admin cap for
+    /// @aborts EPaused - system is paused
+    /// @aborts ENotWorkspaceOwner - caller is not the workspace owner
     public fun recover_admin_cap(
         config: &GlobalConfig,
         workspace: &Workspace,

@@ -48,6 +48,17 @@ module crm_core::organization {
 
     // ===== Public functions =====
 
+    /// @notice Creates a new Organization within a workspace
+    /// @param config - global config (pause check)
+    /// @param workspace - target workspace
+    /// @param cap - workspace admin capability
+    /// @param name - organization name
+    /// @param industry - optional industry classification
+    /// @param website - optional website URL
+    /// @param tags - classification tags
+    /// @emits AuditEventV1
+    /// @aborts EPaused - system is paused
+    /// @aborts ECapMismatch - cap does not match workspace
     public fun create(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -89,6 +100,18 @@ module crm_core::organization {
         org
     }
 
+    /// @notice Updates the organization name with optimistic-lock check
+    /// @param config - global config (pause check)
+    /// @param workspace - workspace the org belongs to
+    /// @param cap - workspace admin capability
+    /// @param org - organization to update
+    /// @param expected_version - optimistic concurrency version
+    /// @param name - new name
+    /// @emits AuditEventV1
+    /// @aborts EPaused - system is paused
+    /// @aborts ECapMismatch - cap does not match workspace
+    /// @aborts EWorkspaceMismatch - org does not belong to workspace
+    /// @aborts EVersionConflict - version mismatch
     public fun update_name(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -118,6 +141,18 @@ module crm_core::organization {
         });
     }
 
+    /// @notice Soft-deletes an organization via optimistic-lock archive
+    /// @param config - global config (pause check)
+    /// @param workspace - workspace the org belongs to
+    /// @param cap - workspace admin capability
+    /// @param org - organization to archive
+    /// @param expected_version - optimistic concurrency version
+    /// @emits AuditEventV1
+    /// @aborts EPaused - system is paused
+    /// @aborts ECapMismatch - cap does not match workspace
+    /// @aborts EWorkspaceMismatch - org does not belong to workspace
+    /// @aborts EVersionConflict - version mismatch
+    /// @aborts EAlreadyArchived - org is already archived
     public fun archive(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -147,6 +182,19 @@ module crm_core::organization {
         });
     }
 
+    /// @notice Sets or updates a dynamic field metadata entry on the organization
+    /// @param config - global config (pause check)
+    /// @param workspace - workspace the org belongs to
+    /// @param cap - workspace admin capability
+    /// @param org - organization to set metadata on
+    /// @param expected_version - optimistic concurrency version
+    /// @param key - metadata key
+    /// @param value - metadata value
+    /// @emits AuditEventV1
+    /// @aborts EPaused - system is paused
+    /// @aborts ECapMismatch - cap does not match workspace
+    /// @aborts EWorkspaceMismatch - org does not belong to workspace
+    /// @aborts EVersionConflict - version mismatch
     public fun set_metadata<V: store + drop>(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -183,9 +231,14 @@ module crm_core::organization {
     }
 
     // Accessors
+    /// @notice Returns the workspace ID this organization belongs to
     public fun workspace_id(o: &Organization): ID { o.workspace_id }
+    /// @notice Returns the organization name
     public fun name(o: &Organization): &String { &o.name }
+    /// @notice Returns the organization tier
     public fun tier(o: &Organization): u8 { o.tier }
+    /// @notice Returns the current optimistic-lock version
     public fun version(o: &Organization): u64 { o.version }
+    /// @notice Returns whether the organization is archived
     public fun is_archived(o: &Organization): bool { o.is_archived }
 }

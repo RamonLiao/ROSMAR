@@ -41,6 +41,16 @@ module crm_data::segment {
 
     // ===== Public functions =====
 
+    /// @notice Create a new audience segment
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param name - Segment name
+    /// @param rule_hash - Hash of the segment rule definition
+    /// @param is_dynamic - Whether membership is dynamically computed
+    /// @emits AuditEventV1
+    /// @aborts EGlobalPaused - if system is paused
+    /// @aborts ECapMismatch - if cap does not match workspace
     public fun create(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -78,6 +88,16 @@ module crm_data::segment {
         segment
     }
 
+    /// @notice Update the rule hash of a segment
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param segment - Segment to update
+    /// @param expected_version - Optimistic concurrency version
+    /// @param rule_hash - New rule hash bytes
+    /// @emits AuditEventV1
+    /// @aborts EWorkspaceMismatch - if segment does not belong to workspace
+    /// @aborts EVersionConflict - if expected_version != segment.version
     public fun update_rule_hash(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -107,6 +127,13 @@ module crm_data::segment {
         });
     }
 
+    /// @notice Update the cached member count of a segment
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param segment - Segment to update
+    /// @param member_count - New member count
+    /// @aborts EWorkspaceMismatch - if segment does not belong to workspace
     public fun update_member_count(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -125,10 +152,17 @@ module crm_data::segment {
     }
 
     // Accessors
+
+    /// @notice Return the workspace ID
     public fun workspace_id(s: &Segment): ID { s.workspace_id }
+    /// @notice Return the segment name
     public fun name(s: &Segment): &String { &s.name }
+    /// @notice Return the rule hash bytes
     public fun rule_hash(s: &Segment): &vector<u8> { &s.rule_hash }
+    /// @notice Return the cached member count
     public fun member_count(s: &Segment): u64 { s.member_count }
+    /// @notice Return whether this is a dynamic segment
     public fun is_dynamic(s: &Segment): bool { s.is_dynamic }
+    /// @notice Return the current optimistic-lock version
     public fun version(s: &Segment): u64 { s.version }
 }

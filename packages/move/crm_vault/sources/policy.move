@@ -51,6 +51,14 @@ module crm_vault::policy {
 
     // ===== Public functions =====
 
+    /// @notice Create a workspace-member access policy (any workspace member can decrypt)
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param name - Display name of the policy
+    /// @emits AuditEventV1
+    /// @aborts EGlobalPaused - if system is paused
+    /// @aborts ECapMismatch - if cap does not match workspace
     public fun create_workspace_policy(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -86,6 +94,15 @@ module crm_vault::policy {
         policy
     }
 
+    /// @notice Create an address-list access policy (only listed addresses can decrypt)
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param name - Display name of the policy
+    /// @param allowed_addresses - Addresses permitted to decrypt
+    /// @emits AuditEventV1
+    /// @aborts EGlobalPaused - if system is paused
+    /// @aborts ECapMismatch - if cap does not match workspace
     public fun create_address_policy(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -122,6 +139,15 @@ module crm_vault::policy {
         policy
     }
 
+    /// @notice Create a role-based access policy (minimum role level required)
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param name - Display name of the policy
+    /// @param min_role_level - Minimum role level to decrypt
+    /// @emits AuditEventV1
+    /// @aborts EGlobalPaused - if system is paused
+    /// @aborts ECapMismatch - if cap does not match workspace
     public fun create_role_policy(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -158,6 +184,16 @@ module crm_vault::policy {
         policy
     }
 
+    /// @notice Append an address to an existing address-list policy
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param policy - Access policy to update
+    /// @param expected_version - Optimistic concurrency version
+    /// @param addr - Address to add
+    /// @emits AuditEventV1
+    /// @aborts EWorkspaceMismatch - if policy does not belong to workspace
+    /// @aborts EVersionConflict - if expected_version != policy.version
     public fun add_address(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -189,8 +225,12 @@ module crm_vault::policy {
 
     // ===== Seal Key-Server Verification =====
 
-    /// Called by Seal key servers to verify that the sender is allowed to decrypt.
-    /// `id` is the raw identity bytes used during encryption (the policy object address).
+    /// @notice Verify that the caller is allowed to decrypt content under this policy
+    /// @param id - Raw identity bytes (policy object address) used during encryption
+    /// @param policy - Access policy to check against
+    /// @aborts ESealNoAccess - if sender is not in allowed_addresses (RULE_SPECIFIC_ADDRESS)
+    /// @aborts ESealNoAccess - if rule_type is unknown
+    /// @aborts ESealInvalidIdentity - if id does not match policy object address
     entry fun seal_approve(
         id: vector<u8>,
         policy: &AccessPolicy,
@@ -217,14 +257,24 @@ module crm_vault::policy {
     }
 
     // Accessors
+
+    /// @notice Return the workspace ID this policy belongs to
     public fun workspace_id(p: &AccessPolicy): ID { p.workspace_id }
+    /// @notice Return the rule type (0=workspace_member, 1=specific_address, 2=role_based)
     public fun rule_type(p: &AccessPolicy): u8 { p.rule_type }
+    /// @notice Return the list of allowed addresses
     public fun allowed_addresses(p: &AccessPolicy): &vector<address> { &p.allowed_addresses }
+    /// @notice Return the minimum role level required
     public fun min_role_level(p: &AccessPolicy): u8 { p.min_role_level }
+    /// @notice Return the current optimistic-lock version
     public fun version(p: &AccessPolicy): u64 { p.version }
 
     // Rule type constant accessors
+
+    /// @notice Return RULE_WORKSPACE_MEMBER constant (0)
     public fun rule_workspace_member(): u8 { RULE_WORKSPACE_MEMBER }
+    /// @notice Return RULE_SPECIFIC_ADDRESS constant (1)
     public fun rule_specific_address(): u8 { RULE_SPECIFIC_ADDRESS }
+    /// @notice Return RULE_ROLE_BASED constant (2)
     public fun rule_role_based(): u8 { RULE_ROLE_BASED }
 }

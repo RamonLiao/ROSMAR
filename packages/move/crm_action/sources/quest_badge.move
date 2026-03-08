@@ -94,7 +94,20 @@ module crm_action::quest_badge {
 
     // ===== Public functions =====
 
-    /// Mint a quest badge SBT to a recipient
+    /// @notice Mint a soul-bound quest badge (SBT) to a recipient
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param registry - Shared deduplication registry
+    /// @param recipient - Address to receive the badge
+    /// @param quest_id - Unique quest identifier bytes
+    /// @param quest_name - Display name of the quest
+    /// @param completed_steps - Steps the recipient completed
+    /// @param total_steps - Total steps in the quest
+    /// @param tier - Badge tier level
+    /// @emits QuestBadgeMinted
+    /// @emits AuditEventV1
+    /// @aborts EDuplicateBadge - if badge already minted for this quest+recipient
     public fun mint_badge(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -161,18 +174,28 @@ module crm_action::quest_badge {
 
     // ===== Accessors =====
 
+    /// @notice Return the quest ID bytes
     public fun quest_id(badge: &QuestBadge): &vector<u8> { &badge.quest_id }
+    /// @notice Return the workspace ID this badge belongs to
     public fun badge_workspace_id(badge: &QuestBadge): ID { badge.workspace_id }
+    /// @notice Return the badge tier
     public fun tier(badge: &QuestBadge): u8 { badge.tier }
+    /// @notice Return whether all quest steps are completed
     public fun is_complete(badge: &QuestBadge): bool { badge.completed_steps >= badge.total_steps }
+    /// @notice Return the completion timestamp
     public fun completed_at(badge: &QuestBadge): u64 { badge.completed_at }
+    /// @notice Return the number of completed steps
     public fun completed_steps(badge: &QuestBadge): u64 { badge.completed_steps }
+    /// @notice Return the total number of steps
     public fun total_steps(badge: &QuestBadge): u64 { badge.total_steps }
+    /// @notice Return the issuer address
     public fun issuer(badge: &QuestBadge): address { badge.issuer }
 
     // ===== Helpers =====
 
-    /// Create a unique dedup key from quest_id + recipient using BCS serialization
+    /// @notice Create a unique dedup key from quest_id + recipient using BCS serialization
+    /// @param quest_id - Quest identifier bytes
+    /// @param recipient - Recipient address
     public fun make_dedup_key(quest_id: &vector<u8>, recipient: address): vector<u8> {
         let mut key = bcs::to_bytes(quest_id);
         let addr_bytes = bcs::to_bytes(&recipient);
