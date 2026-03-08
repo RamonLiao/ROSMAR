@@ -9,7 +9,16 @@ import { LoggerModule } from 'nestjs-pino';
           process.env.NODE_ENV !== 'production'
             ? { target: 'pino-pretty' }
             : undefined,
-        redact: ['req.headers.authorization', 'req.headers.cookie'],
+        redact: [
+          'req.headers.authorization',
+          'req.headers.cookie',
+          'req.body.encryptedData',
+          'req.body.privateKey',
+          'req.body.secret',
+          'req.body.password',
+          'req.body.seedPhrase',
+          'req.body.mnemonic',
+        ],
       },
     }),
   ],
