@@ -14,12 +14,18 @@ import { RbacGuard } from './guards/rbac.guard';
     PassportModule.register({ defaultStrategy: 'wallet' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService): any => ({
-        secret: configService.get<string>('JWT_SECRET', 'dev-secret'),
-        signOptions: {
-          expiresIn: configService.get<string>('JWT_EXPIRES_IN', '15m'),
-        },
-      }),
+      useFactory: (configService: ConfigService): any => {
+        const secret = configService.get<string>('JWT_SECRET');
+        if (!secret) {
+          throw new Error('JWT_SECRET environment variable is required');
+        }
+        return {
+          secret,
+          signOptions: {
+            expiresIn: configService.get<string>('JWT_EXPIRES_IN', '15m'),
+          },
+        };
+      },
       inject: [ConfigService],
     }),
   ],
