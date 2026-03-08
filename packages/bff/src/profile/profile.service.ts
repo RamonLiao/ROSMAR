@@ -94,9 +94,9 @@ export class ProfileService {
     };
   }
 
-  async getProfile(profileId: string): Promise<any> {
-    return this.prisma.profile.findUniqueOrThrow({
-      where: { id: profileId },
+  async getProfile(workspaceId: string, profileId: string): Promise<any> {
+    return this.prisma.profile.findFirstOrThrow({
+      where: { id: profileId, workspaceId },
     });
   }
 
@@ -127,9 +127,9 @@ export class ProfileService {
     return { profiles, total };
   }
 
-  async getProfileOrganizations(profileId: string): Promise<any> {
+  async getProfileOrganizations(workspaceId: string, profileId: string): Promise<any> {
     const links = await this.prisma.profileOrganization.findMany({
-      where: { profileId },
+      where: { profileId, profile: { workspaceId } },
       include: { organization: true },
     });
     return links.map((l) => l.organization);
@@ -171,7 +171,12 @@ export class ProfileService {
     };
   }
 
-  async getAssets(profileId: string) {
+  async getAssets(workspaceId: string, profileId: string) {
+    // Verify profile belongs to caller's workspace
+    await this.prisma.profile.findFirstOrThrow({
+      where: { id: profileId, workspaceId },
+      select: { id: true },
+    });
     const rows = await this.prisma.$queryRaw<
       { collection: string | null; event_type: string; cnt: bigint; total_amount: number | null }[]
     >`
@@ -213,7 +218,11 @@ export class ProfileService {
     };
   }
 
-  async getTimeline(profileId: string, limit = 20, offset = 0) {
+  async getTimeline(workspaceId: string, profileId: string, limit = 20, offset = 0) {
+    await this.prisma.profile.findFirstOrThrow({
+      where: { id: profileId, workspaceId },
+      select: { id: true },
+    });
     const [events, total] = await Promise.all([
       this.prisma.walletEvent.findMany({
         where: { profileId },
@@ -263,10 +272,10 @@ export class ProfileService {
 
   // ── Wallet CRUD ──────────────────────────────────────────────
 
-  async addWallet(profileId: string, dto: CreateWalletDto) {
-    // Verify profile exists
-    await this.prisma.profile.findUniqueOrThrow({
-      where: { id: profileId },
+  async addWallet(workspaceId: string, profileId: string, dto: CreateWalletDto) {
+    // Verify profile exists and belongs to workspace
+    await this.prisma.profile.findFirstOrThrow({
+      where: { id: profileId, workspaceId },
     });
 
     // Auto-resolve ENS/SNS names
@@ -291,14 +300,22 @@ export class ProfileService {
     });
   }
 
-  async listWallets(profileId: string) {
+  async listWallets(workspaceId: string, profileId: string) {
+    await this.prisma.profile.findFirstOrThrow({
+      where: { id: profileId, workspaceId },
+      select: { id: true },
+    });
     return this.prisma.profileWallet.findMany({
       where: { profileId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async removeWallet(profileId: string, walletId: string) {
+  async removeWallet(workspaceId: string, profileId: string, walletId: string) {
+    await this.prisma.profile.findFirstOrThrow({
+      where: { id: profileId, workspaceId },
+      select: { id: true },
+    });
     const wallet = await this.prisma.profileWallet.findFirst({
       where: { id: walletId, profileId },
     });
@@ -309,7 +326,11 @@ export class ProfileService {
     return { success: true };
   }
 
-  async getNetWorth(profileId: string) {
+  async getNetWorth(workspaceId: string, profileId: string) {
+    await this.prisma.profile.findFirstOrThrow({
+      where: { id: profileId, workspaceId },
+      select: { id: true },
+    });
     return this.balanceAggregator.getNetWorth(profileId);
   }
 }

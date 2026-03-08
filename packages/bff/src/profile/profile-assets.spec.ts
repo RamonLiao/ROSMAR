@@ -49,6 +49,7 @@ describe('ProfileService - Assets & Timeline', () => {
       walletEvent: { findMany: jest.fn(), count: jest.fn() },
       profile: {
         findUniqueOrThrow: jest.fn(),
+        findFirstOrThrow: jest.fn().mockResolvedValue({ id: 'profile-1' }),
         findMany: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
@@ -78,7 +79,7 @@ describe('ProfileService - Assets & Timeline', () => {
       { collection: null, event_type: 'StakeEvent', cnt: 5n, total_amount: 10000 },
     ]);
 
-    const assets = await service.getAssets('profile-1');
+    const assets = await service.getAssets('ws-1', 'profile-1');
     expect(assets.nfts).toHaveLength(1);
     expect(assets.nfts[0].collection).toBe('SuiFrens');
     expect(assets.defi).toHaveLength(1);
@@ -90,7 +91,7 @@ describe('ProfileService - Assets & Timeline', () => {
     ]);
     prisma.walletEvent.count.mockResolvedValue(1);
 
-    const result = await service.getTimeline('profile-1', 20, 0);
+    const result = await service.getTimeline('ws-1', 'profile-1', 20, 0);
     expect(result.events).toHaveLength(1);
     expect(result.total).toBe(1);
   });

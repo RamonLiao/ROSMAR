@@ -118,9 +118,9 @@ export class DealService {
     return { dealId, suiObjectId, txDigest: result.digest };
   }
 
-  async getDeal(dealId: string): Promise<any> {
-    return this.prisma.deal.findUniqueOrThrow({
-      where: { id: dealId },
+  async getDeal(workspaceId: string, dealId: string): Promise<any> {
+    return this.prisma.deal.findFirstOrThrow({
+      where: { id: dealId, workspaceId },
     });
   }
 
@@ -302,9 +302,9 @@ export class DealService {
     return { success: true, txDigest: result.digest };
   }
 
-  async getAuditLogs(objectId: string): Promise<any> {
+  async getAuditLogs(workspaceId: string, objectId: string): Promise<any> {
     return this.prisma.auditLog.findMany({
-      where: { objectId },
+      where: { objectId, workspaceId },
       orderBy: { timestamp: 'desc' },
     });
   }

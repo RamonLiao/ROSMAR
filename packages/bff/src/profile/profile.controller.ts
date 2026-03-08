@@ -47,22 +47,29 @@ export class ProfileController {
   }
 
   @Get(':id')
-  async getProfile(@Param('id') id: string) {
-    return this.profileService.getProfile(id);
+  async getProfile(
+    @User() user: import('../auth/auth.service').UserPayload,
+    @Param('id') id: string,
+  ) {
+    return this.profileService.getProfile(user.workspaceId, id);
   }
 
   @Get(':id/assets')
-  async getAssets(@Param('id') id: string) {
-    return this.profileService.getAssets(id);
+  async getAssets(
+    @User() user: import('../auth/auth.service').UserPayload,
+    @Param('id') id: string,
+  ) {
+    return this.profileService.getAssets(user.workspaceId, id);
   }
 
   @Get(':id/timeline')
   async getTimeline(
+    @User() user: import('../auth/auth.service').UserPayload,
     @Param('id') id: string,
     @Query('limit') limit = 20,
     @Query('offset') offset = 0,
   ) {
-    return this.profileService.getTimeline(id, +limit, +offset);
+    return this.profileService.getTimeline(user.workspaceId, id, +limit, +offset);
   }
 
   @Get()
@@ -81,8 +88,11 @@ export class ProfileController {
   }
 
   @Get(':id/organizations')
-  async getProfileOrganizations(@Param('id') id: string) {
-    return this.profileService.getProfileOrganizations(id);
+  async getProfileOrganizations(
+    @User() user: import('../auth/auth.service').UserPayload,
+    @Param('id') id: string,
+  ) {
+    return this.profileService.getProfileOrganizations(user.workspaceId, id);
   }
 
   @Put(':id/tags')
@@ -120,28 +130,36 @@ export class ProfileController {
   @Post(':id/wallets')
   @RequirePermissions(WRITE)
   async addWallet(
+    @User() user: import('../auth/auth.service').UserPayload,
     @Param('id') id: string,
     @Body() dto: CreateWalletDto,
   ) {
-    return this.profileService.addWallet(id, dto);
+    return this.profileService.addWallet(user.workspaceId, id, dto);
   }
 
   @Get(':id/wallets')
-  async listWallets(@Param('id') id: string) {
-    return this.profileService.listWallets(id);
+  async listWallets(
+    @User() user: import('../auth/auth.service').UserPayload,
+    @Param('id') id: string,
+  ) {
+    return this.profileService.listWallets(user.workspaceId, id);
   }
 
   @Delete(':id/wallets/:walletId')
   @RequirePermissions(DELETE)
   async removeWallet(
+    @User() user: import('../auth/auth.service').UserPayload,
     @Param('id') id: string,
     @Param('walletId') walletId: string,
   ) {
-    return this.profileService.removeWallet(id, walletId);
+    return this.profileService.removeWallet(user.workspaceId, id, walletId);
   }
 
   @Get(':id/net-worth')
-  async getNetWorth(@Param('id') id: string) {
-    return this.profileService.getNetWorth(id);
+  async getNetWorth(
+    @User() user: import('../auth/auth.service').UserPayload,
+    @Param('id') id: string,
+  ) {
+    return this.profileService.getNetWorth(user.workspaceId, id);
   }
 }

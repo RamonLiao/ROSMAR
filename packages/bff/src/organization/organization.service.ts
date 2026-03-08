@@ -79,9 +79,9 @@ export class OrganizationService {
     };
   }
 
-  async getOrganization(organizationId: string): Promise<any> {
-    return this.prisma.organization.findUniqueOrThrow({
-      where: { id: organizationId },
+  async getOrganization(workspaceId: string, organizationId: string): Promise<any> {
+    return this.prisma.organization.findFirstOrThrow({
+      where: { id: organizationId, workspaceId },
       include: { _count: { select: { profiles: true } } },
     });
   }
@@ -114,7 +114,11 @@ export class OrganizationService {
     return { organizations, total };
   }
 
-  async getOrganizationProfiles(organizationId: string): Promise<any> {
+  async getOrganizationProfiles(workspaceId: string, organizationId: string): Promise<any> {
+    await this.prisma.organization.findFirstOrThrow({
+      where: { id: organizationId, workspaceId },
+      select: { id: true },
+    });
     const links = await this.prisma.profileOrganization.findMany({
       where: { organizationId },
       include: { profile: true },
@@ -122,7 +126,11 @@ export class OrganizationService {
     return links.map((l) => l.profile);
   }
 
-  async unlinkProfile(organizationId: string, profileId: string): Promise<any> {
+  async unlinkProfile(workspaceId: string, organizationId: string, profileId: string): Promise<any> {
+    await this.prisma.organization.findFirstOrThrow({
+      where: { id: organizationId, workspaceId },
+      select: { id: true },
+    });
     await this.prisma.profileOrganization.delete({
       where: {
         profileId_organizationId: {

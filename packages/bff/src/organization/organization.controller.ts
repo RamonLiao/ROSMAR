@@ -47,8 +47,11 @@ export class OrganizationController {
   }
 
   @Get(':id')
-  async getOrganization(@Param('id') id: string) {
-    return this.organizationService.getOrganization(id);
+  async getOrganization(
+    @User() user: import('../auth/auth.service').UserPayload,
+    @Param('id') id: string,
+  ) {
+    return this.organizationService.getOrganization(user.workspaceId, id);
   }
 
   @Get()
@@ -97,16 +100,20 @@ export class OrganizationController {
   }
 
   @Get(':id/profiles')
-  async getOrganizationProfiles(@Param('id') id: string) {
-    return this.organizationService.getOrganizationProfiles(id);
+  async getOrganizationProfiles(
+    @User() user: import('../auth/auth.service').UserPayload,
+    @Param('id') id: string,
+  ) {
+    return this.organizationService.getOrganizationProfiles(user.workspaceId, id);
   }
 
   @Delete(':orgId/profiles/:profileId')
   @RequirePermissions(DELETE)
   async unlinkProfile(
+    @User() user: import('../auth/auth.service').UserPayload,
     @Param('orgId') orgId: string,
     @Param('profileId') profileId: string,
   ) {
-    return this.organizationService.unlinkProfile(orgId, profileId);
+    return this.organizationService.unlinkProfile(user.workspaceId, orgId, profileId);
   }
 }

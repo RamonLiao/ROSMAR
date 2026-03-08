@@ -62,8 +62,11 @@ export class DealController {
   }
 
   @Get(':id')
-  async getDeal(@Param('id') id: string) {
-    return this.dealService.getDeal(id);
+  async getDeal(
+    @User() user: import('../auth/auth.service').UserPayload,
+    @Param('id') id: string,
+  ) {
+    return this.dealService.getDeal(user.workspaceId, id);
   }
 
   @Get()
@@ -131,8 +134,11 @@ export class DealController {
   }
 
   @Get(':id/audit')
-  async getAuditLogs(@Param('id') id: string) {
-    return this.dealService.getAuditLogs(id);
+  async getAuditLogs(
+    @User() user: import('../auth/auth.service').UserPayload,
+    @Param('id') id: string,
+  ) {
+    return this.dealService.getAuditLogs(user.workspaceId, id);
   }
 
   // --- Deal Documents ---
