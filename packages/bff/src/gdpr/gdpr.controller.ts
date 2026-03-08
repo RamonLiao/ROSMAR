@@ -13,7 +13,7 @@ export class GdprController {
   ) {}
 
   @Delete(':id/gdpr')
-  @Throttle([{ name: 'gdpr', limit: 3, ttl: 600000 }])
+  @Throttle({ gdpr: { limit: 3, ttl: 600000 } })
   async initiateDeletion(
     @Param('id') profileId: string,
     @Body() body: { legalBasis: string; requestedBy: string; workspaceId: string },

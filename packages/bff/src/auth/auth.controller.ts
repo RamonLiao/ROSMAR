@@ -70,7 +70,7 @@ export class AuthController {
   }
 
   @Post('login')
-  @Throttle([{ name: 'auth', limit: 10, ttl: 60000 }])
+  @Throttle({ auth: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async walletLogin(
     @Body() dto: WalletLoginDto,
