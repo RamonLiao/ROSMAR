@@ -1,10 +1,12 @@
 module crm_core::capabilities {
     use std::string::String;
+    use sui::table::{Self, Table};
 
     // ===== Error codes =====
     const EPaused: u64 = 0;
     const ENotOwner: u64 = 1;
     const ECapMismatch: u64 = 2;
+    const EUserRateLimitExceeded: u64 = 101;
 
     // ===== Structs =====
 
@@ -33,6 +35,19 @@ module crm_core::capabilities {
         max_operations_per_epoch: u64,
         current_epoch: u64,
         current_count: u64,
+    }
+
+    /// Per-user rate limiting within a workspace
+    public struct PerUserRateLimit has key {
+        id: UID,
+        workspace_id: ID,
+        max_per_epoch: u64,
+        limits: Table<address, UserRateState>,
+    }
+
+    public struct UserRateState has store, drop {
+        epoch: u64,
+        count: u64,
     }
 
     // ===== Init =====
@@ -135,6 +150,41 @@ module crm_core::capabilities {
         };
         assert!(rate.current_count < rate.max_operations_per_epoch, 100);
         rate.current_count = rate.current_count + 1;
+    }
+
+    // ===== Per-user rate limiting =====
+
+    public fun create_per_user_rate_limit(
+        workspace_id: ID,
+        max_per_epoch: u64,
+        ctx: &mut TxContext,
+    ): PerUserRateLimit {
+        PerUserRateLimit {
+            id: object::new(ctx),
+            workspace_id,
+            max_per_epoch,
+            limits: table::new(ctx),
+        }
+    }
+
+    public fun check_user_rate_limit(
+        rate: &mut PerUserRateLimit,
+        user: address,
+        current_epoch: u64,
+    ) {
+        if (!table::contains(&rate.limits, user)) {
+            table::add(&mut rate.limits, user, UserRateState {
+                epoch: current_epoch,
+                count: 0,
+            });
+        };
+        let state = table::borrow_mut(&mut rate.limits, user);
+        if (state.epoch != current_epoch) {
+            state.epoch = current_epoch;
+            state.count = 0;
+        };
+        assert!(state.count < rate.max_per_epoch, EUserRateLimitExceeded);
+        state.count = state.count + 1;
     }
 
     // ===== Test-only helpers =====

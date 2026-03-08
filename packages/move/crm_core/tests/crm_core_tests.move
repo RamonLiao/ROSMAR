@@ -1004,4 +1004,74 @@ module crm_core::crm_core_tests {
         test_utils::destroy(p);
         ts::end(scenario);
     }
+
+    // ========== Per-user Rate Limit Tests (M7) ==========
+
+    #[test]
+    fun test_per_user_rate_limit_ok() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let workspace_id = object::id_from_address(@0x123);
+        let mut rate = capabilities::create_per_user_rate_limit(workspace_id, 2, ctx);
+
+        capabilities::check_user_rate_limit(&mut rate, USER1, 1);
+        capabilities::check_user_rate_limit(&mut rate, USER1, 1);
+        // 2 calls at max=2 — OK
+
+        test_utils::destroy(rate);
+        ts::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = capabilities::EUserRateLimitExceeded)]
+    fun test_per_user_rate_limit_hit() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let workspace_id = object::id_from_address(@0x123);
+        let mut rate = capabilities::create_per_user_rate_limit(workspace_id, 2, ctx);
+
+        capabilities::check_user_rate_limit(&mut rate, USER1, 1);
+        capabilities::check_user_rate_limit(&mut rate, USER1, 1);
+        capabilities::check_user_rate_limit(&mut rate, USER1, 1); // 3rd → abort
+
+        test_utils::destroy(rate);
+        ts::end(scenario);
+    }
+
+    #[test]
+    fun test_per_user_rate_limit_independent() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let workspace_id = object::id_from_address(@0x123);
+        let mut rate = capabilities::create_per_user_rate_limit(workspace_id, 2, ctx);
+
+        // USER1 uses 2 calls
+        capabilities::check_user_rate_limit(&mut rate, USER1, 1);
+        capabilities::check_user_rate_limit(&mut rate, USER1, 1);
+
+        // USER2 is independent — should succeed
+        capabilities::check_user_rate_limit(&mut rate, USER2, 1);
+
+        test_utils::destroy(rate);
+        ts::end(scenario);
+    }
+
+    #[test]
+    fun test_per_user_rate_limit_epoch_reset() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let workspace_id = object::id_from_address(@0x123);
+        let mut rate = capabilities::create_per_user_rate_limit(workspace_id, 2, ctx);
+
+        // Exhaust limit in epoch 1
+        capabilities::check_user_rate_limit(&mut rate, USER1, 1);
+        capabilities::check_user_rate_limit(&mut rate, USER1, 1);
+
+        // Epoch 2 → reset, should succeed
+        capabilities::check_user_rate_limit(&mut rate, USER1, 2);
+        capabilities::check_user_rate_limit(&mut rate, USER1, 2);
+
+        test_utils::destroy(rate);
+        ts::end(scenario);
+    }
 }
