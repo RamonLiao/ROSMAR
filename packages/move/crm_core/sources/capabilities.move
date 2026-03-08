@@ -98,6 +98,17 @@ module crm_core::capabilities {
         cap.workspace_id
     }
 
+    // ===== Package-internal pause control (for multi_sig_pause) =====
+
+    public(package) fun set_paused(
+        config: &mut GlobalConfig,
+        paused: bool,
+        reason: Option<String>,
+    ) {
+        config.paused = paused;
+        config.pause_reason = reason;
+    }
+
     // ===== Rate limiting =====
 
     public fun create_rate_limit(

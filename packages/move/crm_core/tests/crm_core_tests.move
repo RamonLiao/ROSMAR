@@ -10,6 +10,8 @@ module crm_core::crm_core_tests {
     use crm_core::organization;
     use crm_core::relation;
     use crm_core::deal;
+    use crm_core::admin_recovery;
+    use crm_core::multi_sig_pause;
 
     const ADMIN: address = @0xA;
     const USER1: address = @0xB;
@@ -831,6 +833,175 @@ module crm_core::crm_core_tests {
         test_utils::destroy(workspace);
         test_utils::destroy(admin_cap);
         test_utils::destroy(d);
+        ts::end(scenario);
+    }
+
+    // ========== Admin Cap Recovery Tests (M3) ==========
+
+    #[test]
+    fun test_recover_admin_cap_by_owner() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"WS"), ctx);
+
+        // Owner recovers a new cap
+        let recovered_cap = admin_recovery::recover_admin_cap(&config, &workspace, ctx);
+        assert!(capabilities::cap_workspace_id(&recovered_cap) == workspace::id(&workspace));
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(admin_cap);
+        test_utils::destroy(recovered_cap);
+        ts::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = admin_recovery::ENotWorkspaceOwner)]
+    fun test_recover_admin_cap_non_owner_fails() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"WS"), ctx);
+
+        // Switch to non-owner
+        ts::next_tx(&mut scenario, USER1);
+        let ctx2 = ts::ctx(&mut scenario);
+
+        // Should abort — USER1 is not owner
+        let bad_cap = admin_recovery::recover_admin_cap(&config, &workspace, ctx2);
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(admin_cap);
+        test_utils::destroy(bad_cap);
+        ts::end(scenario);
+    }
+
+    // ========== Multi-sig Pause Tests (M4) ==========
+
+    #[test]
+    fun test_create_pause_proposal() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+
+        let voters = vector[ADMIN, USER1, USER2];
+        let proposal = multi_sig_pause::create_proposal(
+            multi_sig_pause::action_pause(),
+            string::utf8(b"Security incident"),
+            voters,
+            2, // threshold
+            ctx,
+        );
+
+        assert!(!multi_sig_pause::is_resolved(&proposal));
+        assert!(multi_sig_pause::signer_count(&proposal) == 0);
+
+        multi_sig_pause::test_destroy_proposal(proposal);
+        ts::end(scenario);
+    }
+
+    #[test]
+    fun test_pause_threshold_reached() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let mut config = capabilities::test_create_config(ctx);
+
+        let voters = vector[ADMIN, USER1, USER2];
+        let mut proposal = multi_sig_pause::create_proposal(
+            multi_sig_pause::action_pause(),
+            string::utf8(b"Emergency"),
+            voters,
+            2,
+            ctx,
+        );
+
+        // First vote (ADMIN)
+        multi_sig_pause::vote(&mut proposal, &mut config, ctx);
+        assert!(!capabilities::is_paused(&config));
+
+        // Second vote (USER1) — threshold reached
+        ts::next_tx(&mut scenario, USER1);
+        let ctx2 = ts::ctx(&mut scenario);
+        multi_sig_pause::vote(&mut proposal, &mut config, ctx2);
+
+        assert!(capabilities::is_paused(&config));
+        assert!(multi_sig_pause::is_resolved(&proposal));
+
+        multi_sig_pause::test_destroy_proposal(proposal);
+        test_utils::destroy(config);
+        ts::end(scenario);
+    }
+
+    #[test]
+    fun test_single_vote_insufficient() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let mut config = capabilities::test_create_config(ctx);
+
+        let voters = vector[ADMIN, USER1, USER2];
+        let mut proposal = multi_sig_pause::create_proposal(
+            multi_sig_pause::action_pause(),
+            string::utf8(b"Test"),
+            voters,
+            3, // need all 3
+            ctx,
+        );
+
+        multi_sig_pause::vote(&mut proposal, &mut config, ctx);
+        assert!(!capabilities::is_paused(&config));
+        assert!(!multi_sig_pause::is_resolved(&proposal));
+
+        multi_sig_pause::test_destroy_proposal(proposal);
+        test_utils::destroy(config);
+        ts::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = multi_sig_pause::EAlreadyVoted)]
+    fun test_double_vote_fails() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let mut config = capabilities::test_create_config(ctx);
+
+        let voters = vector[ADMIN, USER1];
+        let mut proposal = multi_sig_pause::create_proposal(
+            multi_sig_pause::action_pause(),
+            string::utf8(b"Test"),
+            voters,
+            2,
+            ctx,
+        );
+
+        multi_sig_pause::vote(&mut proposal, &mut config, ctx);
+        multi_sig_pause::vote(&mut proposal, &mut config, ctx); // double vote
+
+        multi_sig_pause::test_destroy_proposal(proposal);
+        test_utils::destroy(config);
+        ts::end(scenario);
+    }
+
+    #[test]
+    fun test_recovered_cap_works_normally() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, _original_cap) = workspace::create(&config, string::utf8(b"WS"), ctx);
+
+        // Recover a new cap
+        let recovered_cap = admin_recovery::recover_admin_cap(&config, &workspace, ctx);
+
+        // Use recovered cap to create a profile — should succeed
+        let p = profile::create(
+            &config, &workspace, &recovered_cap,
+            USER1, option::none(), vector[], ctx,
+        );
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(_original_cap);
+        test_utils::destroy(recovered_cap);
+        test_utils::destroy(p);
         ts::end(scenario);
     }
 }

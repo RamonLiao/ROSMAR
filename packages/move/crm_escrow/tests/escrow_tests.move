@@ -435,6 +435,110 @@ module crm_escrow::escrow_tests {
         ts::end(scenario2);
     }
 
+    // ========== 15a. test_payee_claim_before_expiry ==========
+
+    #[test]
+    fun test_payee_claim_before_expiry() {
+        let mut scenario = ts::begin(PAYER);
+        let ctx = ts::ctx(&mut scenario);
+        let mut clock = clock::create_for_testing(ctx);
+        clock::set_for_testing(&mut clock, 1000);
+
+        // Create escrow with expiry at 100_000_000 (100s in ms)
+        let expiry = 100_000_000u64;
+        let mut e = escrow::test_create_escrow(
+            PAYER, PAYEE, vector[], 0,
+            option::some(expiry),
+            ctx,
+        );
+        let fund = coin::mint_for_testing<SUI>(10000, ctx);
+        escrow::test_fund_balance(&mut e, fund);
+        escrow::test_set_state(&mut e, escrow::state_funded());
+        escrow::test_set_funded_at(&mut e, 1000);
+        ts::end(scenario);
+
+        // Payee claims within 24h window before expiry
+        let mut scenario2 = ts::begin(PAYEE);
+        let ctx2 = ts::ctx(&mut scenario2);
+        // Set clock to within claim window: expiry - 12h
+        clock::set_for_testing(&mut clock, expiry - 12 * 60 * 60 * 1000);
+
+        escrow::claim_before_expiry(&mut e, &clock, ctx2);
+
+        assert!(escrow::state(&e) == escrow::state_completed());
+        assert!(escrow::balance_value(&e) == 0);
+        assert!(escrow::released_amount(&e) == 10000);
+
+        escrow::test_destroy_escrow(e);
+        clock::destroy_for_testing(clock);
+        ts::end(scenario2);
+    }
+
+    // ========== 15b. test_payer_refund_only_after_expiry ==========
+
+    #[test]
+    #[expected_failure(abort_code = escrow::EInvalidStateTransition)]
+    fun test_payer_refund_only_after_expiry() {
+        let mut scenario = ts::begin(PAYER);
+        let ctx = ts::ctx(&mut scenario);
+        let mut clock = clock::create_for_testing(ctx);
+        clock::set_for_testing(&mut clock, 1000);
+
+        // Create escrow with expiry
+        let expiry = 100_000_000u64;
+        let mut e = escrow::test_create_escrow(
+            PAYER, PAYEE, vector[], 0,
+            option::some(expiry),
+            ctx,
+        );
+        let fund = coin::mint_for_testing<SUI>(10000, ctx);
+        escrow::test_fund_balance(&mut e, fund);
+        escrow::test_set_state(&mut e, escrow::state_funded());
+        escrow::test_set_funded_at(&mut e, 1000);
+
+        // Payer tries to refund BEFORE expiry — should fail
+        clock::set_for_testing(&mut clock, expiry - 1);
+        escrow::refund(&mut e, &clock, ctx);
+
+        escrow::test_destroy_escrow(e);
+        clock::destroy_for_testing(clock);
+        ts::end(scenario);
+    }
+
+    // ========== 15c. test_payee_claim_outside_window_fails ==========
+
+    #[test]
+    #[expected_failure(abort_code = escrow::ENotInClaimWindow)]
+    fun test_payee_claim_outside_window_fails() {
+        let mut scenario = ts::begin(PAYER);
+        let ctx = ts::ctx(&mut scenario);
+        let mut clock = clock::create_for_testing(ctx);
+        clock::set_for_testing(&mut clock, 1000);
+
+        let expiry = 100_000_000u64;
+        let mut e = escrow::test_create_escrow(
+            PAYER, PAYEE, vector[], 0,
+            option::some(expiry),
+            ctx,
+        );
+        let fund = coin::mint_for_testing<SUI>(10000, ctx);
+        escrow::test_fund_balance(&mut e, fund);
+        escrow::test_set_state(&mut e, escrow::state_funded());
+        escrow::test_set_funded_at(&mut e, 1000);
+        ts::end(scenario);
+
+        // Payee tries to claim too early (before the 24h window)
+        let mut scenario2 = ts::begin(PAYEE);
+        let ctx2 = ts::ctx(&mut scenario2);
+        clock::set_for_testing(&mut clock, expiry - 25 * 60 * 60 * 1000); // 25h before expiry
+
+        escrow::claim_before_expiry(&mut e, &clock, ctx2);
+
+        escrow::test_destroy_escrow(e);
+        clock::destroy_for_testing(clock);
+        ts::end(scenario2);
+    }
+
     // ========== 15. test_double_vote ==========
 
     #[test]

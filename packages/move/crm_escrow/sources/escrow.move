@@ -21,7 +21,6 @@ module crm_escrow::escrow {
 
     // ===== Error codes (1500+) =====
     const ENotPayer: u64 = 1500;
-    #[allow(unused_const)]
     const ENotPayee: u64 = 1501;
     const ENotArbitrator: u64 = 1502;
     const EInvalidStateTransition: u64 = 1503;
@@ -30,13 +29,16 @@ module crm_escrow::escrow {
     const EMilestonePercentageMismatch: u64 = 1506;
     const EInvalidThreshold: u64 = 1507;
     const EAlreadyVoted: u64 = 1508;
+    const ENotExpired: u64 = 1509;
     #[allow(unused_const)]
     const EEscrowExpired: u64 = 1510;
     const EArbitratorIsPayer: u64 = 1511;
     const EArbitratorIsPayee: u64 = 1512;
     const EMinLockDuration: u64 = 1513;
+    const ENotInClaimWindow: u64 = 1515;
 
     const MIN_LOCK_DURATION_MS: u64 = 3_600_000; // 1 hour
+    const CLAIM_WINDOW_MS: u64 = 24 * 60 * 60 * 1000; // 24 hours
 
     // AuditEvent constants
     const ACTION_CREATE: u8 = 0;
@@ -373,6 +375,45 @@ module crm_escrow::escrow {
         });
     }
 
+    /// Payee can claim remaining balance within 24h window before expiry.
+    /// This protects the payee from a last-second payer refund.
+    public fun claim_before_expiry(
+        escrow: &mut Escrow,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ) {
+        assert_state_one_of(escrow, STATE_FUNDED, STATE_PARTIALLY_RELEASED);
+        assert!(ctx.sender() == escrow.payee, ENotPayee);
+        assert!(escrow.expiry_ms.is_some(), ENotExpired);
+
+        let now = clock.timestamp_ms();
+        let expiry = *escrow.expiry_ms.borrow();
+        // Claim window: [expiry - 24h, expiry)
+        assert!(expiry >= CLAIM_WINDOW_MS, ENotInClaimWindow); // prevent underflow
+        let window_start = expiry - CLAIM_WINDOW_MS;
+        assert!(now >= window_start && now < expiry, ENotInClaimWindow);
+
+        let remaining = balance::value(&escrow.balance);
+        assert!(remaining > 0, EOverRelease);
+
+        let payment = coin::from_balance(
+            balance::split(&mut escrow.balance, remaining),
+            ctx,
+        );
+        transfer::public_transfer(payment, escrow.payee);
+
+        escrow.released_amount = escrow.released_amount + remaining;
+        escrow.state = STATE_COMPLETED;
+
+        event::emit(EscrowReleased {
+            workspace_id: escrow.workspace_id,
+            escrow_id: object::id(escrow),
+            actor: ctx.sender(),
+            amount: remaining,
+            timestamp: now,
+        });
+    }
+
     /// Refund remaining balance to payer
     public fun refund(
         escrow: &mut Escrow,
@@ -383,12 +424,13 @@ module crm_escrow::escrow {
 
         let now = clock.timestamp_ms();
 
-        // Allow refund if: CREATED, (FUNDED/PARTIALLY_RELEASED and not disputed), or expired
+        // Allow refund if: CREATED, expired, or (FUNDED/PARTIALLY_RELEASED with no expiry set)
         let is_unfunded = escrow.state == STATE_CREATED;
-        let is_funded_not_disputed = escrow.state == STATE_FUNDED || escrow.state == STATE_PARTIALLY_RELEASED;
         let is_expired = escrow.expiry_ms.is_some() && now >= *escrow.expiry_ms.borrow();
+        let is_funded_no_expiry = (escrow.state == STATE_FUNDED || escrow.state == STATE_PARTIALLY_RELEASED)
+            && escrow.expiry_ms.is_none();
 
-        assert!(is_unfunded || is_funded_not_disputed || is_expired, EInvalidStateTransition);
+        assert!(is_unfunded || is_expired || is_funded_no_expiry, EInvalidStateTransition);
 
         let remaining = balance::value(&escrow.balance);
         if (remaining > 0) {
