@@ -60,6 +60,16 @@ module crm_core::profile {
 
     // ===== Public functions =====
 
+    /// @notice Creates a new Profile within a workspace
+    /// @param config - global config (pause check)
+    /// @param workspace - target workspace
+    /// @param cap - workspace admin capability
+    /// @param primary_address - wallet address of the profile owner
+    /// @param suins_name - optional SuiNS name
+    /// @param tags - classification tags
+    /// @emits AuditEventV1
+    /// @aborts EPaused - system is paused
+    /// @aborts ECapMismatch - cap does not match workspace
     public fun create(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -102,6 +112,10 @@ module crm_core::profile {
         profile
     }
 
+    /// @notice Updates the tier and engagement score of a profile
+    /// @param profile - profile to update
+    /// @param tier - new tier value
+    /// @param score - new engagement score
     public fun update_tier_and_score(
         profile: &mut Profile,
         tier: u8,
@@ -114,6 +128,18 @@ module crm_core::profile {
         profile.updated_at = tx_context::epoch_timestamp_ms(ctx);
     }
 
+    /// @notice Soft-deletes a profile via optimistic-lock archive
+    /// @param config - global config (pause check)
+    /// @param workspace - workspace the profile belongs to
+    /// @param cap - workspace admin capability
+    /// @param profile - profile to archive
+    /// @param expected_version - optimistic concurrency version
+    /// @emits AuditEventV1
+    /// @aborts EPaused - system is paused
+    /// @aborts ECapMismatch - cap does not match workspace
+    /// @aborts EWorkspaceMismatch - profile does not belong to workspace
+    /// @aborts EVersionConflict - version mismatch (concurrent edit)
+    /// @aborts EAlreadyArchived - profile is already archived
     public fun archive(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -143,12 +169,29 @@ module crm_core::profile {
         });
     }
 
+    /// @notice Adds a wallet binding as a dynamic object field on the profile
+    /// @param config - global config (pause check)
+    /// @param workspace - workspace the profile belongs to
+    /// @param cap - workspace admin capability
+    /// @param profile - profile to add wallet to
+    /// @param wallet_address - address of the wallet being bound
+    /// @param chain - chain identifier string
+    /// @aborts EPaused - system is paused
+    /// @aborts ECapMismatch - cap does not match workspace
+    /// @aborts EWorkspaceMismatch - profile does not belong to workspace
     public fun add_wallet(
+        config: &GlobalConfig,
+        workspace: &Workspace,
+        cap: &WorkspaceAdminCap,
         profile: &mut Profile,
         wallet_address: address,
         chain: String,
         ctx: &mut TxContext,
     ) {
+        capabilities::assert_not_paused(config);
+        capabilities::assert_cap_matches(cap, workspace::id(workspace));
+        assert!(profile.workspace_id == workspace::id(workspace), EWorkspaceMismatch);
+
         let binding = WalletBinding {
             id: object::new(ctx),
             profile_id: object::id(profile),
@@ -160,7 +203,19 @@ module crm_core::profile {
         profile.version = profile.version + 1;
     }
 
-    // Dynamic field extension with access control
+    /// @notice Sets or updates a dynamic field metadata entry on the profile
+    /// @param config - global config (pause check)
+    /// @param workspace - workspace the profile belongs to
+    /// @param cap - workspace admin capability
+    /// @param profile - profile to set metadata on
+    /// @param expected_version - optimistic concurrency version
+    /// @param key - metadata key
+    /// @param value - metadata value
+    /// @emits AuditEventV1
+    /// @aborts EPaused - system is paused
+    /// @aborts ECapMismatch - cap does not match workspace
+    /// @aborts EWorkspaceMismatch - profile does not belong to workspace
+    /// @aborts EVersionConflict - version mismatch (concurrent edit)
     public fun set_metadata<V: store + drop>(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -197,10 +252,16 @@ module crm_core::profile {
     }
 
     // Accessors
+    /// @notice Returns the workspace ID this profile belongs to
     public fun workspace_id(p: &Profile): ID { p.workspace_id }
+    /// @notice Returns the primary wallet address of the profile
     public fun primary_address(p: &Profile): address { p.primary_address }
+    /// @notice Returns the profile tier
     public fun tier(p: &Profile): u8 { p.tier }
+    /// @notice Returns the engagement score
     public fun engagement_score(p: &Profile): u64 { p.engagement_score }
+    /// @notice Returns the current optimistic-lock version
     public fun version(p: &Profile): u64 { p.version }
+    /// @notice Returns whether the profile is archived
     public fun is_archived(p: &Profile): bool { p.is_archived }
 }

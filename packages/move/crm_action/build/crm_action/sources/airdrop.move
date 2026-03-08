@@ -34,7 +34,17 @@ module crm_action::airdrop {
 
     // ===== Public functions =====
 
-    /// Batch airdrop equal amounts of SUI to a list of addresses
+    /// @notice Batch airdrop equal amounts of SUI to a list of addresses
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param recipients - List of recipient addresses
+    /// @param fund - SUI coin to split from
+    /// @param amount_per_recipient - Amount each recipient receives
+    /// @emits AirdropExecuted
+    /// @emits AuditEventV1
+    /// @aborts EEmptyRecipients - if recipients list is empty
+    /// @aborts EInsufficientFunds - if fund balance < total needed
     public fun batch_airdrop(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -85,7 +95,15 @@ module crm_action::airdrop {
         });
     }
 
-    /// Batch airdrop with variable amounts per recipient
+    /// @notice Batch airdrop with variable amounts per recipient
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param recipients - List of recipient addresses
+    /// @param amounts - Per-recipient amounts (must match recipients length)
+    /// @param fund - SUI coin to split from
+    /// @emits AirdropExecuted
+    /// @aborts EEmptyRecipients - if recipients list is empty or lengths mismatch
     public fun batch_airdrop_variable(
         config: &GlobalConfig,
         workspace: &Workspace,

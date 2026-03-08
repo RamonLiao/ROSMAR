@@ -52,6 +52,18 @@ module crm_vault::vault {
 
     // ===== Public functions =====
 
+    /// @notice Create a new vault object within a workspace
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param owner_profile_id - Profile that owns this vault
+    /// @param vault_type - VAULT_NOTE (0) or VAULT_FILE (1)
+    /// @param name - Display name of the vault
+    /// @param mime_type - Optional MIME type for file vaults
+    /// @param size_bytes - File size in bytes
+    /// @emits AuditEventV1
+    /// @aborts EGlobalPaused - if system is paused
+    /// @aborts ECapMismatch - if cap does not match workspace
     public fun create(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -96,6 +108,18 @@ module crm_vault::vault {
         vault
     }
 
+    /// @notice Attach a Walrus blob ID and Seal policy to an existing vault
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param vault - Vault to update
+    /// @param expected_version - Optimistic concurrency version
+    /// @param walrus_blob_id - Walrus blob object ID
+    /// @param seal_policy_id - Seal access-policy object ID
+    /// @emits AuditEventV1
+    /// @aborts EWorkspaceMismatch - if vault does not belong to workspace
+    /// @aborts EVersionConflict - if expected_version != vault.version
+    /// @aborts EAlreadyArchived - if vault is archived
     public fun set_blob(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -128,6 +152,16 @@ module crm_vault::vault {
         });
     }
 
+    /// @notice Soft-archive a vault (sets is_archived flag)
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param vault - Vault to archive
+    /// @param expected_version - Optimistic concurrency version
+    /// @emits AuditEventV1
+    /// @aborts EWorkspaceMismatch - if vault does not belong to workspace
+    /// @aborts EVersionConflict - if expected_version != vault.version
+    /// @aborts EAlreadyArchived - if vault is already archived
     public fun archive(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -158,13 +192,22 @@ module crm_vault::vault {
     }
 
     // Accessors
+
+    /// @notice Return the workspace ID this vault belongs to
     public fun workspace_id(v: &Vault): ID { v.workspace_id }
+    /// @notice Return the owner profile ID
     public fun owner_profile_id(v: &Vault): ID { v.owner_profile_id }
+    /// @notice Return the vault type (0=note, 1=file)
     public fun vault_type(v: &Vault): u8 { v.vault_type }
+    /// @notice Return the current optimistic-lock version
     public fun version(v: &Vault): u64 { v.version }
+    /// @notice Return whether the vault is archived
     public fun is_archived(v: &Vault): bool { v.is_archived }
 
     // Type constant accessors
+
+    /// @notice Return the VAULT_NOTE type constant (0)
     public fun type_note(): u8 { VAULT_NOTE }
+    /// @notice Return the VAULT_FILE type constant (1)
     public fun type_file(): u8 { VAULT_FILE }
 }

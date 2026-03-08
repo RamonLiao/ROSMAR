@@ -66,6 +66,18 @@ module crm_data::ticket {
 
     // ===== Public functions =====
 
+    /// @notice Create a new support ticket in OPEN status
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param profile_id - Associated contact profile
+    /// @param title - Ticket title
+    /// @param priority - Priority level (0=low, 1=medium, 2=high, 3=urgent)
+    /// @param assignee - Optional assignee address
+    /// @param sla_deadline - Optional SLA deadline (epoch ms)
+    /// @emits AuditEventV1
+    /// @aborts EGlobalPaused - if system is paused
+    /// @aborts ECapMismatch - if cap does not match workspace
     public fun create(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -109,7 +121,18 @@ module crm_data::ticket {
         ticket
     }
 
-    /// Transition status with validation
+    /// @notice Transition ticket status with FSM validation
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param ticket - Ticket to transition
+    /// @param expected_version - Optimistic concurrency version
+    /// @param new_status - Target status constant
+    /// @emits TicketStatusChanged
+    /// @emits AuditEventV1
+    /// @aborts EWorkspaceMismatch - if ticket does not belong to workspace
+    /// @aborts EVersionConflict - if expected_version != ticket.version
+    /// @aborts EInvalidTransition - if status transition is invalid
     public fun transition_status(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -158,6 +181,13 @@ module crm_data::ticket {
         });
     }
 
+    /// @notice Assign a ticket to an agent address
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param ticket - Ticket to assign
+    /// @param assignee - Agent address
+    /// @aborts EWorkspaceMismatch - if ticket does not belong to workspace
     public fun assign(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -188,23 +218,41 @@ module crm_data::ticket {
     }
 
     // Accessors
+
+    /// @notice Return the workspace ID
     public fun workspace_id(t: &Ticket): ID { t.workspace_id }
+    /// @notice Return the associated profile ID
     public fun profile_id(t: &Ticket): ID { t.profile_id }
+    /// @notice Return the ticket title
     public fun title(t: &Ticket): &String { &t.title }
+    /// @notice Return the current status
     public fun status(t: &Ticket): u8 { t.status }
+    /// @notice Return the priority level
     public fun priority(t: &Ticket): u8 { t.priority }
+    /// @notice Return the current optimistic-lock version
     public fun version(t: &Ticket): u64 { t.version }
 
     // Status constant accessors
+
+    /// @notice Return STATUS_OPEN constant (0)
     public fun status_open(): u8 { STATUS_OPEN }
+    /// @notice Return STATUS_IN_PROGRESS constant (1)
     public fun status_in_progress(): u8 { STATUS_IN_PROGRESS }
+    /// @notice Return STATUS_WAITING constant (2)
     public fun status_waiting(): u8 { STATUS_WAITING }
+    /// @notice Return STATUS_RESOLVED constant (3)
     public fun status_resolved(): u8 { STATUS_RESOLVED }
+    /// @notice Return STATUS_CLOSED constant (4)
     public fun status_closed(): u8 { STATUS_CLOSED }
 
     // Priority constant accessors
+
+    /// @notice Return PRIORITY_LOW constant (0)
     public fun priority_low(): u8 { PRIORITY_LOW }
+    /// @notice Return PRIORITY_MEDIUM constant (1)
     public fun priority_medium(): u8 { PRIORITY_MEDIUM }
+    /// @notice Return PRIORITY_HIGH constant (2)
     public fun priority_high(): u8 { PRIORITY_HIGH }
+    /// @notice Return PRIORITY_URGENT constant (3)
     public fun priority_urgent(): u8 { PRIORITY_URGENT }
 }

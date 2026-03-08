@@ -63,6 +63,19 @@ module crm_data::deal {
 
     // ===== Public functions =====
 
+    /// @notice Create a new deal in NEW stage
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param profile_id - Associated contact profile
+    /// @param organization_id - Optional associated organization
+    /// @param name - Deal name
+    /// @param value - Deal monetary value
+    /// @param currency - Currency code
+    /// @param expected_close_date - Optional expected close date (epoch ms)
+    /// @emits AuditEventV1
+    /// @aborts EGlobalPaused - if system is paused
+    /// @aborts ECapMismatch - if cap does not match workspace
     public fun create(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -108,7 +121,19 @@ module crm_data::deal {
         deal
     }
 
-    /// Advance stage: new→qualified→proposal→won/lost
+    /// @notice Advance deal stage (new->qualified->proposal->won/lost)
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param deal - Deal to advance
+    /// @param expected_version - Optimistic concurrency version
+    /// @param new_stage - Target stage constant
+    /// @emits DealStageChanged
+    /// @emits AuditEventV1
+    /// @aborts EWorkspaceMismatch - if deal does not belong to workspace
+    /// @aborts EVersionConflict - if expected_version != deal.version
+    /// @aborts EAlreadyArchived - if deal is archived
+    /// @aborts EInvalidTransition - if stage transition is invalid
     public fun advance_stage(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -148,6 +173,16 @@ module crm_data::deal {
         });
     }
 
+    /// @notice Soft-archive a deal (sets is_archived flag)
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param deal - Deal to archive
+    /// @param expected_version - Optimistic concurrency version
+    /// @emits AuditEventV1
+    /// @aborts EWorkspaceMismatch - if deal does not belong to workspace
+    /// @aborts EVersionConflict - if expected_version != deal.version
+    /// @aborts EAlreadyArchived - if deal is already archived
     public fun archive(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -189,18 +224,32 @@ module crm_data::deal {
     }
 
     // Accessors
+
+    /// @notice Return the workspace ID
     public fun workspace_id(d: &Deal): ID { d.workspace_id }
+    /// @notice Return the associated profile ID
     public fun profile_id(d: &Deal): ID { d.profile_id }
+    /// @notice Return the deal name
     public fun name(d: &Deal): &String { &d.name }
+    /// @notice Return the current stage
     public fun stage(d: &Deal): u8 { d.stage }
+    /// @notice Return the deal monetary value
     public fun value(d: &Deal): u64 { d.value }
+    /// @notice Return the current optimistic-lock version
     public fun version(d: &Deal): u64 { d.version }
+    /// @notice Return whether the deal is archived
     public fun is_archived(d: &Deal): bool { d.is_archived }
 
     // Stage constant accessors
+
+    /// @notice Return STAGE_NEW constant (0)
     public fun stage_new(): u8 { STAGE_NEW }
+    /// @notice Return STAGE_QUALIFIED constant (1)
     public fun stage_qualified(): u8 { STAGE_QUALIFIED }
+    /// @notice Return STAGE_PROPOSAL constant (2)
     public fun stage_proposal(): u8 { STAGE_PROPOSAL }
+    /// @notice Return STAGE_WON constant (3)
     public fun stage_won(): u8 { STAGE_WON }
+    /// @notice Return STAGE_LOST constant (4)
     public fun stage_lost(): u8 { STAGE_LOST }
 }

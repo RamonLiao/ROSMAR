@@ -6,6 +6,7 @@ module crm_escrow::escrow {
     use sui::clock::Clock;
     use sui::event;
     use sui::dynamic_field;
+    use sui::hash;
     use crm_core::capabilities::{Self, GlobalConfig, WorkspaceAdminCap};
     use crm_core::workspace::{Self, Workspace};
     use crm_escrow::vesting;
@@ -21,7 +22,6 @@ module crm_escrow::escrow {
 
     // ===== Error codes (1500+) =====
     const ENotPayer: u64 = 1500;
-    #[allow(unused_const)]
     const ENotPayee: u64 = 1501;
     const ENotArbitrator: u64 = 1502;
     const EInvalidStateTransition: u64 = 1503;
@@ -30,13 +30,22 @@ module crm_escrow::escrow {
     const EMilestonePercentageMismatch: u64 = 1506;
     const EInvalidThreshold: u64 = 1507;
     const EAlreadyVoted: u64 = 1508;
+    const ENotExpired: u64 = 1509;
     #[allow(unused_const)]
     const EEscrowExpired: u64 = 1510;
     const EArbitratorIsPayer: u64 = 1511;
     const EArbitratorIsPayee: u64 = 1512;
     const EMinLockDuration: u64 = 1513;
+    const ENotInClaimWindow: u64 = 1515;
+    const ECommitmentExists: u64 = 1520;
+    const ENoCommitment: u64 = 1521;
+    const ERevealMismatch: u64 = 1522;
+    const ERevealDeadlinePassed: u64 = 1523;
+    #[allow(unused_const)]
+    const ECommitPhaseClosed: u64 = 1524;
 
     const MIN_LOCK_DURATION_MS: u64 = 3_600_000; // 1 hour
+    const CLAIM_WINDOW_MS: u64 = 24 * 60 * 60 * 1000; // 24 hours
 
     // AuditEvent constants
     const ACTION_CREATE: u8 = 0;
@@ -87,6 +96,9 @@ module crm_escrow::escrow {
         votes_refund: vector<address>,
         resolved: bool,
         resolution: u8,
+        commitments: vector<address>,
+        commitment_hashes: vector<vector<u8>>,
+        reveal_deadline_ms: u64,
     }
 
     // ===== Events =====
@@ -195,6 +207,24 @@ module crm_escrow::escrow {
         false
     }
 
+    fun has_committed(arb: &ArbitrationState, addr: address): bool {
+        let mut i = 0;
+        while (i < arb.commitments.length()) {
+            if (arb.commitments[i] == addr) { return true };
+            i = i + 1;
+        };
+        false
+    }
+
+    fun find_commitment_index(arb: &ArbitrationState, addr: address): u64 {
+        let mut i = 0;
+        while (i < arb.commitments.length()) {
+            if (arb.commitments[i] == addr) { return i };
+            i = i + 1;
+        };
+        abort ENoCommitment
+    }
+
     fun arb_threshold_reached(arb: &ArbitrationState, threshold: u64): Option<u8> {
         if (arb.votes_release.length() >= threshold) {
             option::some(arbitration::decision_release())
@@ -231,7 +261,24 @@ module crm_escrow::escrow {
 
     // ===== Entry functions =====
 
-    /// Create a new escrow (shared object)
+    /// @notice Creates a new escrow as a shared object, linking a deal to payer/payee
+    /// @param config - global config (pause check)
+    /// @param workspace - target workspace
+    /// @param cap - workspace admin capability
+    /// @param deal_id - ID of the associated deal
+    /// @param payee - address of the payee
+    /// @param arbitrators - list of arbitrator addresses (must not include payer or payee)
+    /// @param arbiter_threshold - number of arbitrator votes required for dispute resolution
+    /// @param expiry_ms - optional expiry timestamp in ms (must be >= now + 1 hour)
+    /// @param clock - Sui Clock object
+    /// @emits EscrowCreated
+    /// @emits AuditEventV1
+    /// @aborts EPaused - system is paused
+    /// @aborts ECapMismatch - cap does not match workspace
+    /// @aborts EInvalidThreshold - threshold < 1 or > arbitrator count
+    /// @aborts EArbitratorIsPayer - an arbitrator address equals the payer
+    /// @aborts EArbitratorIsPayee - an arbitrator address equals the payee
+    /// @aborts EMinLockDuration - expiry < now + MIN_LOCK_DURATION_MS
     public fun create_escrow(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -313,7 +360,14 @@ module crm_escrow::escrow {
         transfer::share_object(escrow);
     }
 
-    /// Fund an escrow with SUI coins
+    /// @notice Funds a CREATED escrow with SUI coins, transitioning it to FUNDED
+    /// @param escrow - escrow to fund
+    /// @param coin - SUI coin to deposit
+    /// @param clock - Sui Clock object
+    /// @emits EscrowFunded
+    /// @aborts EInvalidStateTransition - escrow is not in CREATED state
+    /// @aborts ENotPayer - caller is not the payer
+    /// @aborts EOverRelease - coin value is zero
     public fun fund_escrow(
         escrow: &mut Escrow,
         coin: Coin<SUI>,
@@ -339,7 +393,15 @@ module crm_escrow::escrow {
         });
     }
 
-    /// Release funds to payee
+    /// @notice Releases funds from escrow to the payee (payer-initiated)
+    /// @param escrow - escrow to release from
+    /// @param amount - amount of SUI to release
+    /// @param clock - Sui Clock object
+    /// @emits EscrowReleased
+    /// @aborts EInvalidStateTransition - escrow not FUNDED or PARTIALLY_RELEASED
+    /// @aborts ENotPayer - caller is not the payer
+    /// @aborts EMinLockDuration - less than 1 hour since funding
+    /// @aborts EOverRelease - amount exceeds remaining balance
     public fun release(
         escrow: &mut Escrow,
         amount: u64,
@@ -373,7 +435,58 @@ module crm_escrow::escrow {
         });
     }
 
-    /// Refund remaining balance to payer
+    /// @notice Allows payee to claim remaining balance within 24h window before expiry
+    /// @param escrow - escrow to claim from
+    /// @param clock - Sui Clock object
+    /// @emits EscrowReleased
+    /// @aborts EInvalidStateTransition - escrow not FUNDED or PARTIALLY_RELEASED
+    /// @aborts ENotPayee - caller is not the payee
+    /// @aborts ENotExpired - escrow has no expiry set
+    /// @aborts ENotInClaimWindow - current time outside [expiry - 24h, expiry)
+    /// @aborts EOverRelease - no remaining balance
+    public fun claim_before_expiry(
+        escrow: &mut Escrow,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ) {
+        assert_state_one_of(escrow, STATE_FUNDED, STATE_PARTIALLY_RELEASED);
+        assert!(ctx.sender() == escrow.payee, ENotPayee);
+        assert!(escrow.expiry_ms.is_some(), ENotExpired);
+
+        let now = clock.timestamp_ms();
+        let expiry = *escrow.expiry_ms.borrow();
+        // Claim window: [expiry - 24h, expiry)
+        assert!(expiry >= CLAIM_WINDOW_MS, ENotInClaimWindow); // prevent underflow
+        let window_start = expiry - CLAIM_WINDOW_MS;
+        assert!(now >= window_start && now < expiry, ENotInClaimWindow);
+
+        let remaining = balance::value(&escrow.balance);
+        assert!(remaining > 0, EOverRelease);
+
+        let payment = coin::from_balance(
+            balance::split(&mut escrow.balance, remaining),
+            ctx,
+        );
+        transfer::public_transfer(payment, escrow.payee);
+
+        escrow.released_amount = escrow.released_amount + remaining;
+        escrow.state = STATE_COMPLETED;
+
+        event::emit(EscrowReleased {
+            workspace_id: escrow.workspace_id,
+            escrow_id: object::id(escrow),
+            actor: ctx.sender(),
+            amount: remaining,
+            timestamp: now,
+        });
+    }
+
+    /// @notice Refunds remaining balance to the payer (unfunded, expired, or no-expiry funded)
+    /// @param escrow - escrow to refund from
+    /// @param clock - Sui Clock object
+    /// @emits EscrowRefunded
+    /// @aborts ENotPayer - caller is not the payer
+    /// @aborts EInvalidStateTransition - not eligible for refund
     public fun refund(
         escrow: &mut Escrow,
         clock: &Clock,
@@ -383,12 +496,13 @@ module crm_escrow::escrow {
 
         let now = clock.timestamp_ms();
 
-        // Allow refund if: CREATED, (FUNDED/PARTIALLY_RELEASED and not disputed), or expired
+        // Allow refund if: CREATED, expired, or (FUNDED/PARTIALLY_RELEASED with no expiry set)
         let is_unfunded = escrow.state == STATE_CREATED;
-        let is_funded_not_disputed = escrow.state == STATE_FUNDED || escrow.state == STATE_PARTIALLY_RELEASED;
         let is_expired = escrow.expiry_ms.is_some() && now >= *escrow.expiry_ms.borrow();
+        let is_funded_no_expiry = (escrow.state == STATE_FUNDED || escrow.state == STATE_PARTIALLY_RELEASED)
+            && escrow.expiry_ms.is_none();
 
-        assert!(is_unfunded || is_funded_not_disputed || is_expired, EInvalidStateTransition);
+        assert!(is_unfunded || is_expired || is_funded_no_expiry, EInvalidStateTransition);
 
         let remaining = balance::value(&escrow.balance);
         if (remaining > 0) {
@@ -413,7 +527,17 @@ module crm_escrow::escrow {
 
     // ===== Vesting functions =====
 
-    /// Add a vesting schedule to a funded escrow
+    /// @notice Adds a vesting schedule (linear or milestone) to a funded escrow
+    /// @param escrow - funded escrow to add vesting to
+    /// @param vesting_type - LINEAR (0) or MILESTONE (1)
+    /// @param cliff_ms - cliff duration in ms (linear vesting)
+    /// @param total_duration_ms - total vesting duration in ms (linear vesting)
+    /// @param milestones - milestone definitions (milestone vesting)
+    /// @param clock - Sui Clock object
+    /// @aborts EInvalidStateTransition - escrow is not FUNDED
+    /// @aborts ENotPayer - caller is not the payer
+    /// @aborts EVestingAlreadySet - vesting schedule already attached
+    /// @aborts EMilestonePercentageMismatch - milestone percentages do not sum to 10000 bp
     public fun add_vesting(
         escrow: &mut Escrow,
         vesting_type: u8,
@@ -443,7 +567,13 @@ module crm_escrow::escrow {
         escrow.has_vesting = true;
     }
 
-    /// Release vested amount to payee
+    /// @notice Releases the currently vested amount to the payee based on the vesting schedule
+    /// @param escrow - escrow with vesting to release from
+    /// @param clock - Sui Clock object
+    /// @emits EscrowReleased
+    /// @aborts EInvalidStateTransition - escrow not FUNDED/PARTIALLY_RELEASED or no vesting
+    /// @aborts ENotPayer - caller is not the payer
+    /// @aborts EOverRelease - no new amount vested to release
     public fun release_vested(
         escrow: &mut Escrow,
         clock: &Clock,
@@ -503,7 +633,13 @@ module crm_escrow::escrow {
         });
     }
 
-    /// Complete a milestone
+    /// @notice Marks a milestone as completed in the vesting schedule
+    /// @param escrow - escrow with milestone vesting
+    /// @param milestone_index - index of the milestone to complete
+    /// @param clock - Sui Clock object
+    /// @emits MilestoneCompleted
+    /// @aborts EInvalidStateTransition - escrow not FUNDED/PARTIALLY_RELEASED or no vesting
+    /// @aborts ENotPayer - caller is not the payer
     public fun complete_milestone(
         escrow: &mut Escrow,
         milestone_index: u64,
@@ -531,7 +667,12 @@ module crm_escrow::escrow {
 
     // ===== Arbitration functions =====
 
-    /// Raise a dispute on the escrow
+    /// @notice Raises a dispute on the escrow, transitioning it to DISPUTED state
+    /// @param escrow - escrow to dispute
+    /// @param clock - Sui Clock object
+    /// @emits DisputeRaised
+    /// @aborts EInvalidStateTransition - escrow not FUNDED or PARTIALLY_RELEASED
+    /// @aborts ENotPayer - caller is neither payer nor payee
     public fun raise_dispute(
         escrow: &mut Escrow,
         clock: &Clock,
@@ -547,6 +688,9 @@ module crm_escrow::escrow {
             votes_refund: vector[],
             resolved: false,
             resolution: 0,
+            commitments: vector[],
+            commitment_hashes: vector[],
+            reveal_deadline_ms: 0,
         };
 
         dynamic_field::add(&mut escrow.id, ARBITRATION_KEY, arb_state);
@@ -560,7 +704,15 @@ module crm_escrow::escrow {
         });
     }
 
-    /// Vote on a dispute
+    /// @notice Arbitrator casts a direct vote on a dispute; resolves if threshold reached
+    /// @param escrow - disputed escrow
+    /// @param vote - DECISION_RELEASE (0) or DECISION_REFUND (1)
+    /// @param clock - Sui Clock object
+    /// @emits DisputeVoteCast
+    /// @emits DisputeResolved - if threshold reached
+    /// @aborts EInvalidStateTransition - escrow not in DISPUTED state
+    /// @aborts ENotArbitrator - caller is not a registered arbitrator
+    /// @aborts EAlreadyVoted - caller has already voted
     public fun vote_on_dispute(
         escrow: &mut Escrow,
         vote: u8,
@@ -647,27 +799,195 @@ module crm_escrow::escrow {
         };
     }
 
+    /// @notice Arbitrator commits a hash of their vote (commit phase of commit-reveal)
+    /// @param escrow - disputed escrow
+    /// @param commitment_hash - keccak256(vote_byte || salt)
+    /// @param reveal_deadline_ms - deadline timestamp for the reveal phase
+    /// @param _clock - Sui Clock object
+    /// @aborts EInvalidStateTransition - escrow not in DISPUTED state
+    /// @aborts ENotArbitrator - caller is not a registered arbitrator
+    /// @aborts EAlreadyVoted - caller has already voted directly
+    /// @aborts ECommitmentExists - caller has already committed
+    public fun commit_vote(
+        escrow: &mut Escrow,
+        commitment_hash: vector<u8>,
+        reveal_deadline_ms: u64,
+        _clock: &Clock,
+        ctx: &TxContext,
+    ) {
+        assert_state(escrow, STATE_DISPUTED);
+
+        let sender = ctx.sender();
+
+        // Check sender is an arbitrator
+        let mut is_arb = false;
+        let mut i = 0;
+        while (i < escrow.arbitrators.length()) {
+            if (escrow.arbitrators[i] == sender) {
+                is_arb = true;
+            };
+            i = i + 1;
+        };
+        assert!(is_arb, ENotArbitrator);
+
+        let arb_state: &mut ArbitrationState = dynamic_field::borrow_mut(
+            &mut escrow.id,
+            ARBITRATION_KEY,
+        );
+
+        // Must not have already voted or committed
+        assert!(!arb_has_voted(arb_state, sender), EAlreadyVoted);
+        assert!(!has_committed(arb_state, sender), ECommitmentExists);
+
+        arb_state.commitments.push_back(sender);
+        arb_state.commitment_hashes.push_back(commitment_hash);
+        // Update reveal deadline if later than current
+        if (reveal_deadline_ms > arb_state.reveal_deadline_ms) {
+            arb_state.reveal_deadline_ms = reveal_deadline_ms;
+        };
+    }
+
+    /// @notice Arbitrator reveals their vote (reveal phase of commit-reveal); resolves if threshold reached
+    /// @param escrow - disputed escrow
+    /// @param vote - DECISION_RELEASE (0) or DECISION_REFUND (1)
+    /// @param salt - salt used in the commitment hash
+    /// @param clock - Sui Clock object
+    /// @emits DisputeVoteCast
+    /// @emits DisputeResolved - if threshold reached
+    /// @aborts EInvalidStateTransition - escrow not in DISPUTED state
+    /// @aborts ENoCommitment - caller has not committed
+    /// @aborts ERevealDeadlinePassed - reveal deadline has passed
+    /// @aborts ERevealMismatch - revealed hash does not match commitment
+    public fun reveal_vote(
+        escrow: &mut Escrow,
+        vote: u8,
+        salt: vector<u8>,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ) {
+        assert_state(escrow, STATE_DISPUTED);
+
+        let sender = ctx.sender();
+        let now = clock.timestamp_ms();
+
+        // Cache IDs before mutable borrow
+        let ws_id = escrow.workspace_id;
+        let escrow_id = object::id(escrow);
+        let payee = escrow.payee;
+        let payer = escrow.payer;
+        let threshold = escrow.arbiter_threshold;
+
+        let arb_state: &mut ArbitrationState = dynamic_field::borrow_mut(
+            &mut escrow.id,
+            ARBITRATION_KEY,
+        );
+
+        // Must have committed
+        assert!(has_committed(arb_state, sender), ENoCommitment);
+
+        // Must be before reveal deadline
+        assert!(now < arb_state.reveal_deadline_ms, ERevealDeadlinePassed);
+
+        // Verify hash: keccak256(vote_byte || salt)
+        let mut data = vector[vote];
+        data.append(salt);
+        let computed = hash::keccak256(&data);
+
+        let idx = find_commitment_index(arb_state, sender);
+        assert!(computed == arb_state.commitment_hashes[idx], ERevealMismatch);
+
+        // Remove commitment (swap-remove)
+        arb_state.commitments.swap_remove(idx);
+        arb_state.commitment_hashes.swap_remove(idx);
+
+        // Record vote (same logic as vote_on_dispute)
+        if (vote == arbitration::decision_release()) {
+            arb_state.votes_release.push_back(sender);
+        } else {
+            arb_state.votes_refund.push_back(sender);
+        };
+
+        event::emit(DisputeVoteCast {
+            workspace_id: ws_id,
+            escrow_id,
+            actor: sender,
+            vote,
+            timestamp: now,
+        });
+
+        // Check if threshold reached
+        let maybe_decision = arb_threshold_reached(arb_state, threshold);
+        if (maybe_decision.is_some()) {
+            let decision = *maybe_decision.borrow();
+            arb_state.resolved = true;
+            arb_state.resolution = decision;
+
+            let remaining = balance::value(&escrow.balance);
+            if (remaining > 0) {
+                let payout = coin::from_balance(
+                    balance::split(&mut escrow.balance, remaining),
+                    ctx,
+                );
+                if (decision == arbitration::decision_release()) {
+                    transfer::public_transfer(payout, payee);
+                    escrow.released_amount = escrow.released_amount + remaining;
+                    escrow.state = STATE_COMPLETED;
+                } else {
+                    transfer::public_transfer(payout, payer);
+                    escrow.refunded_amount = escrow.refunded_amount + remaining;
+                    escrow.state = STATE_REFUNDED;
+                };
+            };
+
+            event::emit(DisputeResolved {
+                workspace_id: ws_id,
+                escrow_id,
+                actor: sender,
+                resolution: decision,
+                timestamp: now,
+            });
+        };
+    }
+
     // ===== Accessors =====
 
+    /// @notice Returns the current escrow state
     public fun state(e: &Escrow): u8 { e.state }
+    /// @notice Returns the payer address
     public fun payer(e: &Escrow): address { e.payer }
+    /// @notice Returns the payee address
     public fun payee(e: &Escrow): address { e.payee }
+    /// @notice Returns the current SUI balance held in escrow
     public fun balance_value(e: &Escrow): u64 { balance::value(&e.balance) }
+    /// @notice Returns the total amount released to the payee
     public fun released_amount(e: &Escrow): u64 { e.released_amount }
+    /// @notice Returns the total amount refunded to the payer
     public fun refunded_amount(e: &Escrow): u64 { e.refunded_amount }
+    /// @notice Returns the workspace ID this escrow belongs to
     public fun escrow_workspace_id(e: &Escrow): ID { e.workspace_id }
+    /// @notice Returns whether a vesting schedule is attached
     public fun has_vesting(e: &Escrow): bool { e.has_vesting }
+    /// @notice Returns the timestamp when the escrow was funded
     public fun funded_at(e: &Escrow): u64 { e.funded_at }
 
+    /// @notice Returns CREATED state constant (0)
     public fun state_created(): u8 { STATE_CREATED }
+    /// @notice Returns FUNDED state constant (1)
     public fun state_funded(): u8 { STATE_FUNDED }
+    /// @notice Returns PARTIALLY_RELEASED state constant (2)
     public fun state_partially_released(): u8 { STATE_PARTIALLY_RELEASED }
+    /// @notice Returns COMPLETED state constant (3)
     public fun state_completed(): u8 { STATE_COMPLETED }
+    /// @notice Returns REFUNDED state constant (4)
     public fun state_refunded(): u8 { STATE_REFUNDED }
+    /// @notice Returns DISPUTED state constant (5)
     public fun state_disputed(): u8 { STATE_DISPUTED }
 
     // ===== Milestone constructor =====
 
+    /// @notice Creates a new incomplete Milestone definition
+    /// @param description - milestone description
+    /// @param percentage - milestone weight in basis points (sum must = 10000)
     public fun new_milestone(description: String, percentage: u64): Milestone {
         Milestone {
             description,
@@ -677,7 +997,9 @@ module crm_escrow::escrow {
         }
     }
 
+    /// @notice Returns whether a milestone is completed
     public fun milestone_is_completed(m: &Milestone): bool { m.is_completed }
+    /// @notice Returns the milestone percentage in basis points
     public fun milestone_percentage(m: &Milestone): u64 { m.percentage }
 
     // ===== Test-only helpers =====

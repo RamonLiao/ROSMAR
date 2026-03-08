@@ -56,6 +56,16 @@ module crm_data::campaign {
 
     // ===== Public functions =====
 
+    /// @notice Create a new campaign in DRAFT status
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param name - Campaign name
+    /// @param segment_id - Target segment object ID
+    /// @param reward_type - Optional reward type label
+    /// @emits AuditEventV1
+    /// @aborts EGlobalPaused - if system is paused
+    /// @aborts ECapMismatch - if cap does not match workspace
     public fun create(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -95,7 +105,15 @@ module crm_data::campaign {
         campaign
     }
 
-    /// draft → active, paused → active
+    /// @notice Launch a campaign (draft -> active, or paused -> active)
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param campaign - Campaign to launch
+    /// @emits CampaignStatusChanged
+    /// @emits AuditEventV1
+    /// @aborts EWorkspaceMismatch - if campaign does not belong to workspace
+    /// @aborts EInvalidTransition - if campaign is not in draft or paused status
     public fun launch(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -135,7 +153,15 @@ module crm_data::campaign {
         });
     }
 
-    /// active → paused
+    /// @notice Pause an active campaign (active -> paused)
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param campaign - Campaign to pause
+    /// @emits CampaignStatusChanged
+    /// @emits AuditEventV1
+    /// @aborts EWorkspaceMismatch - if campaign does not belong to workspace
+    /// @aborts EInvalidTransition - if campaign is not active
     public fun pause(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -170,7 +196,15 @@ module crm_data::campaign {
         });
     }
 
-    /// active → completed
+    /// @notice Complete an active campaign (active -> completed)
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param campaign - Campaign to complete
+    /// @emits CampaignStatusChanged
+    /// @emits AuditEventV1
+    /// @aborts EWorkspaceMismatch - if campaign does not belong to workspace
+    /// @aborts EInvalidTransition - if campaign is not active
     public fun complete(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -207,15 +241,26 @@ module crm_data::campaign {
     }
 
     // Accessors
+
+    /// @notice Return the workspace ID
     public fun workspace_id(c: &Campaign): ID { c.workspace_id }
+    /// @notice Return the campaign name
     public fun name(c: &Campaign): &String { &c.name }
+    /// @notice Return the current status
     public fun status(c: &Campaign): u8 { c.status }
+    /// @notice Return the target segment ID
     public fun segment_id(c: &Campaign): ID { c.segment_id }
+    /// @notice Return the current optimistic-lock version
     public fun version(c: &Campaign): u64 { c.version }
 
     // Status constant accessors
+
+    /// @notice Return STATUS_DRAFT constant (0)
     public fun status_draft(): u8 { STATUS_DRAFT }
+    /// @notice Return STATUS_ACTIVE constant (1)
     public fun status_active(): u8 { STATUS_ACTIVE }
+    /// @notice Return STATUS_PAUSED constant (2)
     public fun status_paused(): u8 { STATUS_PAUSED }
+    /// @notice Return STATUS_COMPLETED constant (3)
     public fun status_completed(): u8 { STATUS_COMPLETED }
 }

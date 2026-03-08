@@ -4,6 +4,7 @@ module crm_core::display_init {
     use crm_core::profile::Profile;
     use crm_core::workspace::Workspace;
     use crm_core::organization::Organization;
+    use crm_core::deal::Deal;
 
     /// OTW for publisher claim
     public struct DISPLAY_INIT has drop {}
@@ -63,6 +64,23 @@ module crm_core::display_init {
         );
         display::update_version(&mut org_display);
         transfer::public_transfer(org_display, ctx.sender());
+
+        // Deal Display
+        let deal_keys = vector[
+            b"name".to_string(),
+            b"description".to_string(),
+            b"project_url".to_string(),
+        ];
+        let deal_values = vector[
+            b"{title}".to_string(),
+            b"CRM Deal | Stage {stage} | ${amount_usd}".to_string(),
+            b"https://crm.rosmar.io/deals/{id}".to_string(),
+        ];
+        let mut deal_display = display::new_with_fields<Deal>(
+            &publisher, deal_keys, deal_values, ctx,
+        );
+        display::update_version(&mut deal_display);
+        transfer::public_transfer(deal_display, ctx.sender());
 
         transfer::public_transfer(publisher, ctx.sender());
     }

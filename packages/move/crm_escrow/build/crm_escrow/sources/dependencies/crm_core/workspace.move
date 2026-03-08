@@ -51,6 +51,11 @@ module crm_core::workspace {
 
     // ===== Public functions =====
 
+    /// @notice Creates a new workspace with the caller as owner and first member
+    /// @param config - global config (pause check)
+    /// @param name - workspace display name
+    /// @emits WorkspaceCreated
+    /// @aborts EPaused - system is paused
     public fun create(
         config: &GlobalConfig,
         name: String,
@@ -90,6 +95,16 @@ module crm_core::workspace {
         (workspace, admin_cap)
     }
 
+    /// @notice Adds a new member to the workspace with the given role
+    /// @param config - global config (pause check)
+    /// @param workspace - workspace to add member to
+    /// @param cap - workspace admin capability
+    /// @param member_address - address of the new member
+    /// @param role - ACL role to assign
+    /// @emits MemberAdded
+    /// @aborts EPaused - system is paused
+    /// @aborts ECapMismatch - cap does not match workspace
+    /// @aborts EMemberExists - member already exists in workspace
     public fun add_member(
         config: &GlobalConfig,
         workspace: &mut Workspace,
@@ -122,6 +137,15 @@ module crm_core::workspace {
         });
     }
 
+    /// @notice Removes a member from the workspace and destroys their MemberRecord
+    /// @param config - global config (pause check)
+    /// @param workspace - workspace to remove member from
+    /// @param cap - workspace admin capability
+    /// @param member_address - address of the member to remove
+    /// @emits MemberRemoved
+    /// @aborts EPaused - system is paused
+    /// @aborts ECapMismatch - cap does not match workspace
+    /// @aborts ENotOwner - cannot remove the workspace owner
     public fun remove_member(
         config: &GlobalConfig,
         workspace: &mut Workspace,
@@ -148,6 +172,9 @@ module crm_core::workspace {
         object::delete(id);
     }
 
+    /// @notice Returns a reference to the Role of a workspace member
+    /// @param workspace - workspace to query
+    /// @param member_address - address of the member
     public fun get_member_role(
         workspace: &Workspace,
         member_address: address,
@@ -159,13 +186,18 @@ module crm_core::workspace {
         &member.role
     }
 
+    /// @notice Checks whether an address is a member of the workspace
     public fun is_member(workspace: &Workspace, addr: address): bool {
         dynamic_object_field::exists_<address>(&workspace.id, addr)
     }
 
     // Accessors
+    /// @notice Returns the workspace object ID
     public fun id(w: &Workspace): ID { object::id(w) }
+    /// @notice Returns the workspace owner address
     public fun owner(w: &Workspace): address { w.owner }
+    /// @notice Returns the workspace name
     public fun name(w: &Workspace): &String { &w.name }
+    /// @notice Returns the current member count
     public fun member_count(w: &Workspace): u64 { w.member_count }
 }

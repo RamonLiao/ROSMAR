@@ -52,6 +52,17 @@ module crm_core::relation {
 
     // ===== Public functions =====
 
+    /// @notice Creates a new Relation linking a profile to an organization
+    /// @param config - global config (pause check)
+    /// @param workspace - target workspace
+    /// @param cap - workspace admin capability
+    /// @param profile_id - ID of the related profile
+    /// @param organization_id - ID of the related organization
+    /// @param relation_type - type constant (MEMBER_OF, PARTNER, INVESTOR, ADVISOR)
+    /// @param title - optional title/role description
+    /// @emits AuditEventV1
+    /// @aborts EPaused - system is paused
+    /// @aborts ECapMismatch - cap does not match workspace
     public fun create(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -92,6 +103,19 @@ module crm_core::relation {
         relation
     }
 
+    /// @notice Updates the relation type and title with optimistic-lock check
+    /// @param config - global config (pause check)
+    /// @param workspace - workspace the relation belongs to
+    /// @param cap - workspace admin capability
+    /// @param relation - relation to update
+    /// @param expected_version - optimistic concurrency version
+    /// @param relation_type - new relation type constant
+    /// @param title - new optional title
+    /// @emits AuditEventV1
+    /// @aborts EPaused - system is paused
+    /// @aborts ECapMismatch - cap does not match workspace
+    /// @aborts EWorkspaceMismatch - relation does not belong to workspace
+    /// @aborts EVersionConflict - version mismatch
     public fun update_type(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -123,6 +147,18 @@ module crm_core::relation {
         });
     }
 
+    /// @notice Soft-deletes a relation via optimistic-lock archive
+    /// @param config - global config (pause check)
+    /// @param workspace - workspace the relation belongs to
+    /// @param cap - workspace admin capability
+    /// @param relation - relation to archive
+    /// @param expected_version - optimistic concurrency version
+    /// @emits AuditEventV1
+    /// @aborts EPaused - system is paused
+    /// @aborts ECapMismatch - cap does not match workspace
+    /// @aborts EWorkspaceMismatch - relation does not belong to workspace
+    /// @aborts EVersionConflict - version mismatch
+    /// @aborts EAlreadyArchived - relation is already archived
     public fun archive(
         config: &GlobalConfig,
         workspace: &Workspace,
@@ -153,16 +189,26 @@ module crm_core::relation {
     }
 
     // Accessors
+    /// @notice Returns the workspace ID this relation belongs to
     public fun workspace_id(r: &Relation): ID { r.workspace_id }
+    /// @notice Returns the profile ID in this relation
     public fun profile_id(r: &Relation): ID { r.profile_id }
+    /// @notice Returns the organization ID in this relation
     public fun organization_id(r: &Relation): ID { r.organization_id }
+    /// @notice Returns the relation type constant
     public fun relation_type(r: &Relation): u8 { r.relation_type }
+    /// @notice Returns the current optimistic-lock version
     public fun version(r: &Relation): u64 { r.version }
+    /// @notice Returns whether the relation is archived
     public fun is_archived(r: &Relation): bool { r.is_archived }
 
     // Relation type constants accessors
+    /// @notice Returns the MEMBER_OF relation type constant (0)
     public fun type_member_of(): u8 { RELATION_MEMBER_OF }
+    /// @notice Returns the PARTNER relation type constant (1)
     public fun type_partner(): u8 { RELATION_PARTNER }
+    /// @notice Returns the INVESTOR relation type constant (2)
     public fun type_investor(): u8 { RELATION_INVESTOR }
+    /// @notice Returns the ADVISOR relation type constant (3)
     public fun type_advisor(): u8 { RELATION_ADVISOR }
 }
