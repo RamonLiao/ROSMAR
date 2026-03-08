@@ -384,12 +384,34 @@ module crm_core::crm_core_tests {
         let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
         let mut profile = profile::create(&config, &workspace, &admin_cap, USER1, option::none(), vector[], ctx);
 
-        profile::add_wallet(&mut profile, USER2, string::utf8(b"ETH"), ctx);
+        profile::add_wallet(&config, &workspace, &admin_cap, &mut profile, USER2, string::utf8(b"ETH"), ctx);
         assert!(profile::version(&profile) == 1);
 
         test_utils::destroy(config);
         test_utils::destroy(workspace);
         test_utils::destroy(admin_cap);
+        test_utils::destroy(profile);
+        ts::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = capabilities::ECapMismatch)]
+    fun test_add_wallet_wrong_cap_fails() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"WS1"), ctx);
+        let (workspace2, admin_cap2) = workspace::create(&config, string::utf8(b"WS2"), ctx);
+        let mut profile = profile::create(&config, &workspace, &admin_cap, USER1, option::none(), vector[], ctx);
+
+        // Should abort — cap2 belongs to workspace2, not workspace
+        profile::add_wallet(&config, &workspace, &admin_cap2, &mut profile, USER2, string::utf8(b"sui"), ctx);
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(workspace2);
+        test_utils::destroy(admin_cap);
+        test_utils::destroy(admin_cap2);
         test_utils::destroy(profile);
         ts::end(scenario);
     }
@@ -591,11 +613,11 @@ module crm_core::crm_core_tests {
         let profile_id = object::id_from_address(@0x111);
         let mut d = deal::create_deal(&config, &workspace, &admin_cap, profile_id, string::utf8(b"Old Title"), 1_000_000, deal::stage_lead(), ctx);
 
-        deal::update_deal(&config, &workspace, &admin_cap, &mut d, 0, string::utf8(b"New Title"), 2_000_000, deal::stage_proposal(), ctx);
+        deal::update_deal(&config, &workspace, &admin_cap, &mut d, 0, string::utf8(b"New Title"), 2_000_000, deal::stage_qualified(), ctx);
 
         assert!(deal::deal_version(&d) == 1);
         assert!(deal::deal_amount_usd(&d) == 2_000_000);
-        assert!(deal::deal_stage(&d) == deal::stage_proposal());
+        assert!(deal::deal_stage(&d) == deal::stage_qualified());
 
         test_utils::destroy(config);
         test_utils::destroy(workspace);
@@ -677,6 +699,133 @@ module crm_core::crm_core_tests {
 
         deal::archive_deal(&config, &workspace, &admin_cap, &mut d, 0, ctx);
         deal::archive_deal(&config, &workspace, &admin_cap, &mut d, 1, ctx);
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(admin_cap);
+        test_utils::destroy(d);
+        ts::end(scenario);
+    }
+
+    // ========== Deal Stage Transition Tests (M2) ==========
+
+    #[test]
+    fun test_deal_valid_stage_transition() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+
+        let profile_id = object::id_from_address(@0x111);
+        let mut d = deal::create_deal(&config, &workspace, &admin_cap, profile_id, string::utf8(b"Deal"), 1_000_000, deal::stage_lead(), ctx);
+
+        // LEAD → QUALIFIED (forward +1, valid)
+        deal::update_deal(&config, &workspace, &admin_cap, &mut d, 0, string::utf8(b"Deal"), 1_000_000, deal::stage_qualified(), ctx);
+        assert!(deal::deal_stage(&d) == deal::stage_qualified());
+
+        // QUALIFIED → PROPOSAL (forward +1, valid)
+        deal::update_deal(&config, &workspace, &admin_cap, &mut d, 1, string::utf8(b"Deal"), 1_000_000, deal::stage_proposal(), ctx);
+        assert!(deal::deal_stage(&d) == deal::stage_proposal());
+
+        // PROPOSAL → NEGOTIATION (forward +1, valid)
+        deal::update_deal(&config, &workspace, &admin_cap, &mut d, 2, string::utf8(b"Deal"), 1_000_000, deal::stage_negotiation(), ctx);
+        assert!(deal::deal_stage(&d) == deal::stage_negotiation());
+
+        // NEGOTIATION → WON (forward +1, valid)
+        deal::update_deal(&config, &workspace, &admin_cap, &mut d, 3, string::utf8(b"Deal"), 1_000_000, deal::stage_won(), ctx);
+        assert!(deal::deal_stage(&d) == deal::stage_won());
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(admin_cap);
+        test_utils::destroy(d);
+        ts::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = deal::EInvalidStageTransition)]
+    fun test_deal_invalid_stage_skip() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+
+        let profile_id = object::id_from_address(@0x111);
+        let mut d = deal::create_deal(&config, &workspace, &admin_cap, profile_id, string::utf8(b"Deal"), 1_000_000, deal::stage_lead(), ctx);
+
+        // LEAD → WON: skip stages, should abort
+        deal::update_deal(&config, &workspace, &admin_cap, &mut d, 0, string::utf8(b"Deal"), 1_000_000, deal::stage_won(), ctx);
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(admin_cap);
+        test_utils::destroy(d);
+        ts::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = deal::EInvalidStageTransition)]
+    fun test_deal_terminal_stage_no_transition() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+
+        let profile_id = object::id_from_address(@0x111);
+        let mut d = deal::create_deal(&config, &workspace, &admin_cap, profile_id, string::utf8(b"Deal"), 1_000_000, deal::stage_lead(), ctx);
+
+        // Walk to WON via full pipeline
+        deal::update_deal(&config, &workspace, &admin_cap, &mut d, 0, string::utf8(b"Deal"), 1_000_000, deal::stage_qualified(), ctx);
+        deal::update_deal(&config, &workspace, &admin_cap, &mut d, 1, string::utf8(b"Deal"), 1_000_000, deal::stage_proposal(), ctx);
+        deal::update_deal(&config, &workspace, &admin_cap, &mut d, 2, string::utf8(b"Deal"), 1_000_000, deal::stage_negotiation(), ctx);
+        deal::update_deal(&config, &workspace, &admin_cap, &mut d, 3, string::utf8(b"Deal"), 1_000_000, deal::stage_won(), ctx);
+
+        // WON → LEAD: terminal, should abort
+        deal::update_deal(&config, &workspace, &admin_cap, &mut d, 4, string::utf8(b"Deal"), 1_000_000, deal::stage_lead(), ctx);
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(admin_cap);
+        test_utils::destroy(d);
+        ts::end(scenario);
+    }
+
+    #[test]
+    fun test_deal_can_lose_from_any_stage() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+
+        let profile_id = object::id_from_address(@0x111);
+        let mut d = deal::create_deal(&config, &workspace, &admin_cap, profile_id, string::utf8(b"Deal"), 1_000_000, deal::stage_lead(), ctx);
+
+        // LEAD → LOST: can abandon from any stage
+        deal::update_deal(&config, &workspace, &admin_cap, &mut d, 0, string::utf8(b"Deal"), 1_000_000, deal::stage_lost(), ctx);
+        assert!(deal::deal_stage(&d) == deal::stage_lost());
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(admin_cap);
+        test_utils::destroy(d);
+        ts::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = deal::EInvalidStageTransition)]
+    fun test_deal_backward_transition_fails() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+
+        let profile_id = object::id_from_address(@0x111);
+        let mut d = deal::create_deal(&config, &workspace, &admin_cap, profile_id, string::utf8(b"Deal"), 1_000_000, deal::stage_lead(), ctx);
+
+        // LEAD → QUALIFIED
+        deal::update_deal(&config, &workspace, &admin_cap, &mut d, 0, string::utf8(b"Deal"), 1_000_000, deal::stage_qualified(), ctx);
+        // QUALIFIED → LEAD: backward, should abort
+        deal::update_deal(&config, &workspace, &admin_cap, &mut d, 1, string::utf8(b"Deal"), 1_000_000, deal::stage_lead(), ctx);
 
         test_utils::destroy(config);
         test_utils::destroy(workspace);

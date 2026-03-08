@@ -144,11 +144,18 @@ module crm_core::profile {
     }
 
     public fun add_wallet(
+        config: &GlobalConfig,
+        workspace: &Workspace,
+        cap: &WorkspaceAdminCap,
         profile: &mut Profile,
         wallet_address: address,
         chain: String,
         ctx: &mut TxContext,
     ) {
+        capabilities::assert_not_paused(config);
+        capabilities::assert_cap_matches(cap, workspace::id(workspace));
+        assert!(profile.workspace_id == workspace::id(workspace), EWorkspaceMismatch);
+
         let binding = WalletBinding {
             id: object::new(ctx),
             profile_id: object::id(profile),
