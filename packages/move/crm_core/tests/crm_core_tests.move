@@ -308,7 +308,7 @@ module crm_core::crm_core_tests {
         let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
         let mut profile = profile::create(&config, &workspace, &admin_cap, USER1, option::none(), vector[], ctx);
 
-        profile::update_tier_and_score(&mut profile, 3, 500, ctx);
+        profile::update_tier_and_score(&config, &workspace, &admin_cap, &mut profile, 3, 500, ctx);
 
         assert!(profile::tier(&profile) == 3);
         assert!(profile::engagement_score(&profile) == 500);

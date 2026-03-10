@@ -37,6 +37,8 @@ module crm_escrow::escrow {
     const EArbitratorIsPayee: u64 = 1512;
     const EMinLockDuration: u64 = 1513;
     const ENotInClaimWindow: u64 = 1515;
+    const EZeroAmount: u64 = 1516;
+    const EDuplicateArbitrator: u64 = 1517;
     const ECommitmentExists: u64 = 1520;
     const ENoCommitment: u64 = 1521;
     const ERevealMismatch: u64 = 1522;
@@ -302,11 +304,17 @@ module crm_escrow::escrow {
             assert!(arbiter_threshold >= 1 && arbiter_threshold <= arb_len, EInvalidThreshold);
         };
 
-        // Validate arbitrators not payer/payee
+        // Validate arbitrators not payer/payee and no duplicates
         let mut i = 0;
         while (i < arb_len) {
             assert!(arbitrators[i] != sender, EArbitratorIsPayer);
             assert!(arbitrators[i] != payee, EArbitratorIsPayee);
+            // Check no duplicate arbitrators
+            let mut j = 0;
+            while (j < i) {
+                assert!(arbitrators[j] != arbitrators[i], EDuplicateArbitrator);
+                j = j + 1;
+            };
             i = i + 1;
         };
 
@@ -411,6 +419,7 @@ module crm_escrow::escrow {
         assert_state_one_of(escrow, STATE_FUNDED, STATE_PARTIALLY_RELEASED);
         assert_is_payer(escrow, ctx);
 
+        assert!(amount > 0, EZeroAmount);
         let now = clock.timestamp_ms();
         assert!(now - escrow.funded_at >= MIN_LOCK_DURATION_MS, EMinLockDuration);
         assert!(amount <= balance::value(&escrow.balance), EOverRelease);

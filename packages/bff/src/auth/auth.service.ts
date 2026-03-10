@@ -31,12 +31,10 @@ export interface AuthResponse {
 export class AuthService {
   private readonly refreshExpiresIn: string;
   private readonly suiClient: SuiJsonRpcClient;
-  /** In-memory WebAuthn challenge store: challenge → { expiry, address? } */
-  private readonly webauthnChallenges = new Map<string, { expiry: number; address?: string }>();
   private readonly rpId: string;
   private readonly rpName: string;
   private readonly rpOrigin: string;
-  private static readonly CHALLENGE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+  private static readonly WEBAUTHN_TTL = 300; // 5 minutes in seconds
 
   constructor(
     private readonly jwtService: JwtService,
@@ -168,22 +166,25 @@ export class AuthService {
       },
     });
 
-    this.webauthnChallenges.set(options.challenge, {
-      expiry: Date.now() + AuthService.CHALLENGE_TTL_MS,
-      address,
-    });
+    await this.cacheService.set(
+      `webauthn:${options.challenge}`,
+      JSON.stringify({ address }),
+      AuthService.WEBAUTHN_TTL,
+    );
 
     return options;
   }
 
   async verifyPasskeyRegistration(address: string, response: any) {
-    const stored = this.webauthnChallenges.get(response.challenge ?? '');
-    // Try to find the challenge from the response's clientDataJSON
+    // Find the challenge associated with this address
+    const stored = response.challenge
+      ? await this.cacheService.get<string>(`webauthn:${response.challenge}`)
+      : null;
     let expectedChallenge: string | undefined;
-    for (const [challenge, data] of this.webauthnChallenges.entries()) {
-      if (data.address === address && data.expiry > Date.now()) {
-        expectedChallenge = challenge;
-        break;
+    if (stored) {
+      const data = JSON.parse(stored);
+      if (data.address === address) {
+        expectedChallenge = response.challenge;
       }
     }
 
@@ -198,7 +199,7 @@ export class AuthService {
       expectedRPID: this.rpId,
     });
 
-    this.webauthnChallenges.delete(expectedChallenge);
+    await this.cacheService.evict(`webauthn:${expectedChallenge}`);
 
     if (!verification.verified || !verification.registrationInfo) {
       throw new UnauthorizedException('Passkey registration verification failed');
@@ -225,9 +226,11 @@ export class AuthService {
       userVerification: 'preferred',
     });
 
-    this.webauthnChallenges.set(options.challenge, {
-      expiry: Date.now() + AuthService.CHALLENGE_TTL_MS,
-    });
+    await this.cacheService.set(
+      `webauthn:${options.challenge}`,
+      JSON.stringify({ type: 'auth' }),
+      AuthService.WEBAUTHN_TTL,
+    );
 
     return options;
   }
@@ -242,16 +245,17 @@ export class AuthService {
       throw new UnauthorizedException('Unknown passkey credential');
     }
 
-    // Find the matching challenge
-    let expectedChallenge: string | undefined;
-    for (const [challenge, data] of this.webauthnChallenges.entries()) {
-      if (data.expiry > Date.now() && !data.address) {
-        expectedChallenge = challenge;
-        break;
-      }
-    }
+    // Extract challenge from response clientDataJSON
+    const expectedChallenge = response.response?.clientDataJSON
+      ? JSON.parse(Buffer.from(response.response.clientDataJSON, 'base64url').toString()).challenge
+      : undefined;
 
     if (!expectedChallenge) {
+      throw new UnauthorizedException('Missing WebAuthn challenge in response');
+    }
+
+    const stored = await this.cacheService.get<string>(`webauthn:${expectedChallenge}`);
+    if (!stored) {
       throw new UnauthorizedException('Invalid or expired WebAuthn challenge');
     }
 
@@ -268,7 +272,7 @@ export class AuthService {
       },
     });
 
-    this.webauthnChallenges.delete(expectedChallenge);
+    await this.cacheService.evict(`webauthn:${expectedChallenge}`);
 
     if (!verification.verified) {
       throw new UnauthorizedException('Passkey authentication failed');
