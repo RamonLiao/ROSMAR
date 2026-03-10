@@ -1,10 +1,14 @@
-import { Controller, Post, Res, Body } from '@nestjs/common';
+import { Controller, Post, Res, Body, ForbiddenException } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthService } from './auth.service';
 
 @Controller('auth')
 export class TestAuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('TestAuthController must not be loaded in production');
+    }
+  }
 
   @Post('test-login')
   async testLogin(

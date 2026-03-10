@@ -11,6 +11,10 @@ module crm_action::reward {
     const EWorkspaceMismatch: u64 = 1400;
     const ECampaignNotActive: u64 = 1401;
     const EInsufficientFunds: u64 = 1402;
+    const EBatchTooLarge: u64 = 1403;
+
+    // Limits
+    const MAX_BATCH_SIZE: u64 = 500;
 
     // AuditEvent constants
     const ACTION_CREATE: u8 = 0;
@@ -154,6 +158,8 @@ module crm_action::reward {
         assert!(campaign::status(campaign_obj) == campaign::status_active(), ECampaignNotActive);
 
         let count = recipients.length();
+        assert!(count > 0, EWorkspaceMismatch);
+        assert!(count <= MAX_BATCH_SIZE, EBatchTooLarge);
         let total_needed = amount_per_recipient * count;
         assert!(coin::value(&fund) >= total_needed, EInsufficientFunds);
 

@@ -8,6 +8,10 @@ module crm_action::airdrop {
     // Errors
     const EEmptyRecipients: u64 = 1300;
     const EInsufficientFunds: u64 = 1301;
+    const EBatchTooLarge: u64 = 1302;
+
+    // Limits
+    const MAX_BATCH_SIZE: u64 = 500;
 
     // AuditEvent constants
     const ACTION_CREATE: u8 = 0;
@@ -59,6 +63,7 @@ module crm_action::airdrop {
 
         let recipient_count = recipients.length();
         assert!(recipient_count > 0, EEmptyRecipients);
+        assert!(recipient_count <= MAX_BATCH_SIZE, EBatchTooLarge);
 
         let total_needed = amount_per_recipient * recipient_count;
         assert!(coin::value(&fund) >= total_needed, EInsufficientFunds);
@@ -118,6 +123,7 @@ module crm_action::airdrop {
 
         let recipient_count = recipients.length();
         assert!(recipient_count > 0, EEmptyRecipients);
+        assert!(recipient_count <= MAX_BATCH_SIZE, EBatchTooLarge);
         assert!(recipient_count == amounts.length(), EEmptyRecipients);
 
         let mut total = 0u64;
