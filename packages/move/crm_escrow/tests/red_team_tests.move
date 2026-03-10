@@ -21,8 +21,8 @@ module crm_escrow::red_team_tests {
     fun setup_funded_escrow(
         clock: &clock::Clock,
         ctx: &mut TxContext,
-    ): escrow::Escrow {
-        let mut e = escrow::test_create_escrow(
+    ): escrow::Escrow<SUI> {
+        let mut e = escrow::test_create_escrow<SUI>(
             PAYER, PAYEE,
             vector[ARB1, ARB2, ARB3],
             2,
@@ -131,7 +131,7 @@ module crm_escrow::red_team_tests {
         clock::set_for_testing(&mut clock, 1000);
 
         let expiry = 100_000_000u64;
-        let mut e = escrow::test_create_escrow(
+        let mut e = escrow::test_create_escrow<SUI>(
             PAYER, PAYEE, vector[], 0,
             option::some(expiry),
             ctx,
@@ -223,7 +223,7 @@ module crm_escrow::red_team_tests {
         clock::set_for_testing(&mut clock, 1000);
 
         let expiry = 200_000_000u64; // ~55 hours from now
-        let mut e = escrow::test_create_escrow(
+        let mut e = escrow::test_create_escrow<SUI>(
             PAYER, PAYEE, vector[], 0,
             option::some(expiry),
             ctx,

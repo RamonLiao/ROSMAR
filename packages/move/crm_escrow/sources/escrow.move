@@ -1,7 +1,7 @@
 module crm_escrow::escrow {
     use std::string::String;
+    use std::type_name;
     use sui::coin::{Self, Coin};
-    use sui::sui::SUI;
     use sui::balance::{Self, Balance};
     use sui::clock::Clock;
     use sui::event;
@@ -59,13 +59,13 @@ module crm_escrow::escrow {
 
     // ===== Structs =====
 
-    public struct Escrow has key {
+    public struct Escrow<phantom T> has key {
         id: UID,
         workspace_id: ID,
         deal_id: ID,
         payer: address,
         payee: address,
-        balance: Balance<SUI>,
+        balance: Balance<T>,
         released_amount: u64,
         refunded_amount: u64,
         state: u8,
@@ -119,6 +119,7 @@ module crm_escrow::escrow {
         workspace_id: ID,
         escrow_id: ID,
         actor: address,
+        coin_type: String,
         timestamp: u64,
     }
 
@@ -126,6 +127,7 @@ module crm_escrow::escrow {
         workspace_id: ID,
         escrow_id: ID,
         actor: address,
+        coin_type: String,
         amount: u64,
         timestamp: u64,
     }
@@ -134,6 +136,7 @@ module crm_escrow::escrow {
         workspace_id: ID,
         escrow_id: ID,
         actor: address,
+        coin_type: String,
         amount: u64,
         timestamp: u64,
     }
@@ -142,6 +145,7 @@ module crm_escrow::escrow {
         workspace_id: ID,
         escrow_id: ID,
         actor: address,
+        coin_type: String,
         amount: u64,
         timestamp: u64,
     }
@@ -150,6 +154,7 @@ module crm_escrow::escrow {
         workspace_id: ID,
         escrow_id: ID,
         actor: address,
+        coin_type: String,
         milestone_index: u64,
         timestamp: u64,
     }
@@ -158,6 +163,7 @@ module crm_escrow::escrow {
         workspace_id: ID,
         escrow_id: ID,
         actor: address,
+        coin_type: String,
         timestamp: u64,
     }
 
@@ -165,6 +171,7 @@ module crm_escrow::escrow {
         workspace_id: ID,
         escrow_id: ID,
         actor: address,
+        coin_type: String,
         vote: u8,
         timestamp: u64,
     }
@@ -173,25 +180,32 @@ module crm_escrow::escrow {
         workspace_id: ID,
         escrow_id: ID,
         actor: address,
+        coin_type: String,
         resolution: u8,
         timestamp: u64,
     }
 
     // ===== Internal helpers =====
 
-    fun assert_state(escrow: &Escrow, expected: u8) {
+    /// Returns the fully-qualified coin type name as a String (e.g. "0x2::sui::SUI").
+    /// Uses `with_defining_ids` so the string remains stable across package upgrades.
+    fun coin_type_string<T>(): String {
+        type_name::with_defining_ids<T>().into_string().to_string()
+    }
+
+    fun assert_state<T>(escrow: &Escrow<T>, expected: u8) {
         assert!(escrow.state == expected, EInvalidStateTransition);
     }
 
-    fun assert_state_one_of(escrow: &Escrow, s1: u8, s2: u8) {
+    fun assert_state_one_of<T>(escrow: &Escrow<T>, s1: u8, s2: u8) {
         assert!(escrow.state == s1 || escrow.state == s2, EInvalidStateTransition);
     }
 
-    fun assert_is_payer(escrow: &Escrow, ctx: &TxContext) {
+    fun assert_is_payer<T>(escrow: &Escrow<T>, ctx: &TxContext) {
         assert!(ctx.sender() == escrow.payer, ENotPayer);
     }
 
-    fun assert_is_payer_or_payee(escrow: &Escrow, ctx: &TxContext) {
+    fun assert_is_payer_or_payee<T>(escrow: &Escrow<T>, ctx: &TxContext) {
         assert!(ctx.sender() == escrow.payer || ctx.sender() == escrow.payee, ENotPayer);
     }
 
@@ -263,7 +277,7 @@ module crm_escrow::escrow {
 
     // ===== Entry functions =====
 
-    /// @notice Creates a new escrow as a shared object, linking a deal to payer/payee
+    /// @notice Creates a new generic escrow as a shared object, linking a deal to payer/payee
     /// @param config - global config (pause check)
     /// @param workspace - target workspace
     /// @param cap - workspace admin capability
@@ -273,7 +287,7 @@ module crm_escrow::escrow {
     /// @param arbiter_threshold - number of arbitrator votes required for dispute resolution
     /// @param expiry_ms - optional expiry timestamp in ms (must be >= now + 1 hour)
     /// @param clock - Sui Clock object
-    /// @emits EscrowCreated
+    /// @emits EscrowCreated (with coin_type)
     /// @emits AuditEventV1
     /// @aborts EPaused - system is paused
     /// @aborts ECapMismatch - cap does not match workspace
@@ -281,7 +295,7 @@ module crm_escrow::escrow {
     /// @aborts EArbitratorIsPayer - an arbitrator address equals the payer
     /// @aborts EArbitratorIsPayee - an arbitrator address equals the payee
     /// @aborts EMinLockDuration - expiry < now + MIN_LOCK_DURATION_MS
-    public fun create_escrow(
+    public fun create_escrow<T>(
         config: &GlobalConfig,
         workspace: &Workspace,
         cap: &WorkspaceAdminCap,
@@ -326,13 +340,13 @@ module crm_escrow::escrow {
             assert!(exp >= now + MIN_LOCK_DURATION_MS, EMinLockDuration);
         };
 
-        let escrow = Escrow {
+        let escrow = Escrow<T> {
             id: object::new(ctx),
             workspace_id: workspace::id(workspace),
             deal_id,
             payer: sender,
             payee,
-            balance: balance::zero(),
+            balance: balance::zero<T>(),
             released_amount: 0,
             refunded_amount: 0,
             state: STATE_CREATED,
@@ -352,6 +366,7 @@ module crm_escrow::escrow {
             workspace_id: ws_id,
             escrow_id,
             actor: sender,
+            coin_type: coin_type_string<T>(),
             timestamp: now,
         });
 
@@ -368,34 +383,35 @@ module crm_escrow::escrow {
         transfer::share_object(escrow);
     }
 
-    /// @notice Funds a CREATED escrow with SUI coins, transitioning it to FUNDED
-    /// @param escrow - escrow to fund
-    /// @param coin - SUI coin to deposit
+    /// @notice Funds a CREATED escrow with Coin<T>, transitioning it to FUNDED
+    /// @param escrow - escrow to fund (must match coin type T)
+    /// @param coin - coin of type T to deposit
     /// @param clock - Sui Clock object
-    /// @emits EscrowFunded
+    /// @emits EscrowFunded (with coin_type)
     /// @aborts EInvalidStateTransition - escrow is not in CREATED state
     /// @aborts ENotPayer - caller is not the payer
-    /// @aborts EOverRelease - coin value is zero
-    public fun fund_escrow(
-        escrow: &mut Escrow,
-        coin: Coin<SUI>,
+    /// @aborts EZeroAmount - coin value is zero
+    public fun fund_escrow<T>(
+        escrow: &mut Escrow<T>,
+        coin: Coin<T>,
         clock: &Clock,
         ctx: &TxContext,
     ) {
         assert_state(escrow, STATE_CREATED);
         assert_is_payer(escrow, ctx);
-        assert!(coin::value(&coin) > 0, EOverRelease);
+        assert!(coin::value(&coin) > 0, EZeroAmount);
 
         let amount = coin::value(&coin);
+        let now = clock.timestamp_ms();
         balance::join(&mut escrow.balance, coin::into_balance(coin));
         escrow.state = STATE_FUNDED;
-        escrow.funded_at = clock.timestamp_ms();
+        escrow.funded_at = now;
 
-        let now = clock.timestamp_ms();
         event::emit(EscrowFunded {
             workspace_id: escrow.workspace_id,
             escrow_id: object::id(escrow),
             actor: ctx.sender(),
+            coin_type: coin_type_string<T>(),
             amount,
             timestamp: now,
         });
@@ -403,15 +419,15 @@ module crm_escrow::escrow {
 
     /// @notice Releases funds from escrow to the payee (payer-initiated)
     /// @param escrow - escrow to release from
-    /// @param amount - amount of SUI to release
+    /// @param amount - amount to release
     /// @param clock - Sui Clock object
-    /// @emits EscrowReleased
+    /// @emits EscrowReleased (with coin_type)
     /// @aborts EInvalidStateTransition - escrow not FUNDED or PARTIALLY_RELEASED
     /// @aborts ENotPayer - caller is not the payer
     /// @aborts EMinLockDuration - less than 1 hour since funding
     /// @aborts EOverRelease - amount exceeds remaining balance
-    public fun release(
-        escrow: &mut Escrow,
+    public fun release<T>(
+        escrow: &mut Escrow<T>,
         amount: u64,
         clock: &Clock,
         ctx: &mut TxContext,
@@ -439,6 +455,7 @@ module crm_escrow::escrow {
             workspace_id: escrow.workspace_id,
             escrow_id: object::id(escrow),
             actor: ctx.sender(),
+            coin_type: coin_type_string<T>(),
             amount,
             timestamp: now,
         });
@@ -447,14 +464,14 @@ module crm_escrow::escrow {
     /// @notice Allows payee to claim remaining balance within 24h window before expiry
     /// @param escrow - escrow to claim from
     /// @param clock - Sui Clock object
-    /// @emits EscrowReleased
+    /// @emits EscrowReleased (with coin_type)
     /// @aborts EInvalidStateTransition - escrow not FUNDED or PARTIALLY_RELEASED
     /// @aborts ENotPayee - caller is not the payee
     /// @aborts ENotExpired - escrow has no expiry set
     /// @aborts ENotInClaimWindow - current time outside [expiry - 24h, expiry)
     /// @aborts EOverRelease - no remaining balance
-    public fun claim_before_expiry(
-        escrow: &mut Escrow,
+    public fun claim_before_expiry<T>(
+        escrow: &mut Escrow<T>,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
@@ -485,6 +502,7 @@ module crm_escrow::escrow {
             workspace_id: escrow.workspace_id,
             escrow_id: object::id(escrow),
             actor: ctx.sender(),
+            coin_type: coin_type_string<T>(),
             amount: remaining,
             timestamp: now,
         });
@@ -493,11 +511,11 @@ module crm_escrow::escrow {
     /// @notice Refunds remaining balance to the payer (unfunded, expired, or no-expiry funded)
     /// @param escrow - escrow to refund from
     /// @param clock - Sui Clock object
-    /// @emits EscrowRefunded
+    /// @emits EscrowRefunded (with coin_type)
     /// @aborts ENotPayer - caller is not the payer
     /// @aborts EInvalidStateTransition - not eligible for refund
-    public fun refund(
-        escrow: &mut Escrow,
+    public fun refund<T>(
+        escrow: &mut Escrow<T>,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
@@ -529,6 +547,7 @@ module crm_escrow::escrow {
             workspace_id: escrow.workspace_id,
             escrow_id: object::id(escrow),
             actor: ctx.sender(),
+            coin_type: coin_type_string<T>(),
             amount: remaining,
             timestamp: now,
         });
@@ -547,8 +566,8 @@ module crm_escrow::escrow {
     /// @aborts ENotPayer - caller is not the payer
     /// @aborts EVestingAlreadySet - vesting schedule already attached
     /// @aborts EMilestonePercentageMismatch - milestone percentages do not sum to 10000 bp
-    public fun add_vesting(
-        escrow: &mut Escrow,
+    public fun add_vesting<T>(
+        escrow: &mut Escrow<T>,
         vesting_type: u8,
         cliff_ms: u64,
         total_duration_ms: u64,
@@ -579,12 +598,12 @@ module crm_escrow::escrow {
     /// @notice Releases the currently vested amount to the payee based on the vesting schedule
     /// @param escrow - escrow with vesting to release from
     /// @param clock - Sui Clock object
-    /// @emits EscrowReleased
+    /// @emits EscrowReleased (with coin_type)
     /// @aborts EInvalidStateTransition - escrow not FUNDED/PARTIALLY_RELEASED or no vesting
     /// @aborts ENotPayer - caller is not the payer
     /// @aborts EOverRelease - no new amount vested to release
-    public fun release_vested(
-        escrow: &mut Escrow,
+    public fun release_vested<T>(
+        escrow: &mut Escrow<T>,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
@@ -637,6 +656,7 @@ module crm_escrow::escrow {
             workspace_id: escrow.workspace_id,
             escrow_id: object::id(escrow),
             actor: ctx.sender(),
+            coin_type: coin_type_string<T>(),
             amount: to_release,
             timestamp: now,
         });
@@ -646,11 +666,11 @@ module crm_escrow::escrow {
     /// @param escrow - escrow with milestone vesting
     /// @param milestone_index - index of the milestone to complete
     /// @param clock - Sui Clock object
-    /// @emits MilestoneCompleted
+    /// @emits MilestoneCompleted (with coin_type)
     /// @aborts EInvalidStateTransition - escrow not FUNDED/PARTIALLY_RELEASED or no vesting
     /// @aborts ENotPayer - caller is not the payer
-    public fun complete_milestone(
-        escrow: &mut Escrow,
+    public fun complete_milestone<T>(
+        escrow: &mut Escrow<T>,
         milestone_index: u64,
         clock: &Clock,
         ctx: &TxContext,
@@ -669,6 +689,7 @@ module crm_escrow::escrow {
             workspace_id: escrow.workspace_id,
             escrow_id: object::id(escrow),
             actor: ctx.sender(),
+            coin_type: coin_type_string<T>(),
             milestone_index,
             timestamp: now,
         });
@@ -679,11 +700,11 @@ module crm_escrow::escrow {
     /// @notice Raises a dispute on the escrow, transitioning it to DISPUTED state
     /// @param escrow - escrow to dispute
     /// @param clock - Sui Clock object
-    /// @emits DisputeRaised
+    /// @emits DisputeRaised (with coin_type)
     /// @aborts EInvalidStateTransition - escrow not FUNDED or PARTIALLY_RELEASED
     /// @aborts ENotPayer - caller is neither payer nor payee
-    public fun raise_dispute(
-        escrow: &mut Escrow,
+    public fun raise_dispute<T>(
+        escrow: &mut Escrow<T>,
         clock: &Clock,
         ctx: &TxContext,
     ) {
@@ -709,6 +730,7 @@ module crm_escrow::escrow {
             workspace_id: escrow.workspace_id,
             escrow_id: object::id(escrow),
             actor: ctx.sender(),
+            coin_type: coin_type_string<T>(),
             timestamp: now,
         });
     }
@@ -717,13 +739,13 @@ module crm_escrow::escrow {
     /// @param escrow - disputed escrow
     /// @param vote - DECISION_RELEASE (0) or DECISION_REFUND (1)
     /// @param clock - Sui Clock object
-    /// @emits DisputeVoteCast
-    /// @emits DisputeResolved - if threshold reached
+    /// @emits DisputeVoteCast (with coin_type)
+    /// @emits DisputeResolved (with coin_type) - if threshold reached
     /// @aborts EInvalidStateTransition - escrow not in DISPUTED state
     /// @aborts ENotArbitrator - caller is not a registered arbitrator
     /// @aborts EAlreadyVoted - caller has already voted
-    public fun vote_on_dispute(
-        escrow: &mut Escrow,
+    public fun vote_on_dispute<T>(
+        escrow: &mut Escrow<T>,
         vote: u8,
         clock: &Clock,
         ctx: &mut TxContext,
@@ -750,6 +772,7 @@ module crm_escrow::escrow {
         let payee = escrow.payee;
         let payer = escrow.payer;
         let threshold = escrow.arbiter_threshold;
+        let ct = coin_type_string<T>();
 
         let arb_state: &mut ArbitrationState = dynamic_field::borrow_mut(
             &mut escrow.id,
@@ -769,6 +792,7 @@ module crm_escrow::escrow {
             workspace_id: ws_id,
             escrow_id,
             actor: sender,
+            coin_type: ct,
             vote,
             timestamp: now,
         });
@@ -802,6 +826,7 @@ module crm_escrow::escrow {
                 workspace_id: ws_id,
                 escrow_id,
                 actor: sender,
+                coin_type: ct,
                 resolution: decision,
                 timestamp: now,
             });
@@ -817,8 +842,8 @@ module crm_escrow::escrow {
     /// @aborts ENotArbitrator - caller is not a registered arbitrator
     /// @aborts EAlreadyVoted - caller has already voted directly
     /// @aborts ECommitmentExists - caller has already committed
-    public fun commit_vote(
-        escrow: &mut Escrow,
+    public fun commit_vote<T>(
+        escrow: &mut Escrow<T>,
         commitment_hash: vector<u8>,
         reveal_deadline_ms: u64,
         _clock: &Clock,
@@ -861,14 +886,14 @@ module crm_escrow::escrow {
     /// @param vote - DECISION_RELEASE (0) or DECISION_REFUND (1)
     /// @param salt - salt used in the commitment hash
     /// @param clock - Sui Clock object
-    /// @emits DisputeVoteCast
-    /// @emits DisputeResolved - if threshold reached
+    /// @emits DisputeVoteCast (with coin_type)
+    /// @emits DisputeResolved (with coin_type) - if threshold reached
     /// @aborts EInvalidStateTransition - escrow not in DISPUTED state
     /// @aborts ENoCommitment - caller has not committed
     /// @aborts ERevealDeadlinePassed - reveal deadline has passed
     /// @aborts ERevealMismatch - revealed hash does not match commitment
-    public fun reveal_vote(
-        escrow: &mut Escrow,
+    public fun reveal_vote<T>(
+        escrow: &mut Escrow<T>,
         vote: u8,
         salt: vector<u8>,
         clock: &Clock,
@@ -885,6 +910,7 @@ module crm_escrow::escrow {
         let payee = escrow.payee;
         let payer = escrow.payer;
         let threshold = escrow.arbiter_threshold;
+        let ct = coin_type_string<T>();
 
         let arb_state: &mut ArbitrationState = dynamic_field::borrow_mut(
             &mut escrow.id,
@@ -920,6 +946,7 @@ module crm_escrow::escrow {
             workspace_id: ws_id,
             escrow_id,
             actor: sender,
+            coin_type: ct,
             vote,
             timestamp: now,
         });
@@ -952,6 +979,7 @@ module crm_escrow::escrow {
                 workspace_id: ws_id,
                 escrow_id,
                 actor: sender,
+                coin_type: ct,
                 resolution: decision,
                 timestamp: now,
             });
@@ -961,23 +989,23 @@ module crm_escrow::escrow {
     // ===== Accessors =====
 
     /// @notice Returns the current escrow state
-    public fun state(e: &Escrow): u8 { e.state }
+    public fun state<T>(e: &Escrow<T>): u8 { e.state }
     /// @notice Returns the payer address
-    public fun payer(e: &Escrow): address { e.payer }
+    public fun payer<T>(e: &Escrow<T>): address { e.payer }
     /// @notice Returns the payee address
-    public fun payee(e: &Escrow): address { e.payee }
-    /// @notice Returns the current SUI balance held in escrow
-    public fun balance_value(e: &Escrow): u64 { balance::value(&e.balance) }
+    public fun payee<T>(e: &Escrow<T>): address { e.payee }
+    /// @notice Returns the current balance held in escrow
+    public fun balance_value<T>(e: &Escrow<T>): u64 { balance::value(&e.balance) }
     /// @notice Returns the total amount released to the payee
-    public fun released_amount(e: &Escrow): u64 { e.released_amount }
+    public fun released_amount<T>(e: &Escrow<T>): u64 { e.released_amount }
     /// @notice Returns the total amount refunded to the payer
-    public fun refunded_amount(e: &Escrow): u64 { e.refunded_amount }
+    public fun refunded_amount<T>(e: &Escrow<T>): u64 { e.refunded_amount }
     /// @notice Returns the workspace ID this escrow belongs to
-    public fun escrow_workspace_id(e: &Escrow): ID { e.workspace_id }
+    public fun escrow_workspace_id<T>(e: &Escrow<T>): ID { e.workspace_id }
     /// @notice Returns whether a vesting schedule is attached
-    public fun has_vesting(e: &Escrow): bool { e.has_vesting }
+    public fun has_vesting<T>(e: &Escrow<T>): bool { e.has_vesting }
     /// @notice Returns the timestamp when the escrow was funded
-    public fun funded_at(e: &Escrow): u64 { e.funded_at }
+    public fun funded_at<T>(e: &Escrow<T>): u64 { e.funded_at }
 
     /// @notice Returns CREATED state constant (0)
     public fun state_created(): u8 { STATE_CREATED }
@@ -1014,21 +1042,21 @@ module crm_escrow::escrow {
     // ===== Test-only helpers =====
 
     #[test_only]
-    public fun test_create_escrow(
+    public fun test_create_escrow<T>(
         payer: address,
         payee: address,
         arbitrators: vector<address>,
         arbiter_threshold: u64,
         expiry_ms: Option<u64>,
         ctx: &mut TxContext,
-    ): Escrow {
-        Escrow {
+    ): Escrow<T> {
+        Escrow<T> {
             id: object::new(ctx),
             workspace_id: object::id_from_address(@0x999),
             deal_id: object::id_from_address(@0x888),
             payer,
             payee,
-            balance: balance::zero(),
+            balance: balance::zero<T>(),
             released_amount: 0,
             refunded_amount: 0,
             state: STATE_CREATED,
@@ -1043,22 +1071,22 @@ module crm_escrow::escrow {
     }
 
     #[test_only]
-    public fun test_set_state(escrow: &mut Escrow, s: u8) {
+    public fun test_set_state<T>(escrow: &mut Escrow<T>, s: u8) {
         escrow.state = s;
     }
 
     #[test_only]
-    public fun test_set_funded_at(escrow: &mut Escrow, t: u64) {
+    public fun test_set_funded_at<T>(escrow: &mut Escrow<T>, t: u64) {
         escrow.funded_at = t;
     }
 
     #[test_only]
-    public fun test_fund_balance(escrow: &mut Escrow, coin: Coin<SUI>) {
+    public fun test_fund_balance<T>(escrow: &mut Escrow<T>, coin: Coin<T>) {
         balance::join(&mut escrow.balance, coin::into_balance(coin));
     }
 
     #[test_only]
-    public fun test_destroy_escrow(escrow: Escrow) {
+    public fun test_destroy_escrow<T>(escrow: Escrow<T>) {
         let Escrow {
             id,
             workspace_id: _,
