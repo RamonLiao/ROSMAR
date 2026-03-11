@@ -1,9 +1,7 @@
 import { ProfileFeatureVector } from '../feature-extraction.service';
+import { ScoredProfile, SimilarityStrategy } from '../interfaces';
 
-export interface ScoredProfile {
-  profileId: string;
-  similarity: number;
-}
+export type { ScoredProfile };
 
 export function cosineSimilarity(a: number[], b: number[]): number {
   let dot = 0;
@@ -18,7 +16,9 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return denom === 0 ? 0 : dot / denom;
 }
 
-export class KnnCosineStrategy {
+export class KnnCosineStrategy implements SimilarityStrategy {
+  readonly name = 'knn-cosine';
+
   computeCentroid(seeds: ProfileFeatureVector[]): number[] {
     if (seeds.length === 0) return [];
     const dims = seeds[0].vector.length;

@@ -225,27 +225,37 @@ module crm_vault::policy {
 
     // ===== Seal Key-Server Verification =====
 
-    /// @notice Verify that the caller is allowed to decrypt content under this policy
+    /// @notice Verify that the caller is allowed to decrypt content under this policy.
+    ///         Called by Seal key servers via dry-run transaction.
     /// @param id - Raw identity bytes (policy object address) used during encryption
     /// @param policy - Access policy to check against
+    /// @param workspace - Workspace the policy belongs to (on-chain membership source)
+    /// @aborts EWorkspaceMismatch - if policy does not belong to the given workspace
+    /// @aborts ESealNoAccess - if sender is not a workspace member (RULE_WORKSPACE_MEMBER)
     /// @aborts ESealNoAccess - if sender is not in allowed_addresses (RULE_SPECIFIC_ADDRESS)
+    /// @aborts ESealNoAccess - if sender lacks min_role_level (RULE_ROLE_BASED)
     /// @aborts ESealNoAccess - if rule_type is unknown
     /// @aborts ESealInvalidIdentity - if id does not match policy object address
     entry fun seal_approve(
         id: vector<u8>,
         policy: &AccessPolicy,
+        workspace: &Workspace,
         ctx: &TxContext,
     ) {
+        // Verify policy belongs to this workspace (prevents cross-workspace attack)
+        assert!(policy.workspace_id == workspace::id(workspace), EWorkspaceMismatch);
+
         let sender = ctx.sender();
         let rule = policy.rule_type;
 
         if (rule == RULE_WORKSPACE_MEMBER) {
-            // BFF already verified workspace membership before the user reaches this point.
-            // Allow all callers — membership is enforced off-chain.
+            assert!(workspace::is_member(workspace, sender), ESealNoAccess);
         } else if (rule == RULE_SPECIFIC_ADDRESS) {
             assert!(policy.allowed_addresses.contains(&sender), ESealNoAccess);
         } else if (rule == RULE_ROLE_BASED) {
-            // BFF enforces role checks. On-chain we allow the call through.
+            assert!(workspace::is_member(workspace, sender), ESealNoAccess);
+            let role = workspace::get_member_role(workspace, sender);
+            assert!(crm_core::acl::level(role) >= policy.min_role_level, ESealNoAccess);
         } else {
             abort ESealNoAccess
         };

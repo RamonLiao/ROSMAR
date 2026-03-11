@@ -47,6 +47,7 @@ describe('ProfileService - Assets & Timeline', () => {
     prisma = {
       $queryRaw: jest.fn(),
       walletEvent: { findMany: jest.fn(), count: jest.fn() },
+      profileWallet: { findMany: jest.fn().mockResolvedValue([]) },
       profile: {
         findUniqueOrThrow: jest.fn(),
         findFirstOrThrow: jest.fn().mockResolvedValue({ id: 'profile-1' }),

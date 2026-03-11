@@ -1,12 +1,12 @@
-import { Controller, Post, Res, Body, ForbiddenException } from '@nestjs/common';
+import { Controller, Post, Res, Body } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthService } from './auth.service';
 
 @Controller('auth')
 export class TestAuthController {
   constructor(private readonly authService: AuthService) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('TestAuthController must not be loaded in production');
+    if (process.env.NODE_ENV !== 'test') {
+      throw new Error('TestAuthController must not be loaded outside test environment');
     }
   }
 
@@ -17,7 +17,7 @@ export class TestAuthController {
   ) {
     const address =
       body?.address ||
-      '0xe2e_test_000000000000000000000000000000000000000000000000000000000001';
+      '0x00000000000000000000000000000000000000000000000000000000e2e00001';
 
     const tokens = await this.authService.testLogin(address);
 

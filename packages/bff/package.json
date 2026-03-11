@@ -30,6 +30,7 @@
     "@mysten/sui": "^2.4.0",
     "@mysten/zklogin": "^0.8.1",
     "@nestjs/bull": "^11.0.4",
+    "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.3",
     "@nestjs/core": "^11.0.1",

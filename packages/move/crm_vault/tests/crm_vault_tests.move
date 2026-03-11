@@ -235,4 +235,94 @@ module crm_vault::crm_vault_tests {
         test_utils::destroy(p);
         ts::end(scenario);
     }
+
+    // ========== seal_approve happy-path tests ==========
+
+    #[test]
+    fun test_seal_approve_workspace_member_passes() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+
+        let p = policy::create_workspace_policy(
+            &config, &workspace, &admin_cap,
+            string::utf8(b"Default"),
+            ctx,
+        );
+
+        // ADMIN is the owner/member — should pass
+        let correct_id = sui::address::to_bytes(object::id_address(&p));
+        policy::seal_approve(correct_id, &p, &workspace, ctx);
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(admin_cap);
+        test_utils::destroy(p);
+        ts::end(scenario);
+    }
+
+    #[test]
+    fun test_seal_approve_address_list_passes() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+
+        let p = policy::create_address_policy(
+            &config, &workspace, &admin_cap,
+            string::utf8(b"Restricted"),
+            vector[USER1],
+            ctx,
+        );
+
+        let correct_id = sui::address::to_bytes(object::id_address(&p));
+
+        test_utils::destroy(config);
+        test_utils::destroy(admin_cap);
+
+        // Switch to USER1 (in allowed list)
+        ts::next_tx(&mut scenario, USER1);
+        let ctx = ts::ctx(&mut scenario);
+
+        policy::seal_approve(correct_id, &p, &workspace, ctx);
+
+        test_utils::destroy(workspace);
+        test_utils::destroy(p);
+        ts::end(scenario);
+    }
+
+    #[test]
+    fun test_seal_approve_role_based_passes() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (mut workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+
+        // Add USER1 as admin (role level 2)
+        workspace::add_member(&config, &mut workspace, &admin_cap, USER1, crm_core::acl::admin(), ctx);
+
+        // Create policy requiring member level (1) — USER1 (admin=2) should pass
+        let p = policy::create_role_policy(
+            &config, &workspace, &admin_cap,
+            string::utf8(b"Member+"),
+            1,
+            ctx,
+        );
+
+        let correct_id = sui::address::to_bytes(object::id_address(&p));
+
+        test_utils::destroy(config);
+        test_utils::destroy(admin_cap);
+
+        // Switch to USER1
+        ts::next_tx(&mut scenario, USER1);
+        let ctx = ts::ctx(&mut scenario);
+
+        policy::seal_approve(correct_id, &p, &workspace, ctx);
+
+        test_utils::destroy(workspace);
+        test_utils::destroy(p);
+        ts::end(scenario);
+    }
 }

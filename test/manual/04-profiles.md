@@ -125,11 +125,83 @@
 
 ---
 
-## 4.6 Related Orgs Tab
+## 4.6 Wallets Tab (Multi-chain)
 
 ### Steps
 
-- [ ] **4.6.1** On profile detail, click **"Related Orgs"** tab
+- [ ] **4.6.1** On profile detail, click **"Wallets"** tab
+  - Verify: "Wallets" title visible
+  - Verify: "Add Wallet" button visible
+
+- [ ] **4.6.2** Click **"Add Wallet"**
+  - Verify: Form appears with chain select (SUI, Ethereum, Solana) and address input
+
+- [ ] **4.6.3** Add an Ethereum wallet:
+  - Chain: `Ethereum`
+  - Address: `0x742d35Cc6634C0532925a3b844Bc9e7595f2bD60` (or any valid ETH address)
+  - Click **"Add"**
+  - Verify: Wallet row appears under "Ethereum" group
+  - Verify: If ENS name resolved, shows `.eth` name next to address
+
+- [ ] **4.6.4** Add a Solana wallet:
+  - Chain: `Solana`
+  - Address: (valid Solana address)
+  - Click **"Add"**
+  - Verify: Wallet row appears under "Solana" group
+  - Verify: If SNS name resolved, shows `.sol` name
+
+- [ ] **4.6.5** Delete a wallet:
+  - Click trash icon on the Ethereum wallet
+  - Verify: Wallet removed from list
+
+### Failure Cases
+
+- [ ] **4.6.6** Add wallet with invalid address
+  - Verify: Error message, wallet not added
+
+- [ ] **4.6.7** Add duplicate wallet (same chain + address)
+  - Verify: Error message (duplicate prevention)
+
+---
+
+## 4.7 Net Worth Card
+
+> Displayed on the Wallets tab.
+
+### Steps
+
+- [ ] **4.7.1** On Wallets tab, verify Net Worth card:
+  - Verify: Large USD total displayed (`$X,XXX.XX`)
+  - Verify: Horizontal bar breakdown by chain (blue=SUI, purple=Ethereum, green=Solana)
+  - Verify: Per-chain row with dot, chain label, truncated address, USD value
+
+- [ ] **4.7.2** Note: SUI balance currently shows `$0.00` (price oracle not implemented)
+  - If Ethereum/Solana wallets linked: those may show USD values via Moralis
+
+---
+
+## 4.8 Assets Tab
+
+### Steps
+
+- [ ] **4.8.1** On profile detail, click **"Assets"** tab
+  - Verify: Asset gallery loads
+
+- [ ] **4.8.2** Verify sections (shown conditionally if data exists):
+  - **NFT Collections**: grid of cards with collection name + item count badge
+  - **DeFi Activity**: grid of cards with position type, tx count, total amount
+  - **Governance**: row of outline badges with `{type}: {count}`
+
+- [ ] **4.8.3** If no on-chain events indexed for this profile:
+  - Verify: Empty state displayed (no crash)
+
+---
+
+## 4.9 Related Orgs Tab
+
+### Steps
+
+- [ ] **4.9.1** On profile detail, click **"Related Orgs"** tab
   - Verify: "Related Organizations" card visible
   - Verify: Shows empty state "No related organizations" (or linked orgs if any)
 

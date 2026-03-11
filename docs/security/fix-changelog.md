@@ -387,6 +387,128 @@ Production requires explicit `CORS_ORIGIN`. Development defaults to localhost.
 
 ---
 
+## Wave 2.5 — Residual Risk Fixes
+
+### RR-4: Seal policy on-chain enforcement
+
+**Severity:** High
+**Files changed:** `packages/move/crm_vault/sources/policy.move`, `packages/move/crm_vault/tests/red_team_tests.move`, `packages/move/crm_vault/tests/crm_vault_tests.move`
+
+**Before:**
+`seal_approve()` for `RULE_WORKSPACE_MEMBER` and `RULE_ROLE_BASED` allowed all callers through with no on-chain check. Membership/role enforcement relied entirely on BFF gating. An attacker bypassing BFF could call `seal_approve()` directly to decrypt any vault content.
+
+**After:**
+`seal_approve()` now takes `&Workspace` as a required parameter and enforces:
+1. **Cross-workspace guard:** `policy.workspace_id == workspace::id(workspace)` — prevents passing a wrong workspace
+2. **RULE_WORKSPACE_MEMBER:** `workspace::is_member(workspace, sender)` — checks DOF-based membership on-chain
+3. **RULE_ROLE_BASED:** `workspace::is_member()` + `acl::level(role) >= min_role_level` — verifies both membership and role level
+4. **RULE_SPECIFIC_ADDRESS:** Unchanged (already enforced via `allowed_addresses.contains()`)
+
+**Impact:** Any user who knew a policy object ID could bypass BFF and decrypt vault content for workspace-member and role-based policies.
+
+**Test Coverage:**
+- `red_team_tests::test_seal_approve_non_member_workspace_policy` (RT-4: non-member denied)
+- `red_team_tests::test_seal_approve_non_member_role_policy` (RT-5: non-member denied on role policy)
+- `red_team_tests::test_seal_approve_insufficient_role` (RT-6: viewer denied admin-level policy)
+- `red_team_tests::test_seal_approve_cross_workspace` (RT-7: wrong workspace denied)
+- `crm_vault_tests::test_seal_approve_workspace_member_passes` (happy path)
+- `crm_vault_tests::test_seal_approve_address_list_passes` (happy path)
+- `crm_vault_tests::test_seal_approve_role_based_passes` (happy path)
+
+---
+
+### RR-3: Quest badge revocation
+
+**Severity:** Medium
+**Files changed:** `packages/move/crm_action/sources/quest_badge.move`, `packages/move/crm_action/tests/quest_badge_tests.move`
+
+**Before:**
+`QuestBadge` is an SBT (no `store` ability). Once minted, a badge could not be burned, invalidated, or revoked. Dedup registry entry persisted forever, preventing re-minting even after a badge should be invalidated.
+
+**After:**
+Two revocation mechanisms added:
+1. **`revoke_badge()`** — Admin soft-revoke: marks badge ID as revoked in shared `QuestRegistry.revoked` table. Removes dedup entry to allow re-minting. Requires `WorkspaceAdminCap`. Badge object still exists (admin can't destroy owned objects in SUI) but is marked revoked.
+2. **`burn_badge()`** — Owner self-destruct: badge holder destroys their own badge. Cleans up both dedup and revocation entries.
+3. **`is_revoked()`** — Public accessor for consumers to check revocation status.
+
+**Impact:** Badges representing compromised or erroneous quest completions could not be invalidated. Dedup entries blocked legitimate re-minting after corrections.
+
+**Test Coverage:**
+- `quest_badge_tests::test_revoke_badge` (admin revoke happy path)
+- `quest_badge_tests::test_revoke_allows_remint` (re-mint after revoke)
+- `quest_badge_tests::test_double_revoke_fails` (idempotency guard)
+- `quest_badge_tests::test_burn_badge` (owner self-destruct)
+- `quest_badge_tests::test_revoke_wrong_cap_fails` (cross-workspace cap rejected)
+
+---
+
+### RR-9: BFF persistent audit trail
+
+**Severity:** Medium
+**Files changed:**
+- `packages/bff/prisma/schema.prisma` (added `BffAuditLog` model)
+- `packages/bff/src/common/audit-trail/audit-trail.service.ts` (NEW)
+- `packages/bff/src/common/audit-trail/audit-trail.module.ts` (NEW)
+- `packages/bff/src/app.module.ts` (registered AuditTrailModule)
+- `packages/bff/src/auth/auth.service.ts` (integrated audit logging)
+- `packages/bff/prisma/migrations/20260311000000_add_bff_audit_log/migration.sql` (NEW)
+
+**Before:**
+BFF operations logged only to stdout via Pino. No persistent store for compliance-sensitive actions. Audit logs were ephemeral and lost on restart.
+
+**After:**
+- New `BffAuditLog` model with nullable `workspaceId`, `actor`, `action`, `resource`, `resourceId`, `metadata`, `ipAddress`
+- `AuditTrailService` (`@Global()`) with `log()`, `logMany()`, `query()` methods
+- Fire-and-forget audit logging integrated into `walletLogin()`, `zkLogin()`, `switchWorkspace()`
+- Indexed on `(workspaceId, action, createdAt)` and `(actor, createdAt)` for compliance queries
+
+**Impact:** Off-chain admin actions (auth, GDPR, workspace management) had no persistent audit trail. Compliance auditors could not verify who performed what operations and when.
+
+---
+
+### RR-10: testLogin production exposure hardening
+
+**Severity:** Critical
+**Files changed:**
+- `packages/bff/src/auth/test-auth.controller.ts`
+- `packages/bff/src/auth/auth.service.ts`
+- `packages/bff/src/auth/auth.service.spec.ts` (NEW)
+
+**Before:**
+TestAuthController constructor only checked `NODE_ENV === 'production'` — development, staging, and undefined environments passed through. `AuthService.testLogin()` had zero guards. Default test address contained underscores (invalid SUI hex).
+
+**After:**
+Three-layer defense-in-depth:
+1. **AppModule** (unchanged): Only imports TestAuthModule when `NODE_ENV === 'test'`
+2. **TestAuthController constructor**: Throws `Error` when `NODE_ENV !== 'test'` (tightened from `=== 'production'`)
+3. **AuthService.testLogin()**: Throws `ForbiddenException` when `NODE_ENV !== 'test'` (new guard)
+4. Default address fixed to valid hex: `0x00000000000000000000000000000000000000000000000000000000e2e00001`
+
+**Impact:** If TestAuthModule was accidentally loaded in a non-test environment, any caller could authenticate as any address without wallet signature proof — full authentication bypass.
+
+**Test Coverage:**
+- `auth.service.spec.ts`: 3 tests validating ForbiddenException for `development`, `production`, and `undefined` NODE_ENV values.
+
+---
+
+### RR-6: Airdrop batch size limit
+
+**Severity:** Medium
+**Files changed:** `packages/move/crm_action/sources/airdrop.move`
+
+**Before:**
+`batch_airdrop()` and `batch_airdrop_variable()` had no upper bound on `recipients.length()`. An attacker could pass thousands of addresses, causing gas exhaustion or griefing.
+
+**After:**
+- Added `MAX_BATCH_SIZE: u64 = 500` constant
+- Added `EBatchTooLarge: u64 = 1302` error code
+- Both functions assert `recipient_count <= MAX_BATCH_SIZE` before processing
+- BFF should enforce the same limit at the API layer for defense-in-depth
+
+**Impact:** Gas bomb attack via large recipient arrays. Could exhaust workspace admin's gas balance in a single TX.
+
+---
+
 ## Wave 3 — Red Team Tests + NatSpec
 
 **Commits:** `44a1f10`, `ba7ed4b`
@@ -431,4 +553,9 @@ Production requires explicit `CORS_ORIGIN`. Development defaults to localhost.
 | 2 | B7 | High | Auth reliability — in-memory challenge store |
 | 2 | B8 | Medium | Data leak — insufficient log redaction |
 | 2 | B9 | Medium | CSRF — permissive CORS |
+| 2.5 | RR-3 | Medium | Quest badge — revocation + owner burn |
+| 2.5 | RR-4 | High | Seal policy — on-chain membership enforcement |
+| 2.5 | RR-6 | Medium | Airdrop — batch size limit (MAX_BATCH_SIZE=500) |
+| 2.5 | RR-9 | Medium | Audit — BFF persistent audit trail (BffAuditLog) |
+| 2.5 | RR-10 | Critical | Auth — testLogin three-layer env guard |
 | 3 | — | — | Red team tests (24) + NatSpec (134) |

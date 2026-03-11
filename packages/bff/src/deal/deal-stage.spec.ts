@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SuiClientService } from '../blockchain/sui.client';
 import { TxBuilderService } from '../blockchain/tx-builder.service';
 import { NotificationService } from '../notification/notification.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 describe('DealService — stage state machine (T11)', () => {
   let service: DealService;
@@ -48,6 +49,10 @@ describe('DealService — stage state machine (T11)', () => {
         {
           provide: NotificationService,
           useValue: { create: jest.fn().mockResolvedValue({}) },
+        },
+        {
+          provide: EventEmitter2,
+          useValue: { emit: jest.fn() },
         },
       ],
     }).compile();

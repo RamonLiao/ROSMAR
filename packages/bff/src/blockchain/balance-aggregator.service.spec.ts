@@ -42,6 +42,7 @@ jest.mock('moralis', () => ({
 }));
 
 import { BalanceAggregatorService } from './balance-aggregator.service';
+import { PriceOracleService } from './price-oracle.service';
 
 describe('BalanceAggregatorService', () => {
   let service: BalanceAggregatorService;
@@ -81,6 +82,10 @@ describe('BalanceAggregatorService', () => {
               return map[key] ?? defaultVal ?? '';
             },
           },
+        },
+        {
+          provide: PriceOracleService,
+          useValue: { getSuiUsdPrice: jest.fn().mockResolvedValue(0) },
         },
       ],
     }).compile();

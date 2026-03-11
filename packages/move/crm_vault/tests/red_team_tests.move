@@ -32,11 +32,151 @@ module crm_vault::red_team_tests {
         // Forge a wrong id (some random address bytes, not matching the policy object)
         let wrong_id = sui::address::to_bytes(@0xDEAD);
 
-        policy::seal_approve(wrong_id, &p, ctx);
+        // ADMIN is owner (member), so membership passes — fails on id mismatch
+        policy::seal_approve(wrong_id, &p, &workspace, ctx);
 
         test_utils::destroy(config);
         test_utils::destroy(workspace);
         test_utils::destroy(admin_cap);
+        test_utils::destroy(p);
+        ts::end(scenario);
+    }
+
+    // ========== RT-4: seal_approve non-member denied (WORKSPACE_MEMBER) ==========
+    // Non-member tries to decrypt via workspace-member policy. Should fail with ESealNoAccess.
+
+    #[test]
+    #[expected_failure(abort_code = policy::ESealNoAccess)]
+    fun test_seal_approve_non_member_workspace_policy() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"WS-A"), ctx);
+
+        let p = policy::create_workspace_policy(
+            &config, &workspace, &admin_cap,
+            string::utf8(b"Default"),
+            ctx,
+        );
+
+        let correct_id = sui::address::to_bytes(object::id_address(&p));
+
+        test_utils::destroy(config);
+        test_utils::destroy(admin_cap);
+
+        // Switch to ATTACKER (not a workspace member)
+        ts::next_tx(&mut scenario, ATTACKER);
+        let ctx = ts::ctx(&mut scenario);
+
+        policy::seal_approve(correct_id, &p, &workspace, ctx);
+
+        test_utils::destroy(workspace);
+        test_utils::destroy(p);
+        ts::end(scenario);
+    }
+
+    // ========== RT-5: seal_approve non-member denied (ROLE_BASED) ==========
+    // Non-member tries to decrypt via role-based policy. Should fail with ESealNoAccess.
+
+    #[test]
+    #[expected_failure(abort_code = policy::ESealNoAccess)]
+    fun test_seal_approve_non_member_role_policy() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"WS-A"), ctx);
+
+        let p = policy::create_role_policy(
+            &config, &workspace, &admin_cap,
+            string::utf8(b"Admin Only"),
+            0, // min_role_level = 0 (viewer), but non-member still fails
+            ctx,
+        );
+
+        let correct_id = sui::address::to_bytes(object::id_address(&p));
+
+        test_utils::destroy(config);
+        test_utils::destroy(admin_cap);
+
+        // Switch to ATTACKER (not a workspace member)
+        ts::next_tx(&mut scenario, ATTACKER);
+        let ctx = ts::ctx(&mut scenario);
+
+        policy::seal_approve(correct_id, &p, &workspace, ctx);
+
+        test_utils::destroy(workspace);
+        test_utils::destroy(p);
+        ts::end(scenario);
+    }
+
+    // ========== RT-6: seal_approve insufficient role level ==========
+    // Member with VIEWER role tries to decrypt ADMIN-level policy. Should fail with ESealNoAccess.
+
+    #[test]
+    #[expected_failure(abort_code = policy::ESealNoAccess)]
+    fun test_seal_approve_insufficient_role() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (mut workspace, admin_cap) = workspace::create(&config, string::utf8(b"WS-A"), ctx);
+
+        // Add ATTACKER as viewer (role level 0)
+        workspace::add_member(&config, &mut workspace, &admin_cap, ATTACKER, crm_core::acl::viewer(), ctx);
+
+        // Create policy requiring admin level (2)
+        let p = policy::create_role_policy(
+            &config, &workspace, &admin_cap,
+            string::utf8(b"Admin Only"),
+            2,
+            ctx,
+        );
+
+        let correct_id = sui::address::to_bytes(object::id_address(&p));
+
+        test_utils::destroy(config);
+        test_utils::destroy(admin_cap);
+
+        // Switch to ATTACKER (viewer, level 0 < required 2)
+        ts::next_tx(&mut scenario, ATTACKER);
+        let ctx = ts::ctx(&mut scenario);
+
+        policy::seal_approve(correct_id, &p, &workspace, ctx);
+
+        test_utils::destroy(workspace);
+        test_utils::destroy(p);
+        ts::end(scenario);
+    }
+
+    // ========== RT-7: seal_approve cross-workspace policy ==========
+    // Attacker passes wrong workspace to bypass membership check.
+    // Should fail with EWorkspaceMismatch.
+
+    #[test]
+    #[expected_failure(abort_code = policy::EWorkspaceMismatch)]
+    fun test_seal_approve_cross_workspace() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (ws_a, cap_a) = workspace::create(&config, string::utf8(b"WS-A"), ctx);
+        let (ws_b, _cap_b) = workspace::create(&config, string::utf8(b"WS-B"), ctx);
+
+        // Create policy in WS-A
+        let p = policy::create_workspace_policy(
+            &config, &ws_a, &cap_a,
+            string::utf8(b"Default"),
+            ctx,
+        );
+
+        let correct_id = sui::address::to_bytes(object::id_address(&p));
+
+        // ADMIN is member of both workspaces, but pass WS-B for WS-A's policy
+        policy::seal_approve(correct_id, &p, &ws_b, ctx);
+
+        test_utils::destroy(config);
+        test_utils::destroy(ws_a);
+        test_utils::destroy(ws_b);
+        test_utils::destroy(cap_a);
+        test_utils::destroy(_cap_b);
         test_utils::destroy(p);
         ts::end(scenario);
     }

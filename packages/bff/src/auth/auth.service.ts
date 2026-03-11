@@ -6,6 +6,7 @@ import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
 import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
 import { PrismaService } from '../prisma/prisma.service';
 import { CacheService } from '../common/cache/cache.service';
+import { AuditTrailService } from '../common/audit-trail/audit-trail.service';
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -41,6 +42,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
+    private readonly auditTrail: AuditTrailService,
   ) {
     this.refreshExpiresIn = this.configService.get<string>(
       'REFRESH_TOKEN_EXPIRES_IN',
@@ -135,13 +137,27 @@ export class AuthService {
     }
 
     const user = await this.resolveOrCreateMembership(address);
-    return this.issueTokens(user);
+    const result = this.issueTokens(user);
+    this.auditTrail.log({
+      actor: address,
+      action: 'AUTH_WALLET_LOGIN',
+      resource: 'session',
+      resourceId: user.workspaceId,
+    }).catch(() => {}); // fire-and-forget
+    return result;
   }
 
   async zkLogin(jwt: string, salt: string): Promise<AuthResponse> {
     const address = await this.deriveZkLoginAddress(jwt, salt);
     const user = await this.resolveOrCreateMembership(address);
-    return this.issueTokens(user);
+    const result = this.issueTokens(user);
+    this.auditTrail.log({
+      actor: address,
+      action: 'AUTH_ZK_LOGIN',
+      resource: 'session',
+      resourceId: user.workspaceId,
+    }).catch(() => {}); // fire-and-forget
+    return result;
   }
 
   // ─── Passkey / WebAuthn ───────────────────────────────
@@ -348,7 +364,14 @@ export class AuthService {
       permissions: membership.permissions,
     };
 
-    return this.issueTokens(user);
+    const result = this.issueTokens(user);
+    this.auditTrail.log({
+      actor: address,
+      action: 'AUTH_SWITCH_WORKSPACE',
+      resource: 'workspace',
+      resourceId: workspaceId,
+    }).catch(() => {}); // fire-and-forget
+    return result;
   }
 
   /**
@@ -356,6 +379,9 @@ export class AuthService {
    * Only callable when TestAuthModule is loaded (NODE_ENV=test).
    */
   async testLogin(address: string): Promise<AuthResponse> {
+    if (process.env.NODE_ENV !== 'test') {
+      throw new ForbiddenException('testLogin is only available in test environment');
+    }
     const user = await this.resolveOrCreateMembership(address);
     return this.issueTokens(user);
   }

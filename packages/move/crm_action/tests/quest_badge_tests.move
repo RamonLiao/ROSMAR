@@ -228,4 +228,184 @@ module crm_action::quest_badge_tests {
         ts::return_to_address(USER1, badge);
         ts::end(scenario2);
     }
+
+    // ========== 8. test_revoke_badge ==========
+
+    #[test]
+    fun test_revoke_badge() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+        let mut registry = quest_badge::test_create_registry(ctx);
+
+        quest_badge::mint_badge(
+            &config, &workspace, &admin_cap, &mut registry,
+            USER1, b"quest_rev", string::utf8(b"Revocable Quest"), 5, 5, 1, ctx,
+        );
+
+        let quest_id = b"quest_rev";
+        let badge_id = quest_badge::test_get_badge_id(&registry, &quest_id, USER1);
+
+        assert!(!quest_badge::is_revoked(&registry, badge_id));
+
+        // Admin revokes the badge
+        quest_badge::revoke_badge(
+            &config, &workspace, &admin_cap, &mut registry,
+            badge_id, b"quest_rev", USER1, ctx,
+        );
+
+        assert!(quest_badge::is_revoked(&registry, badge_id));
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(admin_cap);
+        quest_badge::test_destroy_registry(registry);
+        ts::end(scenario);
+    }
+
+    // ========== 9. test_revoke_allows_remint ==========
+
+    #[test]
+    fun test_revoke_allows_remint() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+        let mut registry = quest_badge::test_create_registry(ctx);
+
+        quest_badge::mint_badge(
+            &config, &workspace, &admin_cap, &mut registry,
+            USER1, b"quest_re", string::utf8(b"Re-mintable"), 5, 5, 1, ctx,
+        );
+
+        let quest_id = b"quest_re";
+        let badge_id = quest_badge::test_get_badge_id(&registry, &quest_id, USER1);
+
+        // Revoke
+        quest_badge::revoke_badge(
+            &config, &workspace, &admin_cap, &mut registry,
+            badge_id, b"quest_re", USER1, ctx,
+        );
+
+        // Re-mint same quest+recipient — should succeed since dedup entry was removed
+        quest_badge::mint_badge(
+            &config, &workspace, &admin_cap, &mut registry,
+            USER1, b"quest_re", string::utf8(b"Re-mintable"), 5, 5, 2, ctx,
+        );
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(admin_cap);
+        quest_badge::test_destroy_registry(registry);
+        ts::end(scenario);
+    }
+
+    // ========== 10. test_double_revoke_fails ==========
+
+    #[test]
+    #[expected_failure(abort_code = quest_badge::EAlreadyRevoked)]
+    fun test_double_revoke_fails() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+        let mut registry = quest_badge::test_create_registry(ctx);
+
+        quest_badge::mint_badge(
+            &config, &workspace, &admin_cap, &mut registry,
+            USER1, b"quest_dd", string::utf8(b"Double Revoke"), 5, 5, 1, ctx,
+        );
+
+        let quest_id = b"quest_dd";
+        let badge_id = quest_badge::test_get_badge_id(&registry, &quest_id, USER1);
+
+        quest_badge::revoke_badge(
+            &config, &workspace, &admin_cap, &mut registry,
+            badge_id, b"quest_dd", USER1, ctx,
+        );
+
+        // Second revoke should fail
+        quest_badge::revoke_badge(
+            &config, &workspace, &admin_cap, &mut registry,
+            badge_id, b"quest_dd", USER1, ctx,
+        );
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(admin_cap);
+        quest_badge::test_destroy_registry(registry);
+        ts::end(scenario);
+    }
+
+    // ========== 11. test_burn_badge ==========
+
+    #[test]
+    fun test_burn_badge() {
+        let mut scenario = ts::begin(ADMIN);
+        {
+            let ctx = ts::ctx(&mut scenario);
+            let config = capabilities::test_create_config(ctx);
+            let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
+            let mut registry = quest_badge::test_create_registry(ctx);
+
+            quest_badge::mint_badge(
+                &config, &workspace, &admin_cap, &mut registry,
+                USER1, b"quest_burn", string::utf8(b"Burnable"), 5, 5, 1, ctx,
+            );
+
+            test_utils::destroy(config);
+            test_utils::destroy(workspace);
+            test_utils::destroy(admin_cap);
+            quest_badge::test_share_registry(registry);
+        };
+
+        // USER1 burns their own badge
+        ts::next_tx(&mut scenario, USER1);
+        {
+            let badge = ts::take_from_address<quest_badge::QuestBadge>(&scenario, USER1);
+            let mut registry = ts::take_shared<quest_badge::QuestRegistry>(&scenario);
+
+            quest_badge::burn_badge(badge, &mut registry, ts::ctx(&mut scenario));
+
+            ts::return_shared(registry);
+        };
+
+        ts::end(scenario);
+    }
+
+    // ========== 12. test_revoke_wrong_cap_fails ==========
+
+    #[test]
+    #[expected_failure(abort_code = capabilities::ECapMismatch)]
+    fun test_revoke_wrong_cap_fails() {
+        let mut scenario = ts::begin(ADMIN);
+        let ctx = ts::ctx(&mut scenario);
+        let config = capabilities::test_create_config(ctx);
+        let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"WS1"), ctx);
+        let (_ws2, cap2) = workspace::create(&config, string::utf8(b"WS2"), ctx);
+        let mut registry = quest_badge::test_create_registry(ctx);
+
+        quest_badge::mint_badge(
+            &config, &workspace, &admin_cap, &mut registry,
+            USER1, b"quest_xw", string::utf8(b"Cross WS"), 5, 5, 1, ctx,
+        );
+
+        let quest_id = b"quest_xw";
+        let badge_id = quest_badge::test_get_badge_id(&registry, &quest_id, USER1);
+
+        // Revoke with wrong workspace cap — should fail
+        quest_badge::revoke_badge(
+            &config, &workspace, &cap2, &mut registry,
+            badge_id, b"quest_xw", USER1, ctx,
+        );
+
+        test_utils::destroy(config);
+        test_utils::destroy(workspace);
+        test_utils::destroy(_ws2);
+        test_utils::destroy(admin_cap);
+        test_utils::destroy(cap2);
+        quest_badge::test_destroy_registry(registry);
+        ts::end(scenario);
+    }
 }

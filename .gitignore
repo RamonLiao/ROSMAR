@@ -8,3 +8,6 @@ target/
 *.DS_Store
 .claude/
 .worktrees/
+
+# Move build artifacts (reproducible via `sui move build`)
+packages/move/*/build/

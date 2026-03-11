@@ -80,7 +80,7 @@ describe('GasSponsorListener', () => {
 
     expect(prisma.notification.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        type: 'gas_sponsor_flagged',
+        type: 'gas_sponsor_activated',
         workspaceId: 'ws-1',
       }),
     });

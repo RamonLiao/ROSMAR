@@ -43,18 +43,53 @@
 
 ---
 
-## 7.3 Campaign Workflow
+## 7.3 Campaign Workflow Builder
+
+**Why manual:** Drag-and-drop ReactFlow canvas requires real mouse interaction.
 
 ### Steps
 
 - [ ] **7.3.1** Navigate to campaign workflow page (`/campaigns/[id]/workflow`)
-  - Verify: Workflow builder/viewer visible
-  - Verify: Shows workflow steps (if configured)
+  - Verify: Full-height ReactFlow canvas visible (600px)
+  - Verify: Background grid pattern, Controls panel (zoom +/-), MiniMap
+  - Verify: Entry node "Campaign Trigger" auto-generated (input type)
 
-- [ ] **7.3.2** Note available workflow actions:
-  - airdrop-token
-  - send-discord
-  - send-telegram
+- [ ] **7.3.2** Verify action palette below canvas (only if campaign is draft):
+  - 8 action buttons in grid:
+    - Send Telegram
+    - Send Discord
+    - Send Email (may show "soon" label)
+    - Airdrop Token
+    - Add to Segment (may show "soon" label)
+    - Update Tier (may show "soon" label)
+    - Wait Delay (may show "soon" label)
+    - Condition (may show "soon" label)
+
+- [ ] **7.3.3** Click **"Send Telegram"** in action palette
+  - Verify: New node added to canvas
+  - Verify: Node labeled "send_telegram" (or equivalent)
+  - Verify: Edge auto-connected from previous node
+
+- [ ] **7.3.4** Click **"Airdrop Token"** in action palette
+  - Verify: Second node added
+  - Verify: Edge connects sequentially (Trigger → Telegram → Airdrop)
+
+- [ ] **7.3.5** Drag a node to reposition it on canvas
+  - Verify: Node follows cursor, edge updates dynamically
+
+- [ ] **7.3.6** Click **"Save"** button
+  - Verify: Workflow steps persisted
+  - Verify: Success feedback
+
+- [ ] **7.3.7** Refresh page (F5)
+  - Verify: Saved workflow loads correctly (nodes + edges restored)
+
+### Read-only Mode
+
+- [ ] **7.3.8** Start the campaign (change status to "active")
+  - Return to workflow page
+  - Verify: Canvas is display-only (no action palette, no Save button)
+  - Verify: Cannot add or move nodes
 
 ---
 

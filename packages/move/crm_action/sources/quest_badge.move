@@ -10,9 +10,12 @@ module crm_action::quest_badge {
 
     // Errors
     const EDuplicateBadge: u64 = 1600;
+    const EAlreadyRevoked: u64 = 1602;
+    const EBadgeNotFound: u64 = 1603;
 
     // AuditEvent constants
     const ACTION_CREATE: u8 = 0;
+    const ACTION_DELETE: u8 = 2;
     const OBJECT_QUEST_BADGE: u8 = 16;
 
     // ===== OTW =====
@@ -33,10 +36,12 @@ module crm_action::quest_badge {
         issuer: address,
     }
 
-    /// Shared registry for deduplication
+    /// Shared registry for deduplication and revocation tracking
     public struct QuestRegistry has key {
         id: UID,
         minted: Table<vector<u8>, ID>,
+        /// Badge IDs that have been revoked by admin (soft revoke)
+        revoked: Table<ID, bool>,
     }
 
     // ===== Events =====
@@ -57,6 +62,22 @@ module crm_action::quest_badge {
         recipient: address,
         quest_id: vector<u8>,
         tier: u8,
+        timestamp: u64,
+    }
+
+    public struct QuestBadgeRevoked has copy, drop {
+        workspace_id: ID,
+        badge_id: ID,
+        actor: address,
+        quest_id: vector<u8>,
+        timestamp: u64,
+    }
+
+    public struct QuestBadgeBurned has copy, drop {
+        workspace_id: ID,
+        badge_id: ID,
+        owner: address,
+        quest_id: vector<u8>,
         timestamp: u64,
     }
 
@@ -88,6 +109,7 @@ module crm_action::quest_badge {
         let registry = QuestRegistry {
             id: object::new(ctx),
             minted: table::new(ctx),
+            revoked: table::new(ctx),
         };
         transfer::share_object(registry);
     }
@@ -172,6 +194,125 @@ module crm_action::quest_badge {
         });
     }
 
+    /// @notice Admin soft-revokes a badge by ID. The badge object still exists
+    ///         (admin cannot destroy owned objects), but is marked revoked in the
+    ///         shared registry. Removes the dedup entry so the quest can be re-minted.
+    /// @param config - Global configuration (pause guard)
+    /// @param workspace - Target workspace
+    /// @param cap - Workspace admin capability
+    /// @param registry - Shared deduplication + revocation registry
+    /// @param badge_id - ID of the badge to revoke
+    /// @param quest_id - Quest identifier bytes (for dedup key removal)
+    /// @param recipient - Original recipient address (for dedup key removal)
+    /// @emits QuestBadgeRevoked
+    /// @emits AuditEventV1
+    /// @aborts EAlreadyRevoked - if badge is already revoked
+    /// @aborts EBadgeNotFound - if badge was never minted in this registry
+    public fun revoke_badge(
+        config: &GlobalConfig,
+        workspace: &Workspace,
+        cap: &WorkspaceAdminCap,
+        registry: &mut QuestRegistry,
+        badge_id: ID,
+        quest_id: vector<u8>,
+        recipient: address,
+        ctx: &TxContext,
+    ) {
+        capabilities::assert_not_paused(config);
+        capabilities::assert_cap_matches(cap, workspace::id(workspace));
+
+        // Verify not already revoked (check first — dedup entry removed on revoke)
+        assert!(!table::contains(&registry.revoked, badge_id), EAlreadyRevoked);
+
+        // Verify badge was minted
+        let dedup_key = make_dedup_key(&quest_id, recipient);
+        assert!(table::contains(&registry.minted, dedup_key), EBadgeNotFound);
+
+        // Mark revoked
+        table::add(&mut registry.revoked, badge_id, true);
+
+        // Remove dedup entry (allows re-minting)
+        table::remove(&mut registry.minted, dedup_key);
+
+        let now = tx_context::epoch_timestamp_ms(ctx);
+        let sender = ctx.sender();
+
+        event::emit(QuestBadgeRevoked {
+            workspace_id: workspace::id(workspace),
+            badge_id,
+            actor: sender,
+            quest_id,
+            timestamp: now,
+        });
+
+        event::emit(AuditEventV1 {
+            version: 1,
+            workspace_id: workspace::id(workspace),
+            actor: sender,
+            action: ACTION_DELETE,
+            object_type: OBJECT_QUEST_BADGE,
+            object_id: badge_id,
+            timestamp: now,
+        });
+    }
+
+    /// @notice Badge owner burns (destroys) their own badge. Removes the dedup
+    ///         entry so the quest can be re-minted if needed.
+    /// @param badge - The badge to burn (caller must be owner due to SUI ownership rules)
+    /// @param registry - Shared registry for dedup cleanup
+    /// @emits QuestBadgeBurned
+    /// @aborts ENotBadgeOwner - if sender is not the badge issuer's workspace admin
+    public fun burn_badge(
+        badge: QuestBadge,
+        registry: &mut QuestRegistry,
+        ctx: &TxContext,
+    ) {
+        let badge_id = object::id(&badge);
+        let QuestBadge {
+            id,
+            workspace_id,
+            quest_id,
+            quest_name: _,
+            completed_steps: _,
+            total_steps: _,
+            completed_at: _,
+            tier: _,
+            issuer: _,
+        } = badge;
+
+        let sender = ctx.sender();
+
+        // Remove dedup entry if it exists (may have been removed by revoke)
+        let dedup_key = make_dedup_key(&quest_id, sender);
+        if (table::contains(&registry.minted, dedup_key)) {
+            table::remove(&mut registry.minted, dedup_key);
+        };
+
+        // Remove revocation entry if it exists
+        if (table::contains(&registry.revoked, badge_id)) {
+            table::remove(&mut registry.revoked, badge_id);
+        };
+
+        let now = tx_context::epoch_timestamp_ms(ctx);
+
+        event::emit(QuestBadgeBurned {
+            workspace_id,
+            badge_id,
+            owner: sender,
+            quest_id,
+            timestamp: now,
+        });
+
+        object::delete(id);
+    }
+
+    /// @notice Check if a badge ID has been revoked
+    /// @param registry - Shared revocation registry
+    /// @param badge_id - Badge ID to check
+    public fun is_revoked(registry: &QuestRegistry, badge_id: ID): bool {
+        table::contains(&registry.revoked, badge_id)
+    }
+
     // ===== Accessors =====
 
     /// @notice Return the quest ID bytes
@@ -210,14 +351,27 @@ module crm_action::quest_badge {
         QuestRegistry {
             id: object::new(ctx),
             minted: table::new(ctx),
+            revoked: table::new(ctx),
         }
     }
 
     #[test_only]
     public fun test_destroy_registry(registry: QuestRegistry) {
-        let QuestRegistry { id, minted } = registry;
+        let QuestRegistry { id, minted, revoked } = registry;
         table::drop(minted);
+        table::drop(revoked);
         object::delete(id);
+    }
+
+    #[test_only]
+    public fun test_get_badge_id(registry: &QuestRegistry, quest_id: &vector<u8>, recipient: address): ID {
+        let dedup_key = make_dedup_key(quest_id, recipient);
+        *table::borrow(&registry.minted, dedup_key)
+    }
+
+    #[test_only]
+    public fun test_share_registry(registry: QuestRegistry) {
+        transfer::share_object(registry);
     }
 
     #[test_only]
