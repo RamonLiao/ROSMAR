@@ -5,11 +5,13 @@ import {
   Param,
   UseGuards,
 } from '@nestjs/common';
-import { IsInt, IsOptional, IsNumber, IsArray, IsString, Min, Max } from 'class-validator';
+import { IsInt, IsOptional, IsNumber, IsArray, IsString, IsIn, Min, Max } from 'class-validator';
+import * as LookalikeTypes from './lookalike.service';
 import { LookalikeService } from './lookalike.service';
 import { SessionGuard } from '../../auth/guards/session.guard';
 import { RbacGuard, RequirePermissions, WRITE } from '../../auth/guards/rbac.guard';
 import { User } from '../../auth/decorators/user.decorator';
+import * as AuthTypes from '../../auth/auth.service';
 
 export class FindLookalikeDto {
   @IsInt()
@@ -23,6 +25,22 @@ export class FindLookalikeDto {
   @Min(0)
   @Max(1)
   minSimilarity?: number;
+
+  @IsString()
+  @IsOptional()
+  @IsIn(['knn-cosine', 'graph-based'])
+  algorithm?: LookalikeTypes.Algorithm;
+
+  @IsString()
+  @IsOptional()
+  @IsIn(['internal', 'on-chain-discovery'])
+  candidateSource?: LookalikeTypes.CandidateMode;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Max(1)
+  alpha?: number;
 }
 
 export class CreateSegmentFromResultsDto {
@@ -39,7 +57,7 @@ export class LookalikeController {
   @Post(':id/lookalike')
   @RequirePermissions(WRITE)
   async findLookalike(
-    @User() user: import('../../auth/auth.service').UserPayload,
+    @User() user: AuthTypes.UserPayload,
     @Param('id') segmentId: string,
     @Body() dto: FindLookalikeDto,
   ) {
@@ -49,6 +67,9 @@ export class LookalikeController {
       {
         topK: dto.topK ?? 20,
         minSimilarity: dto.minSimilarity,
+        algorithm: dto.algorithm,
+        candidateSource: dto.candidateSource,
+        alpha: dto.alpha,
       },
     );
   }
@@ -56,7 +77,7 @@ export class LookalikeController {
   @Post(':id/lookalike/create-segment')
   @RequirePermissions(WRITE)
   async createSegmentFromResults(
-    @User() user: import('../../auth/auth.service').UserPayload,
+    @User() user: AuthTypes.UserPayload,
     @Param('id') segmentId: string,
     @Body() dto: CreateSegmentFromResultsDto,
   ) {

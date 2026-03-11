@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SuiClientService } from '../blockchain/sui.client';
@@ -33,6 +34,7 @@ export class DealService {
     private readonly txBuilder: TxBuilderService,
     private readonly configService: ConfigService,
     private readonly notificationService: NotificationService,
+    private readonly eventEmitter: EventEmitter2,
   ) {
     this.isDryRun =
       this.configService.get<string>('SUI_DRY_RUN', 'false') === 'true';
@@ -257,6 +259,8 @@ export class DealService {
         metadata: { dealId, stage },
       })
       .catch(() => {});
+
+    this.eventEmitter.emit('deal.stage_changed', { dealId, stage, workspaceId });
 
     return { success: true, txDigest: result.digest };
   }

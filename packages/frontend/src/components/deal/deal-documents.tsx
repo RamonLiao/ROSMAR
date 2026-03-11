@@ -9,8 +9,10 @@ import { DocumentUploadForm } from "./document-upload-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileIcon, Trash2, Lock } from "lucide-react";
+import { FileIcon, Trash2, Lock, ShieldAlert } from "lucide-react";
 import { useState } from "react";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useAuthStore } from "@/stores/auth-store";
 
 function formatFileSize(bytes: number | null | undefined): string {
   if (!bytes) return "";
@@ -33,14 +35,47 @@ function formatRelativeTime(dateStr: string): string {
 export function DealDocuments({
   dealId,
   workspaceId,
+  allowedAddresses,
 }: {
   dealId: string;
   workspaceId: string;
+  /** Explicit allow-list of wallet addresses (e.g. payer + payee).
+   *  Falls back to authenticated session address when omitted. */
+  allowedAddresses?: string[];
 }) {
+  const currentAccount = useCurrentAccount();
+  const userAddress = useAuthStore((s) => s.userAddress);
+
+  // Seal-style access gate
+  const isAuthorized: boolean = (() => {
+    const connectedAddress = currentAccount?.address ?? null;
+    if (!connectedAddress) return false;
+
+    if (allowedAddresses && allowedAddresses.length > 0) {
+      return allowedAddresses.includes(connectedAddress);
+    }
+
+    return !!userAddress && connectedAddress === userAddress;
+  })();
+
   const { data: documents = [], isLoading } = useDealDocuments(dealId);
   const upload = useUploadDealDocument(dealId);
   const deleteMut = useDeleteDealDocument(dealId);
   const [showUpload, setShowUpload] = useState(false);
+
+  if (!isAuthorized) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
+        <ShieldAlert className="h-12 w-12 text-muted-foreground mb-4" />
+        <h3 className="text-lg font-semibold">Access Denied</h3>
+        <p className="text-muted-foreground mt-2 text-sm max-w-xs">
+          {currentAccount
+            ? "Your connected wallet is not authorized to view documents for this deal."
+            : "Connect your wallet to access deal documents."}
+        </p>
+      </div>
+    );
+  }
 
   if (isLoading) return <div className="animate-pulse h-32" />;
 

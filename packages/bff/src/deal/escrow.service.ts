@@ -6,6 +6,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TxBuilderService } from '../blockchain/tx-builder.service';
+import { SuiClientService } from '../blockchain/sui.client';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
 import { AddVestingDto } from './dto/escrow-action.dto';
 
@@ -21,6 +22,7 @@ export class EscrowService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly txBuilder: TxBuilderService,
+    private readonly suiClient: SuiClientService,
     private readonly configService: ConfigService,
   ) {
     this.isDryRun =
@@ -62,22 +64,44 @@ export class EscrowService {
     });
   }
 
-  async fundEscrow(escrowId: string, _walletAddress: string) {
+  /** Execute a chain TX unless dry-run mode is active */
+  private async execChainTx(buildTx: () => any): Promise<any> {
+    if (this.isDryRun) {
+      return { digest: 'dry-run', events: [] };
+    }
+    const tx = buildTx();
+    return this.suiClient.executeTransaction(tx);
+  }
+
+  async fundEscrow(escrowId: string, coinObjectId: string) {
     const escrow = await this.findOrThrow(escrowId);
     this.assertStateOneOf(escrow, FUNDABLE_STATES);
 
-    if (this.isDryRun) {
-      return this.prisma.escrow.update({
-        where: { id: escrowId },
-        data: { state: 'FUNDED', version: { increment: 1 } },
-      });
+    let txDigest = 'dry-run';
+
+    if (!this.isDryRun) {
+      if (!(escrow as any).onChainId) {
+        throw new BadRequestException(
+          'Escrow has no on-chain object ID — cannot execute fund TX',
+        );
+      }
+
+      const result = await this.execChainTx(() =>
+        this.txBuilder.buildFundEscrowTx(
+          (escrow as any).onChainId,
+          coinObjectId,
+          escrow.tokenType,
+        ),
+      );
+      txDigest = result.digest;
     }
 
-    // TODO: chain TX for funding
-    return this.prisma.escrow.update({
+    const updated = await this.prisma.escrow.update({
       where: { id: escrowId },
       data: { state: 'FUNDED', version: { increment: 1 } },
     });
+
+    return { escrow: updated, txDigest };
   }
 
   async release(escrowId: string, amount: number) {
@@ -89,6 +113,19 @@ export class EscrowService {
 
     if (newReleased > total) {
       throw new BadRequestException('Release amount exceeds remaining balance');
+    }
+
+    let txDigest = 'dry-run';
+
+    if (!this.isDryRun && (escrow as any).onChainId) {
+      const result = await this.execChainTx(() =>
+        this.txBuilder.buildReleaseEscrowTx(
+          (escrow as any).onChainId,
+          BigInt(amount),
+          escrow.tokenType,
+        ),
+      );
+      txDigest = result.digest;
     }
 
     const newState =
@@ -107,6 +144,15 @@ export class EscrowService {
   async refund(escrowId: string) {
     const escrow = await this.findOrThrow(escrowId);
     this.assertStateOneOf(escrow, REFUNDABLE_STATES);
+
+    if (!this.isDryRun && (escrow as any).onChainId) {
+      await this.execChainTx(() =>
+        this.txBuilder.buildRefundEscrowTx(
+          (escrow as any).onChainId,
+          escrow.tokenType,
+        ),
+      );
+    }
 
     const remaining =
       Number(escrow.totalAmount) - Number(escrow.releasedAmount);

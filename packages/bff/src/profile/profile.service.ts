@@ -9,6 +9,15 @@ import { BalanceAggregatorService } from '../blockchain/balance-aggregator.servi
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateWalletDto } from './dto/wallet.dto';
 
+/** Convert ipfs:// URLs to an HTTPS gateway URL for browser display. */
+function normalizeIpfsUrl(url?: string | null): string | null {
+  if (!url) return null;
+  if (url.startsWith('ipfs://')) {
+    return url.replace('ipfs://', 'https://ipfs.io/ipfs/');
+  }
+  return url;
+}
+
 export interface CreateProfileDto {
   primaryAddress: string;
   suinsName?: string;
@@ -177,19 +186,23 @@ export class ProfileService {
       where: { id: profileId, workspaceId },
       select: { id: true },
     });
-    const rows = await this.prisma.$queryRaw<
-      { collection: string | null; event_type: string; cnt: bigint; total_amount: number | null }[]
-    >`
-      SELECT
-        collection,
-        event_type,
-        COUNT(*) AS cnt,
-        SUM(amount)::float AS total_amount
-      FROM wallet_events
-      WHERE profile_id = ${profileId}
-      GROUP BY collection, event_type
-      ORDER BY cnt DESC
-    `;
+
+    const [rows, nftGallery] = await Promise.all([
+      this.prisma.$queryRaw<
+        { collection: string | null; event_type: string; cnt: bigint; total_amount: number | null }[]
+      >`
+        SELECT
+          collection,
+          event_type,
+          COUNT(*) AS cnt,
+          SUM(amount)::float AS total_amount
+        FROM wallet_events
+        WHERE profile_id = ${profileId}
+        GROUP BY collection, event_type
+        ORDER BY cnt DESC
+      `,
+      this.fetchNftGallery(profileId),
+    ]);
 
     const nftTypes = ['MintNFTEvent', 'TransferObject'];
     const defiTypes = ['SwapEvent', 'AddLiquidityEvent', 'StakeEvent', 'UnstakeEvent'];
@@ -202,6 +215,7 @@ export class ProfileService {
           count: Number(r.cnt),
           eventType: r.event_type,
         })),
+      nftGallery,
       defi: rows
         .filter((r) => defiTypes.includes(r.event_type))
         .map((r) => ({
@@ -216,6 +230,57 @@ export class ProfileService {
           count: Number(r.cnt),
         })),
     };
+  }
+
+  /** Fetch on-chain NFT objects with Display metadata for all Sui wallets of a profile. */
+  private async fetchNftGallery(profileId: string) {
+    const suiWallets = await this.prisma.profileWallet.findMany({
+      where: { profileId, chain: 'sui' },
+      select: { address: true },
+    });
+    if (suiWallets.length === 0) return [];
+
+    const allNfts: {
+      objectId: string;
+      type: string;
+      name: string | null;
+      description: string | null;
+      imageUrl: string | null;
+      ownerAddress: string;
+    }[] = [];
+
+    for (const wallet of suiWallets) {
+      try {
+        const response = await this.suiClient.getOwnedObjects(wallet.address, {
+          showContent: true,
+          showDisplay: true,
+          showType: true,
+          limit: 50,
+        });
+
+        for (const item of response.data) {
+          const obj = item.data;
+          if (!obj) continue;
+
+          // Only include objects that have Display metadata (i.e. NFTs)
+          const display = (obj as any).display?.data;
+          if (!display) continue;
+
+          allNfts.push({
+            objectId: obj.objectId,
+            type: obj.type ?? 'unknown',
+            name: display.name ?? null,
+            description: display.description ?? null,
+            imageUrl: normalizeIpfsUrl(display.image_url) ?? null,
+            ownerAddress: wallet.address,
+          });
+        }
+      } catch {
+        // Skip wallet on RPC failure — partial results are acceptable
+      }
+    }
+
+    return allNfts;
   }
 
   async getTimeline(workspaceId: string, profileId: string, limit = 20, offset = 0) {

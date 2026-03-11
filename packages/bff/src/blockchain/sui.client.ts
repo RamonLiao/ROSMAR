@@ -83,6 +83,28 @@ export class SuiClientService {
     });
   }
 
+  async getOwnedObjects(
+    address: string,
+    options?: {
+      showContent?: boolean;
+      showDisplay?: boolean;
+      showType?: boolean;
+      limit?: number;
+      cursor?: string;
+    },
+  ) {
+    return this.client.getOwnedObjects({
+      owner: address,
+      options: {
+        showContent: options?.showContent ?? true,
+        showDisplay: options?.showDisplay ?? false,
+        showType: options?.showType ?? true,
+      },
+      limit: options?.limit ?? 50,
+      cursor: options?.cursor,
+    });
+  }
+
   async queryEvents(query: any) {
     return this.client.queryEvents(query);
   }

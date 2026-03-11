@@ -7,6 +7,15 @@ export interface NftAsset {
   eventType: string;
 }
 
+export interface NftDisplayItem {
+  objectId: string;
+  type: string;
+  name: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  ownerAddress: string;
+}
+
 export interface DefiPosition {
   type: string;
   count: number;
@@ -20,6 +29,7 @@ export interface GovernanceActivity {
 
 export interface ProfileAssets {
   nfts: NftAsset[];
+  nftGallery: NftDisplayItem[];
   defi: DefiPosition[];
   governance: GovernanceActivity[];
 }

@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SendTelegramAction } from './actions/send-telegram.action';
 import { SendDiscordAction } from './actions/send-discord.action';
@@ -20,6 +22,7 @@ export class WorkflowEngine {
   private actions: Map<string, { execute(profileId: string, config: any): Promise<void> }>;
 
   constructor(
+    @InjectQueue('workflow-delay') private readonly delayQueue: Queue,
     private readonly prisma: PrismaService,
     private readonly sendTelegramAction: SendTelegramAction,
     private readonly sendDiscordAction: SendDiscordAction,
@@ -116,9 +119,11 @@ export class WorkflowEngine {
       // Schedule next step (with delay if configured)
       const delay = step.delay || 0;
       if (delay > 0) {
-        setTimeout(() => {
-          this.executeNextStep(campaignId, profileId, workflowSteps);
-        }, delay);
+        await this.delayQueue.add(
+          'resume',
+          { campaignId, profileId, workflowSteps },
+          { delay },
+        );
       } else {
         await this.executeNextStep(campaignId, profileId, workflowSteps);
       }

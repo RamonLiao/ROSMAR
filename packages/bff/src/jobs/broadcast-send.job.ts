@@ -1,35 +1,29 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Logger } from '@nestjs/common';
+import { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { BroadcastService } from '../broadcast/broadcast.service';
 
-@Injectable()
-export class BroadcastSendJob implements OnModuleInit, OnModuleDestroy {
+export interface BroadcastSendJobData {
+  broadcastId?: string;
+}
+
+@Processor('broadcast-send')
+export class BroadcastSendJob extends WorkerHost {
   private readonly logger = new Logger(BroadcastSendJob.name);
-  private intervalRef: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly broadcastService: BroadcastService,
-  ) {}
-
-  onModuleInit() {
-    // Run every 60 seconds
-    this.intervalRef = setInterval(() => {
-      this.handleScheduledBroadcasts().catch((err) =>
-        this.logger.error(`BroadcastSendJob error: ${err.message}`),
-      );
-    }, 60_000);
-    this.logger.log('BroadcastSendJob started (every 60s)');
+  ) {
+    super();
   }
 
-  onModuleDestroy() {
-    if (this.intervalRef) {
-      clearInterval(this.intervalRef);
-      this.intervalRef = null;
-    }
+  async process(_job: Job<BroadcastSendJobData>): Promise<void> {
+    await this.handleScheduledBroadcasts();
   }
 
-  async handleScheduledBroadcasts(): Promise<void> {
+  private async handleScheduledBroadcasts(): Promise<void> {
     const now = new Date();
 
     const broadcasts = await this.prisma.broadcast.findMany({

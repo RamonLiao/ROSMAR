@@ -24,6 +24,7 @@ export class TxBuilderService {
   private crmDataPackageId: string;
   private crmVaultPackageId: string;
   private crmActionPackageId: string;
+  private crmEscrowPackageId: string;
 
   constructor(private configService: ConfigService) {
     this.crmCorePackageId = this.configService.get<string>(
@@ -40,6 +41,10 @@ export class TxBuilderService {
     );
     this.crmActionPackageId = this.configService.get<string>(
       'CRM_ACTION_PACKAGE_ID',
+      '0x0',
+    );
+    this.crmEscrowPackageId = this.configService.get<string>(
+      'CRM_ESCROW_PACKAGE_ID',
       '0x0',
     );
   }
@@ -454,6 +459,95 @@ export class TxBuilderService {
         tx.pure.string(description),
         tx.object(segmentId),
       ],
+    });
+
+    return tx;
+  }
+
+  // ─── Escrow TX builders ───────────────────────────────────────────────────
+
+  /**
+   * Build transaction to fund an escrow with a Coin<T>.
+   * Calls crm_escrow::escrow::fund_escrow<T>(escrow, coin, clock, ctx).
+   */
+  buildFundEscrowTx(
+    escrowObjectId: string,
+    coinObjectId: string,
+    tokenType = '0x2::sui::SUI',
+  ): Transaction {
+    const tx = new Transaction();
+
+    tx.moveCall({
+      target: `${this.crmEscrowPackageId}::escrow::fund_escrow`,
+      typeArguments: [tokenType],
+      arguments: [
+        tx.object(escrowObjectId),
+        tx.object(coinObjectId),
+        tx.object('0x6'), // Sui Clock
+      ],
+    });
+
+    return tx;
+  }
+
+  /**
+   * Build transaction to release funds from escrow to payee.
+   * Calls crm_escrow::escrow::release<T>(escrow, amount, clock, ctx).
+   */
+  buildReleaseEscrowTx(
+    escrowObjectId: string,
+    amount: bigint,
+    tokenType = '0x2::sui::SUI',
+  ): Transaction {
+    const tx = new Transaction();
+
+    tx.moveCall({
+      target: `${this.crmEscrowPackageId}::escrow::release`,
+      typeArguments: [tokenType],
+      arguments: [
+        tx.object(escrowObjectId),
+        tx.pure.u64(amount),
+        tx.object('0x6'), // Sui Clock
+      ],
+    });
+
+    return tx;
+  }
+
+  /**
+   * Build transaction to refund an escrow back to payer.
+   * Calls crm_escrow::escrow::refund<T>(escrow, clock, ctx).
+   */
+  buildRefundEscrowTx(
+    escrowObjectId: string,
+    tokenType = '0x2::sui::SUI',
+  ): Transaction {
+    const tx = new Transaction();
+
+    tx.moveCall({
+      target: `${this.crmEscrowPackageId}::escrow::refund`,
+      typeArguments: [tokenType],
+      arguments: [
+        tx.object(escrowObjectId),
+        tx.object('0x6'), // Sui Clock
+      ],
+    });
+
+    return tx;
+  }
+
+  // ─── Vault TX builders ──────────────────────────────────────────────────
+
+  /**
+   * Build transaction to enforce vault secret expiry on-chain.
+   * Calls crm_vault::vault::enforce_expiry(vault, clock).
+   */
+  buildEnforceVaultExpiryTx(vaultObjectId: string): Transaction {
+    const tx = new Transaction();
+
+    tx.moveCall({
+      target: `${this.crmVaultPackageId}::vault::enforce_expiry`,
+      arguments: [tx.object(vaultObjectId), tx.object('0x6')],
     });
 
     return tx;

@@ -1,80 +1,58 @@
-// @ts-nocheck
-import { Injectable } from '@nestjs/common';
-import { Queue, Worker } from 'bullmq';
-import { ConfigService } from '@nestjs/config';
-import { Pool } from 'pg';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Logger } from '@nestjs/common';
+import { Job } from 'bullmq';
+import { PrismaService } from '../prisma/prisma.service';
 
-@Injectable()
-export class CampaignSchedulerJob {
-  private queue: Queue;
-  private worker: Worker;
-  private pgPool: Pool;
+@Processor('campaign-scheduler')
+export class CampaignSchedulerJob extends WorkerHost {
+  private readonly logger = new Logger(CampaignSchedulerJob.name);
 
-  constructor(private readonly configService: ConfigService) {
-    this.pgPool = new Pool({
-      connectionString: this.configService.get<string>('DATABASE_URL'),
-    });
+  constructor(private readonly prisma: PrismaService) {
+    super();
+  }
 
-    // TODO: Initialize BullMQ queue with repeat pattern
-    // const redisUrl = this.configService.get<string>('REDIS_URL');
-    // this.queue = new Queue('campaign-scheduler', {
-    //   connection: { url: redisUrl },
-    // });
-    //
-    // // Schedule recurring check every minute
-    // this.queue.add('check-scheduled', {}, {
-    //   repeat: { pattern: '*/1 * * * *' }, // Every minute
-    // });
-    //
-    // this.worker = new Worker('campaign-scheduler', async (job) => {
-    //   await this.checkScheduledCampaigns();
-    // }, {
-    //   connection: { url: redisUrl },
-    // });
+  async process(_job: Job): Promise<void> {
+    await this.checkScheduledCampaigns();
   }
 
   private async checkScheduledCampaigns(): Promise<void> {
-    console.log('Checking for scheduled campaigns...');
+    this.logger.log('Checking for scheduled campaigns...');
 
-    // Find campaigns with scheduled start time that haven't started yet
-    const campaigns = await this.pgPool.query(
-      `SELECT id, workflow_steps, segment_id
-       FROM campaigns
-       WHERE status = 'scheduled'
-         AND scheduled_start_at <= now()
-       LIMIT 10`,
-    );
+    const campaigns = await this.prisma.campaign.findMany({
+      where: {
+        status: 'scheduled',
+        startedAt: null,
+        createdAt: { lte: new Date() },
+      },
+      select: { id: true, workflowSteps: true, segmentId: true },
+      take: 10,
+    });
 
-    for (const campaign of campaigns.rows) {
-      await this.startCampaign(campaign.id, campaign.workflow_steps, campaign.segment_id);
+    for (const campaign of campaigns) {
+      await this.startCampaign(campaign.id, campaign.workflowSteps, campaign.segmentId);
     }
   }
 
   private async startCampaign(
     campaignId: string,
-    workflowSteps: any[],
-    segmentId: string,
+    workflowSteps: unknown,
+    segmentId: string | null,
   ): Promise<void> {
-    console.log(`Starting campaign ${campaignId}`);
+    this.logger.log(`Starting campaign ${campaignId}`);
 
-    // Get segment profiles
-    const profiles = await this.pgPool.query(
-      `SELECT profile_id FROM segment_memberships WHERE segment_id = $1`,
-      [segmentId],
-    );
+    let profileCount = 0;
+    if (segmentId) {
+      profileCount = await this.prisma.segmentMembership.count({
+        where: { segmentId },
+      });
+    }
 
-    const profileIds = profiles.rows.map((r) => r.profile_id);
-
-    // Update campaign status
-    await this.pgPool.query(
-      `UPDATE campaigns SET status = 'active', started_at = now() WHERE id = $1`,
-      [campaignId],
-    );
+    await this.prisma.campaign.update({
+      where: { id: campaignId },
+      data: { status: 'active', startedAt: new Date() },
+    });
 
     // TODO: Trigger workflow engine for each profile
-    // const workflowEngine = ...; // Inject WorkflowEngine
-    // await workflowEngine.startWorkflow(campaignId, workflowSteps, profileIds);
-
-    console.log(`Campaign ${campaignId} started with ${profileIds.length} profiles`);
+    this.logger.log(`Campaign ${campaignId} started with ${profileCount} profiles`);
   }
 }

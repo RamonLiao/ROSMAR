@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { EscrowService } from './escrow.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TxBuilderService } from '../blockchain/tx-builder.service';
+import { SuiClientService } from '../blockchain/sui.client';
 
 describe('EscrowService', () => {
   let service: EscrowService;
@@ -39,6 +40,7 @@ describe('EscrowService', () => {
         EscrowService,
         { provide: PrismaService, useValue: prisma },
         { provide: TxBuilderService, useValue: {} },
+        { provide: SuiClientService, useValue: { executeTransaction: jest.fn() } },
         {
           provide: ConfigService,
           useValue: {
@@ -97,7 +99,7 @@ describe('EscrowService', () => {
 
     const result = await service.fundEscrow('esc-1', '0xwallet');
 
-    expect(result.state).toBe('FUNDED');
+    expect(result.escrow.state).toBe('FUNDED');
     expect(prisma.escrow.update).toHaveBeenCalledWith({
       where: { id: 'esc-1' },
       data: { state: 'FUNDED', version: { increment: 1 } },

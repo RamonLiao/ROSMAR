@@ -32,6 +32,7 @@ export function AssetGallery({ profileId }: AssetGalleryProps) {
   const hasData =
     assets &&
     (assets.nfts.length > 0 ||
+      assets.nftGallery?.length > 0 ||
       assets.defi.length > 0 ||
       assets.governance.length > 0);
 
@@ -45,6 +46,52 @@ export function AssetGallery({ profileId }: AssetGalleryProps) {
           <p className="text-center text-muted-foreground">No assets found</p>
         ) : (
           <div className="space-y-6">
+            {assets.nftGallery?.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium text-muted-foreground mb-2">
+                  NFT Gallery
+                </h4>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                  {assets.nftGallery.map((nft) => (
+                    <div
+                      key={nft.objectId}
+                      className="rounded-lg border overflow-hidden group"
+                    >
+                      <div className="aspect-square bg-muted relative">
+                        {nft.imageUrl ? (
+                          <img
+                            src={nft.imageUrl}
+                            alt={nft.name ?? "NFT"}
+                            loading="lazy"
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = "none";
+                              (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
+                            }}
+                          />
+                        ) : null}
+                        <div
+                          className={`absolute inset-0 flex items-center justify-center text-muted-foreground text-xs ${nft.imageUrl ? "hidden" : ""}`}
+                        >
+                          No image
+                        </div>
+                      </div>
+                      <div className="p-2 space-y-0.5">
+                        <p className="font-medium text-sm truncate">
+                          {nft.name ?? "Unnamed"}
+                        </p>
+                        {nft.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-2">
+                            {nft.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {assets.nfts.length > 0 && (
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">

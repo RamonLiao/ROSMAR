@@ -6,6 +6,7 @@ import { GasSponsorListener } from './gas-sponsor.listener';
 import { EvmResolverService } from './evm-resolver.service';
 import { SolanaResolverService } from './solana-resolver.service';
 import { BalanceAggregatorService } from './balance-aggregator.service';
+import { PriceOracleService } from './price-oracle.service';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
@@ -18,6 +19,7 @@ import { AuthModule } from '../auth/auth.module';
     EvmResolverService,
     SolanaResolverService,
     BalanceAggregatorService,
+    PriceOracleService,
   ],
   exports: [
     EnokiSponsorService,
@@ -25,6 +27,7 @@ import { AuthModule } from '../auth/auth.module';
     EvmResolverService,
     SolanaResolverService,
     BalanceAggregatorService,
+    PriceOracleService,
   ],
 })
 export class BlockchainModule {}

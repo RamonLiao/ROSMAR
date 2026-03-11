@@ -39,7 +39,7 @@ describe('BroadcastSendJob', () => {
     ]);
     broadcastService.send.mockResolvedValue(undefined);
 
-    await job.handleScheduledBroadcasts();
+    await job.process({} as any);
 
     expect(prisma.broadcast.findMany).toHaveBeenCalledWith({
       where: {
@@ -57,7 +57,7 @@ describe('BroadcastSendJob', () => {
     broadcastService.send.mockRejectedValue(new Error('send failed'));
     prisma.broadcast.update.mockResolvedValue({});
 
-    await job.handleScheduledBroadcasts();
+    await job.process({} as any);
 
     expect(prisma.broadcast.update).toHaveBeenCalledWith({
       where: { id: 'b-1' },
@@ -68,7 +68,7 @@ describe('BroadcastSendJob', () => {
   it('should do nothing when no scheduled broadcasts exist', async () => {
     prisma.broadcast.findMany.mockResolvedValue([]);
 
-    await job.handleScheduledBroadcasts();
+    await job.process({} as any);
 
     expect(broadcastService.send).not.toHaveBeenCalled();
   });

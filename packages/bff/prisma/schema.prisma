@@ -204,6 +204,7 @@ model VaultSecret {
   mimeType     String?   @map("mime_type")
   fileSize     Int?      @map("file_size")
   version      Int       @default(1)
+  suiObjectId  String?   @map("sui_object_id")
   expiresAt    DateTime? @map("expires_at")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
@@ -694,4 +695,22 @@ model GdprDeletionLog {
   workspace      Workspace @relation("WorkspaceGdprLogs", fields: [workspaceId], references: [id])
 
   @@map("gdpr_deletion_logs")
+}
+
+// ─── BFF Audit Trail (off-chain operations) ─────
+
+model BffAuditLog {
+  id          String   @id @default(uuid())
+  workspaceId String?  @map("workspace_id")
+  actor       String
+  action      String
+  resource    String
+  resourceId  String?  @map("resource_id")
+  metadata    Json?
+  ipAddress   String?  @map("ip_address")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([workspaceId, action, createdAt])
+  @@index([actor, createdAt])
+  @@map("bff_audit_logs")
 }

@@ -1,33 +1,24 @@
 # ROSMAR CRM — Progress
 
 ## Current Task
-P5 Security Audit — MERGED to main (21 commits). Ready for next phase.
+All 13 spec gap items complete. Ready for integration testing / commit.
 
 ## TODO
+- [ ] Run `prisma migrate dev` for VaultSecret `suiObjectId` field
+- [ ] Full test suite run + manual smoke test
 
-### Backlog
-- [ ] RR-2: Multi-token escrow `Escrow<phantom T>` (new branch)
-- [ ] RR-4: Seal policy on-chain enforcement (design needed)
-- [ ] Quest badge revocation (P6)
-- [ ] Lookalike: Graph-based similarity + on-chain wallet discovery (P6)
-
-## Recently Completed (2026-03-11)
-- **P5 merge**: 21 commits merged to main (fast-forward, 0 conflicts)
-- **Residual risks**: RR-1 (amount=0), RR-3 (MAX_BATCH_SIZE), RR-4 (public(package)), RR-5 (WebAuthn→Redis), RR-7 (cap check), RR-8 (dedup), RR-10 (testLogin guard)
-- **Wave 4**: 8 audit docs in `docs/security/` (~157 KB)
-- **Wave 3**: 24 red team tests + 134 NatSpec annotations
-- **Wave 1-2**: M1-M7 Move fixes + B1-B9 BFF fixes
-- Worktree `.worktrees/p5-security` removed, branch deleted
+## Recently Completed
+- [2026-03-11] **Wave 3**: 2.3 NFT Gallery, 2.4 HD Wallet Auto-Detection, 6.1 Yield Optimizer Agent
+- [2026-03-11] **Wave 2**: 1.2 Segment Rule Evaluator, 3.3 Deal Won Auto-Release, 4.1 Journey Delay Steps, 5.1 Vault Time-Lock
+- [2026-03-11] **Wave 1**: 1.1 BullMQ Scheduling, 2.1 SuiNS Resolution, 2.2 Price Oracle, 3.1 Escrow Fund TX, 3.2 Deal Room Gate, 4.2 Gas Station Auto-Sponsor
+- [2026-03-11] Spec vs implementation audit + plan creation
 
 ## Blockers
-None
+- VaultSecret `suiObjectId` field added to schema — needs `prisma migrate dev`
 
 ## Notes
-- P5 design doc: `docs/plans/2026-03-08-p5-security-audit-design.md`
-- P5 implementation plan: `docs/plans/2026-03-08-p5-security-audit-implementation.md`
-- 8 audit docs: `docs/security/` (auditor-guide, access-control-matrix, architecture, threat-model, module-analysis, fix-changelog, gas-analysis, test-report)
-- Final test counts: Move 143/143, BFF 185/185, tsc 0 errors
-
-## Key References
-- Roadmap: `docs/plans/2026-03-07-phase2-4-roadmap.md`
-- Spec: `specs/crm_spec_v1.md`
+- All 13/13 plan items from `tasks/plan-spec-gaps.md` implemented
+- Wave 1: 6 agents parallel, Wave 2: 4 agents parallel, Wave 3: 3 agents parallel
+- `tsc --noEmit` clean after each wave
+- New test files: rule-evaluator (11), deal-event-listener (5), vault-expiry (3), wallet-cluster (6), yield-optimizer (7) = 32 new tests
+- Pre-existing: `@mysten/sui` ESM requires `jest.mock` preamble in blockchain-importing specs

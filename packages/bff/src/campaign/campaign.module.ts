@@ -1,4 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
 import { CampaignController } from './campaign.controller';
 import { CampaignService } from './campaign.service';
 import { WorkflowEngine } from './workflow/workflow.engine';
@@ -23,6 +24,7 @@ import { QuestModule } from '../quest/quest.module';
     NotificationModule,
     forwardRef(() => AgentModule),
     QuestModule,
+    BullModule.registerQueue({ name: 'workflow-delay' }),
   ],
   controllers: [CampaignController],
   providers: [

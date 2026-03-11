@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SuiClientService } from './sui.client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PriceOracleService } from './price-oracle.service';
 import Moralis from 'moralis';
 
 export interface TokenBalance {
@@ -34,6 +35,7 @@ export class BalanceAggregatorService implements OnModuleInit {
     private readonly suiClient: SuiClientService,
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly priceOracle: PriceOracleService,
   ) {}
 
   async onModuleInit() {
@@ -55,16 +57,23 @@ export class BalanceAggregatorService implements OnModuleInit {
         owner: address,
       });
 
+      const suiUsdPrice = await this.priceOracle.getSuiUsdPrice();
+
       const tokens: TokenBalance[] = balances.map((b: any) => {
         const coinType = b.coinType as string;
         const symbol = coinType.split('::').pop() || coinType;
+        const isSui = coinType === '0x2::sui::SUI';
+        const usdPrice = isSui ? suiUsdPrice : 0;
+        const usdValue = isSui
+          ? (parseFloat(b.totalBalance) / 1e9) * usdPrice
+          : 0;
         return {
           symbol,
           name: symbol,
           balance: b.totalBalance,
-          decimals: 9, // SUI uses 9 decimals
-          usdPrice: 0, // TODO: price oracle
-          usdValue: 0,
+          decimals: 9,
+          usdPrice,
+          usdValue,
         };
       });
 

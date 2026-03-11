@@ -23,6 +23,8 @@ import { TestAuthModule } from './auth/test-auth.module';
 import { WebhookModule } from './webhook/webhook.module';
 import { AutoTagModule } from './auto-tag/auto-tag.module';
 import { EngagementModule } from './engagement/engagement.module';
+import { BullQueueModule } from './jobs/bull.module';
+import { JobsModule } from './jobs/jobs.module';
 import { AgentModule } from './agent/agent.module';
 import { SocialModule } from './social/social.module';
 import { BroadcastModule } from './broadcast/broadcast.module';
@@ -31,6 +33,7 @@ import { GdprModule } from './gdpr/gdpr.module';
 import { CacheModule } from './common/cache/cache.module';
 import { HealthModule } from './common/health/health.module';
 import { LoggingModule } from './common/logging/logging.module';
+import { AuditTrailModule } from './common/audit-trail/audit-trail.module';
 import { ThrottleConfig } from './common/throttle/throttle.config';
 
 @Module({
@@ -38,10 +41,12 @@ import { ThrottleConfig } from './common/throttle/throttle.config';
     ConfigModule.forRoot({ isGlobal: true }),
     EventEmitterModule.forRoot(),
     ThrottleConfig,
+    BullQueueModule,
     PrismaModule,
     CacheModule,
     HealthModule,
     LoggingModule,
+    AuditTrailModule,
     AuthModule,
     BlockchainModule,
     WorkspaceModule,
@@ -63,6 +68,7 @@ import { ThrottleConfig } from './common/throttle/throttle.config';
     BroadcastModule,
     QuestModule,
     GdprModule,
+    JobsModule,
     ...(process.env.NODE_ENV === 'test' ? [TestAuthModule] : []),
   ],
   controllers: [AppController],

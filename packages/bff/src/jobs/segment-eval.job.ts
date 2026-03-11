@@ -1,84 +1,58 @@
-// @ts-nocheck
-import { Injectable } from '@nestjs/common';
-import { Queue, Worker } from 'bullmq';
-import { ConfigService } from '@nestjs/config';
-import { Pool } from 'pg';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Logger } from '@nestjs/common';
+import { Job } from 'bullmq';
+import { PrismaService } from '../prisma/prisma.service';
+import { RuleEvaluatorService } from '../segment/evaluator/rule-evaluator.service';
 
-@Injectable()
-export class SegmentEvalJob {
-  private queue: Queue;
-  private worker: Worker;
-  private pgPool: Pool;
+export interface SegmentEvalJobData {
+  segmentId: string;
+}
 
-  constructor(private readonly configService: ConfigService) {
-    this.pgPool = new Pool({
-      connectionString: this.configService.get<string>('DATABASE_URL'),
+@Processor('segment-eval')
+export class SegmentEvalJob extends WorkerHost {
+  private readonly logger = new Logger(SegmentEvalJob.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ruleEvaluator: RuleEvaluatorService,
+  ) {
+    super();
+  }
+
+  async process(job: Job<SegmentEvalJobData>): Promise<void> {
+    const { segmentId } = job.data;
+    this.logger.log(`Processing segment evaluation for ${segmentId}`);
+
+    const segment = await this.prisma.segment.findUnique({
+      where: { id: segmentId },
+      select: { id: true, workspaceId: true, rules: true },
     });
 
-    // TODO: Initialize BullMQ queue
-    // const redisUrl = this.configService.get<string>('REDIS_URL');
-    // this.queue = new Queue('segment-eval', {
-    //   connection: {
-    //     url: redisUrl,
-    //   },
-    // });
-    //
-    // this.worker = new Worker('segment-eval', async (job) => {
-    //   await this.processJob(job.data);
-    // }, {
-    //   connection: {
-    //     url: redisUrl,
-    //   },
-    // });
-  }
-
-  async scheduleEvaluation(segmentId: string): Promise<void> {
-    // TODO: Add job to queue
-    console.log(`Scheduling segment evaluation for ${segmentId}`);
-
-    // await this.queue.add('evaluate', {
-    //   segmentId,
-    //   timestamp: Date.now(),
-    // });
-  }
-
-  private async processJob(data: { segmentId: string }): Promise<void> {
-    console.log(`Processing segment evaluation for ${data.segmentId}`);
-
-    // Get segment rules
-    const segment = await this.pgPool.query(
-      `SELECT rules FROM segments WHERE id = $1`,
-      [data.segmentId],
-    );
-
-    if (segment.rows.length === 0) {
-      throw new Error('Segment not found');
+    if (!segment) {
+      throw new Error(`Segment not found: ${segmentId}`);
     }
 
-    const rules = segment.rows[0].rules;
+    const profileIds = await this.ruleEvaluator.evaluate(
+      segment.workspaceId,
+      segment.rules as any,
+    );
 
-    // TODO: Call Rust Core gRPC service to evaluate segment
-    // const grpcClient = new CoreServiceClient(...);
-    // const profileIds = await grpcClient.evaluateSegment({
-    //   segment_id: data.segmentId,
-    //   rules: JSON.stringify(rules),
-    // });
+    await this.prisma.segmentMembership.deleteMany({ where: { segmentId } });
 
-    // Update segment memberships
-    // await this.pgPool.query(
-    //   `DELETE FROM segment_memberships WHERE segment_id = $1`,
-    //   [data.segmentId],
-    // );
-    //
-    // const values = profileIds.map((_, i) => `($1, $${i + 2}, now())`).join(',');
-    // await this.pgPool.query(
-    //   `INSERT INTO segment_memberships (segment_id, profile_id, joined_at) VALUES ${values}`,
-    //   [data.segmentId, ...profileIds],
-    // );
-    //
-    // await this.pgPool.query(
-    //   `UPDATE segments SET last_refreshed_at = now() WHERE id = $1`,
-    //   [data.segmentId],
-    // );
+    if (profileIds.length > 0) {
+      await this.prisma.segmentMembership.createMany({
+        data: profileIds.map((profileId) => ({ segmentId, profileId })),
+        skipDuplicates: true,
+      });
+    }
+
+    await this.prisma.segment.update({
+      where: { id: segmentId },
+      data: { lastRefreshedAt: new Date() },
+    });
+
+    this.logger.log(
+      `Segment evaluation complete for ${segmentId}: ${profileIds.length} members`,
+    );
   }
 }

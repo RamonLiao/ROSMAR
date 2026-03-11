@@ -8,6 +8,9 @@ import { LookalikeController } from './lookalike/lookalike.controller';
 import { LookalikeService } from './lookalike/lookalike.service';
 import { FeatureExtractionService } from './lookalike/feature-extraction.service';
 import { InternalCandidateSource } from './lookalike/sources/internal.source';
+import { OnChainCandidateSource } from './lookalike/sources/on-chain.source';
+import { GraphBasedStrategy } from './lookalike/strategies/graph-based.strategy';
+import { RuleEvaluatorService } from './evaluator/rule-evaluator.service';
 
 @Module({
   imports: [AuthModule],
@@ -19,7 +22,10 @@ import { InternalCandidateSource } from './lookalike/sources/internal.source';
     LookalikeService,
     FeatureExtractionService,
     InternalCandidateSource,
+    OnChainCandidateSource,
+    GraphBasedStrategy,
+    RuleEvaluatorService,
   ],
-  exports: [SegmentService],
+  exports: [SegmentService, RuleEvaluatorService],
 })
 export class SegmentModule {}

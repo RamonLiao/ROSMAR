@@ -48,7 +48,7 @@ describe('SegmentDiffJob', () => {
 
     const emitSpy = jest.spyOn(eventEmitter, 'emit');
 
-    await job.checkSegmentDiffs();
+    await job.process({} as any);
 
     // First run establishes baseline, no events emitted
     expect(emitSpy).not.toHaveBeenCalledWith('segment.entered', expect.anything());
@@ -60,7 +60,7 @@ describe('SegmentDiffJob', () => {
       { segmentId: 'seg-1', profileId: 'p3', joinedAt: new Date() },
     ]);
 
-    await job.checkSegmentDiffs();
+    await job.process({} as any);
 
     expect(emitSpy).toHaveBeenCalledWith('segment.entered', {
       event_type: 'segment_entered',
@@ -90,14 +90,14 @@ describe('SegmentDiffJob', () => {
 
     const emitSpy = jest.spyOn(eventEmitter, 'emit');
 
-    await job.checkSegmentDiffs();
+    await job.process({} as any);
 
     // Second run: p2 removed
     prisma.segmentMembership.findMany.mockResolvedValue([
       { segmentId: 'seg-2', profileId: 'p1', joinedAt: now },
     ]);
 
-    await job.checkSegmentDiffs();
+    await job.process({} as any);
 
     expect(emitSpy).toHaveBeenCalledWith('segment.exited', {
       event_type: 'segment_exited',

@@ -1,27 +1,51 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { SuiClientService } from './sui.client';
+
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+interface CacheEntry<T> {
+  value: T;
+  expiresAt: number;
+}
 
 @Injectable()
 export class SuinsService {
+  private readonly logger = new Logger(SuinsService.name);
+  private readonly cache = new Map<string, CacheEntry<string | null>>();
+
   constructor(private suiClient: SuiClientService) {}
+
+  private cacheGet(key: string): string | null | undefined {
+    const entry = this.cache.get(key);
+    if (!entry) return undefined;
+    if (Date.now() > entry.expiresAt) {
+      this.cache.delete(key);
+      return undefined;
+    }
+    return entry.value;
+  }
+
+  private cacheSet(key: string, value: string | null): void {
+    this.cache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+  }
 
   /**
    * Resolve .sui name to address
    */
   async resolveNameToAddress(name: string): Promise<string | null> {
+    if (!name || !name.trim()) return null;
+
+    const cacheKey = `suins:fwd:${name}`;
+    const cached = this.cacheGet(cacheKey);
+    if (cached !== undefined) return cached;
+
     try {
       const client = this.suiClient.getClient();
-
-      // Query SuiNS registry for the name
-      // TODO: Implement actual SuiNS resolution using official SDK
-      // For now, mock implementation
-
-      // SuiNS names are stored in a registry contract
-      // We would query the registry with the name hash
-
-      return null; // Return null if not found
+      const address = await client.resolveNameServiceAddress({ name });
+      this.cacheSet(cacheKey, address);
+      return address;
     } catch (error) {
-      console.error('Error resolving SuiNS name:', error);
+      this.logger.warn(`Failed to resolve SuiNS name "${name}": ${(error as Error).message}`);
       return null;
     }
   }
@@ -30,15 +54,22 @@ export class SuinsService {
    * Reverse resolve address to .sui name
    */
   async resolveAddressToName(address: string): Promise<string | null> {
+    if (!address || !address.trim()) return null;
+
+    const cacheKey = `suins:rev:${address}`;
+    const cached = this.cacheGet(cacheKey);
+    if (cached !== undefined) return cached;
+
     try {
       const client = this.suiClient.getClient();
-
-      // Query SuiNS reverse registry
-      // TODO: Implement actual reverse resolution
-
-      return null;
+      const result = await client.resolveNameServiceNames({ address });
+      const name = result.data[0] ?? null;
+      this.cacheSet(cacheKey, name);
+      return name;
     } catch (error) {
-      console.error('Error reverse resolving address:', error);
+      this.logger.warn(
+        `Failed to reverse resolve address "${address}": ${(error as Error).message}`,
+      );
       return null;
     }
   }

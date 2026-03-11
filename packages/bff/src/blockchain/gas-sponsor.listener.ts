@@ -65,27 +65,70 @@ export class GasSponsorListener {
           `Low balance detected for ${address}: ${balance} MIST (threshold: ${this.thresholdMist})`,
         );
 
-        await this.prisma.notification.create({
-          data: {
+        // Rate-limit check (in-memory, resets on restart)
+        const todayKey = `${address}:${new Date().toISOString().slice(0, 10)}`;
+        const grantsToday = GasSponsorListener.grantCountCache.get(todayKey) ?? 0;
+        const maxPerDay = this.configService.get<number>('GAS_SPONSOR_MAX_PER_DAY', 5);
+
+        if (grantsToday >= maxPerDay) {
+          this.logger.warn(
+            `Gas sponsor rate limit reached for ${address} (${grantsToday}/${maxPerDay} today)`,
+          );
+          await this.createNotification(
             workspaceId,
-            userId: profile_id,
-            type: 'gas_sponsor_flagged',
-            title: 'Low SUI balance detected',
-            body: `Wallet ${address.slice(0, 8)}...${address.slice(-4)} has ${Number(balance) / 1e9} SUI. Gas sponsorship will be applied on next transaction.`,
-            metadata: {
-              address,
-              profileId: profile_id,
-              balanceMist: balance.toString(),
-              thresholdMist: this.thresholdMist.toString(),
-            },
-          },
-        });
+            profile_id,
+            address,
+            'gas_sponsor_rate_limited',
+            'Daily gas sponsor limit reached',
+          );
+          return;
+        }
+
+        // Record the grant
+        GasSponsorListener.grantCountCache.set(todayKey, grantsToday + 1);
+        this.logger.log(
+          `Gas sponsorship pre-approved for ${address} (${grantsToday + 1}/${maxPerDay} today)`,
+        );
+
+        await this.createNotification(
+          workspaceId,
+          profile_id,
+          address,
+          'gas_sponsor_activated',
+          'Gas sponsorship activated for next transaction',
+        );
       }
     } catch (error: any) {
       this.logger.error(
         `Failed to check balance for ${address}: ${error.message}`,
         error.stack,
       );
+    }
+  }
+
+  // TODO: Replace with Prisma GasSponsorGrant model when ready
+  private static grantCountCache = new Map<string, number>();
+
+  private async createNotification(
+    workspaceId: string,
+    userId: string | undefined,
+    address: string,
+    type: string,
+    title: string,
+  ): Promise<void> {
+    try {
+      await this.prisma.notification.create({
+        data: {
+          workspaceId,
+          userId: userId ?? address,
+          type,
+          title,
+          body: `Wallet ${address.slice(0, 8)}...${address.slice(-4)}: ${title}`,
+          metadata: { address },
+        },
+      });
+    } catch (err: any) {
+      this.logger.error(`Failed to create notification: ${err.message}`);
     }
   }
 }

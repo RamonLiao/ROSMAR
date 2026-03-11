@@ -11,6 +11,7 @@ import { TxBuilderService } from '../blockchain/tx-builder.service';
 import { AuthModule } from '../auth/auth.module';
 import { NotificationModule } from '../notification/notification.module';
 import { WalrusClient } from '../vault/walrus.client';
+import { DealEventListener } from './deal-event.listener';
 
 @Module({
   imports: [AuthModule, NotificationModule],
@@ -23,6 +24,7 @@ import { WalrusClient } from '../vault/walrus.client';
     SuiClientService,
     TxBuilderService,
     WalrusClient,
+    DealEventListener,
   ],
   exports: [DealService, DealDocumentService, EscrowService],
 })

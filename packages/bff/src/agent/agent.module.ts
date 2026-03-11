@@ -8,18 +8,21 @@ import { ContentService } from './content/content.service';
 import { ContentController } from './content/content.controller';
 import { ActionService } from './action/action.service';
 import { ActionController } from './action/action.controller';
+import { YieldOptimizerService } from './yield/yield-optimizer.service';
+import { YieldOptimizerController } from './yield/yield-optimizer.controller';
 import { CampaignModule } from '../campaign/campaign.module';
 
 @Module({
   imports: [forwardRef(() => CampaignModule)],
-  controllers: [AgentController, AnalystController, ContentController, ActionController],
+  controllers: [AgentController, AnalystController, ContentController, ActionController, YieldOptimizerController],
   providers: [
     LlmClientService,
     UsageTrackingService,
     AnalystService,
     ContentService,
     ActionService,
+    YieldOptimizerService,
   ],
-  exports: [LlmClientService, UsageTrackingService, AnalystService],
+  exports: [LlmClientService, UsageTrackingService, AnalystService, YieldOptimizerService],
 })
 export class AgentModule {}
