@@ -22,8 +22,11 @@ export class WalrusClient {
       'WALRUS_AGGREGATOR_URL',
       'https://aggregator.walrus-testnet.walrus.space',
     );
-    this.isMock = this.configService.get<string>('WALRUS_MOCK', 'true') === 'true';
+    this.isMock = this.configService.get<string>('WALRUS_MOCK', 'false') === 'true';
   }
+
+  private static readonly MAX_RETRIES = 3;
+  private static readonly TIMEOUT_MS = 30_000;
 
   async uploadBlob(data: Buffer): Promise<WalrusUploadResponse> {
     if (this.isMock) {
@@ -35,29 +38,45 @@ export class WalrusClient {
       };
     }
 
-    const response = await fetch(`${this.publisherUrl}/v1/store`, {
-      method: 'PUT',
-      body: new Uint8Array(data),
-      headers: { 'Content-Type': 'application/octet-stream' },
-    });
+    let lastError: Error | undefined;
+    for (let attempt = 1; attempt <= WalrusClient.MAX_RETRIES; attempt++) {
+      try {
+        const response = await fetch(`${this.publisherUrl}/v1/store`, {
+          method: 'PUT',
+          body: new Uint8Array(data),
+          headers: { 'Content-Type': 'application/octet-stream' },
+          signal: AbortSignal.timeout(WalrusClient.TIMEOUT_MS),
+        });
 
-    if (!response.ok) {
-      throw new Error(`Walrus upload failed: ${response.status} ${response.statusText}`);
+        if (!response.ok) {
+          throw new Error(`Walrus upload failed: ${response.status} ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        const blobId =
+          result.newlyCreated?.blobObject?.blobId ??
+          result.alreadyCertified?.blobId;
+
+        if (!blobId) {
+          throw new Error('Walrus upload response missing blobId');
+        }
+
+        return {
+          blobId,
+          url: `${this.aggregatorUrl}/v1/${blobId}`,
+        };
+      } catch (error) {
+        lastError = error as Error;
+        this.logger.warn(
+          `Walrus upload attempt ${attempt}/${WalrusClient.MAX_RETRIES} failed: ${lastError.message}`,
+        );
+        if (attempt < WalrusClient.MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, 1_000 * attempt));
+        }
+      }
     }
 
-    const result = await response.json();
-    const blobId =
-      result.newlyCreated?.blobObject?.blobId ??
-      result.alreadyCertified?.blobId;
-
-    if (!blobId) {
-      throw new Error('Walrus upload response missing blobId');
-    }
-
-    return {
-      blobId,
-      url: `${this.aggregatorUrl}/v1/${blobId}`,
-    };
+    throw lastError!;
   }
 
   async downloadBlob(blobId: string): Promise<Buffer> {
@@ -66,7 +85,9 @@ export class WalrusClient {
       return Buffer.from('mock blob data');
     }
 
-    const response = await fetch(`${this.aggregatorUrl}/v1/${blobId}`);
+    const response = await fetch(`${this.aggregatorUrl}/v1/${blobId}`, {
+      signal: AbortSignal.timeout(WalrusClient.TIMEOUT_MS),
+    });
     if (!response.ok) {
       throw new Error(`Walrus download failed: ${response.status} ${response.statusText}`);
     }
