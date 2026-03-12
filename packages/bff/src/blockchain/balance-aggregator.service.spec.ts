@@ -85,7 +85,10 @@ describe('BalanceAggregatorService', () => {
         },
         {
           provide: PriceOracleService,
-          useValue: { getSuiUsdPrice: jest.fn().mockResolvedValue(0) },
+          useValue: {
+            getSuiUsdPrice: jest.fn().mockResolvedValue(0),
+            getSolUsdPrice: jest.fn().mockResolvedValue(0),
+          },
         },
       ],
     }).compile();
@@ -168,6 +171,56 @@ describe('BalanceAggregatorService', () => {
         new Error('API error'),
       );
       const result = await service.getEvmBalance('0xbadaddr');
+      expect(result.tokens).toEqual([]);
+      expect(result.balanceUsd).toBe(0);
+    });
+  });
+
+  describe('getSolanaBalance', () => {
+    it('should include SOL USD price in Solana balance', async () => {
+      // Override getSolUsdPrice for this test
+      const priceOracle = (service as any).priceOracle;
+      priceOracle.getSolUsdPrice.mockResolvedValue(150);
+
+      mockMoralis.SolApi.account.getPortfolio.mockResolvedValue({
+        result: {
+          nativeBalance: { lamports: '5000000000' }, // 5 SOL
+          tokens: [
+            {
+              mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+              symbol: 'USDC',
+              name: 'USD Coin',
+              amount: '1000000',
+              decimals: 6,
+            },
+          ],
+        },
+      });
+
+      const result = await service.getSolanaBalance('SoLaddr1');
+      expect(result.chain).toBe('solana');
+      expect(result.tokens).toHaveLength(2);
+
+      // Native SOL token
+      const sol = result.tokens[0];
+      expect(sol.symbol).toBe('SOL');
+      expect(sol.usdPrice).toBe(150);
+      expect(sol.usdValue).toBe(750); // 5 SOL * $150
+
+      // Non-SOL token should still have 0 price
+      const usdc = result.tokens[1];
+      expect(usdc.symbol).toBe('USDC');
+      expect(usdc.usdPrice).toBe(0);
+      expect(usdc.usdValue).toBe(0);
+
+      expect(result.balanceUsd).toBe(750);
+    });
+
+    it('should handle Solana API error gracefully', async () => {
+      mockMoralis.SolApi.account.getPortfolio.mockRejectedValue(
+        new Error('Solana RPC error'),
+      );
+      const result = await service.getSolanaBalance('SoLbad');
       expect(result.tokens).toEqual([]);
       expect(result.balanceUsd).toBe(0);
     });
