@@ -9,6 +9,10 @@ import { GrantDiscordRoleAction } from './actions/grant-discord-role.action';
 import { IssuePoapAction } from './actions/issue-poap.action';
 import { AiGenerateContentAction } from './actions/ai-generate-content.action';
 import { AssignQuestAction } from './actions/assign-quest.action';
+import { SendEmailAction } from './actions/send-email.action';
+import { AddToSegmentAction } from './actions/add-to-segment.action';
+import { UpdateTierAction } from './actions/update-tier.action';
+import { ConditionAction } from './actions/condition.action';
 
 export interface WorkflowStep {
   type: string;
@@ -19,7 +23,7 @@ export interface WorkflowStep {
 @Injectable()
 export class WorkflowEngine {
   private readonly logger = new Logger(WorkflowEngine.name);
-  private actions: Map<string, { execute(profileId: string, config: any): Promise<void> }>;
+  private actions: Map<string, { execute(profileId: string, config: any): Promise<any> }>;
 
   constructor(
     @InjectQueue('workflow-delay') private readonly delayQueue: Queue,
@@ -31,6 +35,10 @@ export class WorkflowEngine {
     private readonly issuePoapAction: IssuePoapAction,
     private readonly aiGenerateContentAction: AiGenerateContentAction,
     private readonly assignQuestAction: AssignQuestAction,
+    private readonly sendEmailAction: SendEmailAction,
+    private readonly addToSegmentAction: AddToSegmentAction,
+    private readonly updateTierAction: UpdateTierAction,
+    private readonly conditionAction: ConditionAction,
   ) {
     this.actions = new Map();
     this.actions.set('send_telegram', this.sendTelegramAction);
@@ -40,6 +48,10 @@ export class WorkflowEngine {
     this.actions.set('issue_poap', this.issuePoapAction);
     this.actions.set('ai_generate_content', this.aiGenerateContentAction);
     this.actions.set('assign_quest', this.assignQuestAction);
+    this.actions.set('send_email', this.sendEmailAction);
+    this.actions.set('add_to_segment', this.addToSegmentAction);
+    this.actions.set('update_tier', this.updateTierAction);
+    this.actions.set('condition', this.conditionAction);
   }
 
   async startWorkflow(
@@ -97,7 +109,7 @@ export class WorkflowEngine {
     }
 
     try {
-      await action.execute(profileId, step.config);
+      const result = await action.execute(profileId, step.config);
 
       // Log successful action
       await this.prisma.workflowActionLog.create({
@@ -110,10 +122,19 @@ export class WorkflowEngine {
         },
       });
 
+      // Condition branching: use branch result to determine next step index
+      let nextStep = currentStep + 1;
+      if (step.type === 'condition' && result?.branch) {
+        const branches = step.config?.branches;
+        if (branches && typeof branches[result.branch] === 'number') {
+          nextStep = branches[result.branch];
+        }
+      }
+
       // Advance to next step
       await this.prisma.workflowExecution.update({
         where: { id: execution.id },
-        data: { currentStep: currentStep + 1 },
+        data: { currentStep: nextStep },
       });
 
       // Schedule next step (with delay if configured)
