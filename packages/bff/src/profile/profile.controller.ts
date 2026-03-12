@@ -10,11 +10,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ProfileService } from './profile.service';
+import { WalletClusterService } from './wallet-cluster.service';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { RbacGuard, RequirePermissions, WRITE, DELETE } from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
 import { UserPayload } from '../auth/auth.service';
 import { CreateWalletDto } from './dto/wallet.dto';
+import { MergeProfileDto } from './dto/merge-profile.dto';
 
 export class CreateProfileDto {
   primaryAddress: string;
@@ -31,7 +33,10 @@ export class UpdateProfileDto {
 @Controller('profiles')
 @UseGuards(SessionGuard, RbacGuard)
 export class ProfileController {
-  constructor(private readonly profileService: ProfileService) {}
+  constructor(
+    private readonly profileService: ProfileService,
+    private readonly walletClusterService: WalletClusterService,
+  ) {}
 
   @Post()
   @RequirePermissions(WRITE)
@@ -122,6 +127,34 @@ export class ProfileController {
       user.address,
       id,
       expectedVersion,
+    );
+  }
+
+  // ── Merge endpoints ──────────────────────────────────────
+
+  @Get(':id/merge-candidates')
+  async getMergeCandidates(
+    @User() user: import('../auth/auth.service').UserPayload,
+    @Param('id') id: string,
+  ) {
+    const candidate = await this.walletClusterService.detectMergeCandidate(
+      user.workspaceId,
+      id,
+    );
+    return { candidate };
+  }
+
+  @Post(':id/merge')
+  @RequirePermissions(WRITE)
+  async mergeProfile(
+    @User() user: import('../auth/auth.service').UserPayload,
+    @Param('id') id: string,
+    @Body() dto: MergeProfileDto,
+  ) {
+    return this.walletClusterService.mergeProfiles(
+      user.workspaceId,
+      id,
+      dto.sourceProfileId,
     );
   }
 
