@@ -113,6 +113,15 @@ export function useArchiveDeal() {
   });
 }
 
+export function useDealRoomAccess(dealId: string) {
+  return useQuery({
+    queryKey: ['deal-room-access', dealId],
+    queryFn: () => apiClient.get<{ hasAccess: boolean }>(`/deals/${dealId}/access`),
+    enabled: !!dealId,
+    staleTime: 60_000,
+  });
+}
+
 export function useAuditLogs(objectId: string) {
   return useQuery({
     queryKey: ['audit-logs', objectId],

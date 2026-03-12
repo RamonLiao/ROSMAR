@@ -15,9 +15,9 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DealDocuments } from "@/components/deal/deal-documents";
 import { EscrowTabContent } from "@/components/deal/escrow-tab-content";
-import { ArrowLeft, Pencil, X, Loader2, DollarSign } from "lucide-react";
+import { ArrowLeft, Pencil, X, Loader2, DollarSign, ShieldAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useDeal, useUpdateDeal } from "@/lib/hooks/use-deals";
+import { useDeal, useUpdateDeal, useDealRoomAccess } from "@/lib/hooks/use-deals";
 import { DEAL_STAGES } from "@/lib/constants";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -29,6 +29,8 @@ export default function DealDetailPage({
   const { id } = use(params);
   const router = useRouter();
   const { data: deal, isLoading, error } = useDeal(id);
+  const { data: accessData } = useDealRoomAccess(id);
+  const hasRoomAccess = accessData?.hasAccess ?? false;
   const { mutateAsync: updateDeal, isPending: isUpdating } = useUpdateDeal();
 
   const [editing, setEditing] = useState(false);
@@ -256,16 +258,37 @@ export default function DealDetailPage({
         </TabsContent>
 
         <TabsContent value="documents">
-          <DealDocuments
-            dealId={deal.id}
-            workspaceId={deal.workspaceId as string}
-          />
+          {hasRoomAccess ? (
+            <DealDocuments
+              dealId={deal.id}
+              workspaceId={deal.workspaceId as string}
+            />
+          ) : (
+            <AccessDeniedPanel />
+          )}
         </TabsContent>
 
         <TabsContent value="escrow">
-          <EscrowTabContent dealId={deal.id} />
+          {hasRoomAccess ? (
+            <EscrowTabContent dealId={deal.id} />
+          ) : (
+            <AccessDeniedPanel />
+          )}
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function AccessDeniedPanel() {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
+      <ShieldAlert className="h-12 w-12 text-muted-foreground mb-4" />
+      <h3 className="text-lg font-semibold">Access Restricted</h3>
+      <p className="text-muted-foreground mt-2 text-sm max-w-xs">
+        Only deal participants, escrow parties, and workspace admins can view
+        this section. Contact an admin to request access.
+      </p>
     </div>
   );
 }
