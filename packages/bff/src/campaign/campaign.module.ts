@@ -10,6 +10,10 @@ import { GrantDiscordRoleAction } from './workflow/actions/grant-discord-role.ac
 import { IssuePoapAction } from './workflow/actions/issue-poap.action';
 import { AiGenerateContentAction } from './workflow/actions/ai-generate-content.action';
 import { AssignQuestAction } from './workflow/actions/assign-quest.action';
+import { SendEmailAction } from './workflow/actions/send-email.action';
+import { AddToSegmentAction } from './workflow/actions/add-to-segment.action';
+import { UpdateTierAction } from './workflow/actions/update-tier.action';
+import { ConditionAction } from './workflow/actions/condition.action';
 import { SuiClientService } from '../blockchain/sui.client';
 import { TxBuilderService } from '../blockchain/tx-builder.service';
 import { TriggerMatcherService } from './trigger/trigger-matcher.service';
@@ -17,6 +21,7 @@ import { AuthModule } from '../auth/auth.module';
 import { NotificationModule } from '../notification/notification.module';
 import { AgentModule } from '../agent/agent.module';
 import { QuestModule } from '../quest/quest.module';
+import { MessagingModule } from '../messaging/messaging.module';
 
 @Module({
   imports: [
@@ -24,6 +29,7 @@ import { QuestModule } from '../quest/quest.module';
     NotificationModule,
     forwardRef(() => AgentModule),
     QuestModule,
+    MessagingModule,
     BullModule.registerQueue({ name: 'workflow-delay' }),
   ],
   controllers: [CampaignController],
@@ -37,6 +43,10 @@ import { QuestModule } from '../quest/quest.module';
     IssuePoapAction,
     AiGenerateContentAction,
     AssignQuestAction,
+    SendEmailAction,
+    AddToSegmentAction,
+    UpdateTierAction,
+    ConditionAction,
     TriggerMatcherService,
     SuiClientService,
     TxBuilderService,

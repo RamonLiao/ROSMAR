@@ -16,12 +16,12 @@ import {
 const ACTIONS = [
   { type: "send_telegram", label: "Send Telegram", enabled: true },
   { type: "send_discord", label: "Send Discord", enabled: true },
-  { type: "send_email", label: "Send Email", enabled: false },
+  { type: "send_email", label: "Send Email", enabled: true },
   { type: "airdrop_token", label: "Airdrop Token", enabled: true },
-  { type: "add_to_segment", label: "Add to Segment", enabled: false },
-  { type: "update_tier", label: "Update Tier", enabled: false },
-  { type: "wait_delay", label: "Wait Delay", enabled: false },
-  { type: "condition", label: "Condition", enabled: false },
+  { type: "add_to_segment", label: "Add to Segment", enabled: true },
+  { type: "update_tier", label: "Update Tier", enabled: true },
+  { type: "wait_delay", label: "Wait Delay", enabled: true },
+  { type: "condition", label: "Condition", enabled: true },
 ] as const;
 
 export default function WorkflowEditorPage({
