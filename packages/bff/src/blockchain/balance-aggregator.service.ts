@@ -122,27 +122,40 @@ export class BalanceAggregatorService implements OnModuleInit {
           network: 'mainnet',
         });
 
+      const solUsdPrice = await this.priceOracle.getSolUsdPrice();
+
       const tokens: TokenBalance[] = (response?.result?.tokens ?? []).map(
-        (t: any) => ({
-          symbol: t.symbol ?? 'Unknown',
-          name: t.name ?? 'Unknown',
-          balance: t.amount ?? '0',
-          decimals: t.decimals ?? 0,
-          usdPrice: 0,
-          usdValue: 0,
-        }),
+        (t: any) => {
+          const isSol =
+            t.mint === 'So11111111111111111111111111111111111111112';
+          const usdPrice = isSol ? solUsdPrice : 0;
+          const decimals = t.decimals ?? 0;
+          const usdValue = isSol
+            ? (parseFloat(t.amount ?? '0') / 10 ** decimals) * usdPrice
+            : 0;
+          return {
+            symbol: t.symbol ?? 'Unknown',
+            name: t.name ?? 'Unknown',
+            balance: t.amount ?? '0',
+            decimals,
+            usdPrice,
+            usdValue,
+          };
+        },
       );
 
       // Add native SOL
       const nativeSol = response?.result?.nativeBalance;
       if (nativeSol) {
+        const lamports = nativeSol.lamports ?? '0';
+        const usdValue = (parseFloat(lamports) / 1e9) * solUsdPrice;
         tokens.unshift({
           symbol: 'SOL',
           name: 'Solana',
-          balance: nativeSol.lamports ?? '0',
+          balance: lamports,
           decimals: 9,
-          usdPrice: 0,
-          usdValue: 0,
+          usdPrice: solUsdPrice,
+          usdValue,
         });
       }
 
