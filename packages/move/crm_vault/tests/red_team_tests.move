@@ -3,6 +3,7 @@ module crm_vault::red_team_tests {
     use std::string;
     use sui::test_scenario::{Self as ts};
     use sui::test_utils;
+    use sui::clock;
     use crm_core::capabilities;
     use crm_core::workspace;
     use crm_vault::vault;
@@ -26,15 +27,18 @@ module crm_vault::red_team_tests {
         let p = policy::create_workspace_policy(
             &config, &workspace, &admin_cap,
             string::utf8(b"Default"),
+            0,
             ctx,
         );
 
         // Forge a wrong id (some random address bytes, not matching the policy object)
         let wrong_id = sui::address::to_bytes(@0xDEAD);
+        let clk = clock::create_for_testing(ctx);
 
         // ADMIN is owner (member), so membership passes — fails on id mismatch
-        policy::seal_approve(wrong_id, &p, &workspace, ctx);
+        policy::seal_approve(wrong_id, &p, &workspace, &clk, ctx);
 
+        clock::destroy_for_testing(clk);
         test_utils::destroy(config);
         test_utils::destroy(workspace);
         test_utils::destroy(admin_cap);
@@ -56,10 +60,12 @@ module crm_vault::red_team_tests {
         let p = policy::create_workspace_policy(
             &config, &workspace, &admin_cap,
             string::utf8(b"Default"),
+            0,
             ctx,
         );
 
         let correct_id = sui::address::to_bytes(object::id_address(&p));
+        let clk = clock::create_for_testing(ctx);
 
         test_utils::destroy(config);
         test_utils::destroy(admin_cap);
@@ -68,8 +74,9 @@ module crm_vault::red_team_tests {
         ts::next_tx(&mut scenario, ATTACKER);
         let ctx = ts::ctx(&mut scenario);
 
-        policy::seal_approve(correct_id, &p, &workspace, ctx);
+        policy::seal_approve(correct_id, &p, &workspace, &clk, ctx);
 
+        clock::destroy_for_testing(clk);
         test_utils::destroy(workspace);
         test_utils::destroy(p);
         ts::end(scenario);
@@ -90,10 +97,12 @@ module crm_vault::red_team_tests {
             &config, &workspace, &admin_cap,
             string::utf8(b"Admin Only"),
             0, // min_role_level = 0 (viewer), but non-member still fails
+            0,
             ctx,
         );
 
         let correct_id = sui::address::to_bytes(object::id_address(&p));
+        let clk = clock::create_for_testing(ctx);
 
         test_utils::destroy(config);
         test_utils::destroy(admin_cap);
@@ -102,8 +111,9 @@ module crm_vault::red_team_tests {
         ts::next_tx(&mut scenario, ATTACKER);
         let ctx = ts::ctx(&mut scenario);
 
-        policy::seal_approve(correct_id, &p, &workspace, ctx);
+        policy::seal_approve(correct_id, &p, &workspace, &clk, ctx);
 
+        clock::destroy_for_testing(clk);
         test_utils::destroy(workspace);
         test_utils::destroy(p);
         ts::end(scenario);
@@ -128,10 +138,12 @@ module crm_vault::red_team_tests {
             &config, &workspace, &admin_cap,
             string::utf8(b"Admin Only"),
             2,
+            0,
             ctx,
         );
 
         let correct_id = sui::address::to_bytes(object::id_address(&p));
+        let clk = clock::create_for_testing(ctx);
 
         test_utils::destroy(config);
         test_utils::destroy(admin_cap);
@@ -140,8 +152,9 @@ module crm_vault::red_team_tests {
         ts::next_tx(&mut scenario, ATTACKER);
         let ctx = ts::ctx(&mut scenario);
 
-        policy::seal_approve(correct_id, &p, &workspace, ctx);
+        policy::seal_approve(correct_id, &p, &workspace, &clk, ctx);
 
+        clock::destroy_for_testing(clk);
         test_utils::destroy(workspace);
         test_utils::destroy(p);
         ts::end(scenario);
@@ -164,14 +177,17 @@ module crm_vault::red_team_tests {
         let p = policy::create_workspace_policy(
             &config, &ws_a, &cap_a,
             string::utf8(b"Default"),
+            0,
             ctx,
         );
 
         let correct_id = sui::address::to_bytes(object::id_address(&p));
+        let clk = clock::create_for_testing(ctx);
 
         // ADMIN is member of both workspaces, but pass WS-B for WS-A's policy
-        policy::seal_approve(correct_id, &p, &ws_b, ctx);
+        policy::seal_approve(correct_id, &p, &ws_b, &clk, ctx);
 
+        clock::destroy_for_testing(clk);
         test_utils::destroy(config);
         test_utils::destroy(ws_a);
         test_utils::destroy(ws_b);
