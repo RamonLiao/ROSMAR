@@ -13,6 +13,7 @@ import { DealService } from './deal.service';
 import { DealDocumentService } from './deal-document.service';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { RbacGuard, RequirePermissions, WRITE, DELETE } from '../auth/guards/rbac.guard';
+import { DealRoomGuard } from './deal-room.guard';
 import { User } from '../auth/decorators/user.decorator';
 // UserPayload used inline as import() type in decorated params to avoid isolatedModules error
 
@@ -46,6 +47,7 @@ export class DealController {
   constructor(
     private readonly dealService: DealService,
     private readonly dealDocumentService: DealDocumentService,
+    private readonly dealRoomGuard: DealRoomGuard,
   ) {}
 
   @Post()
@@ -141,9 +143,31 @@ export class DealController {
     return this.dealService.getAuditLogs(user.workspaceId, id);
   }
 
-  // --- Deal Documents ---
+  // --- Deal Room Access Check ---
+
+  @Get(':id/access')
+  async checkAccess(
+    @User() user: import('../auth/auth.service').UserPayload,
+    @Param('id') id: string,
+  ) {
+    if (user.role >= 3) {
+      return { hasAccess: true };
+    }
+    try {
+      const participants = await this.dealRoomGuard.gatherParticipants(
+        id,
+        user.workspaceId,
+      );
+      return { hasAccess: participants.has(user.address) };
+    } catch {
+      return { hasAccess: false };
+    }
+  }
+
+  // --- Deal Documents (gated by DealRoomGuard) ---
 
   @Post(':id/documents')
+  @UseGuards(DealRoomGuard)
   @RequirePermissions(WRITE)
   async uploadDocument(
     @Param('id') dealId: string,
@@ -158,6 +182,7 @@ export class DealController {
   }
 
   @Get(':id/documents')
+  @UseGuards(DealRoomGuard)
   async listDocuments(
     @Param('id') dealId: string,
     @User() user: import('../auth/auth.service').UserPayload,

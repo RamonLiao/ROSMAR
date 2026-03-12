@@ -12,6 +12,7 @@ import { AuthModule } from '../auth/auth.module';
 import { NotificationModule } from '../notification/notification.module';
 import { WalrusClient } from '../vault/walrus.client';
 import { DealEventListener } from './deal-event.listener';
+import { DealRoomGuard } from './deal-room.guard';
 
 @Module({
   imports: [AuthModule, NotificationModule],
@@ -25,6 +26,7 @@ import { DealEventListener } from './deal-event.listener';
     TxBuilderService,
     WalrusClient,
     DealEventListener,
+    DealRoomGuard,
   ],
   exports: [DealService, DealDocumentService, EscrowService],
 })
