@@ -112,24 +112,32 @@ export class SocialLinkService {
 
     const user = this.telegramAdapter.getUserInfo(data);
 
-    return this.prisma.socialLink.upsert({
-      where: {
-        profileId_platform: { profileId, platform: 'telegram' },
-      },
-      create: {
-        profileId,
-        platform: 'telegram',
-        platformUserId: user.id,
-        platformUsername: user.username,
-        verified: true,
-      },
-      update: {
-        platformUserId: user.id,
-        platformUsername: user.username,
-        verified: true,
-        linkedAt: new Date(),
-      },
-    });
+    const [link] = await this.prisma.$transaction([
+      this.prisma.socialLink.upsert({
+        where: {
+          profileId_platform: { profileId, platform: 'telegram' },
+        },
+        create: {
+          profileId,
+          platform: 'telegram',
+          platformUserId: user.id,
+          platformUsername: user.username,
+          verified: true,
+        },
+        update: {
+          platformUserId: user.id,
+          platformUsername: user.username,
+          verified: true,
+          linkedAt: new Date(),
+        },
+      }),
+      this.prisma.profile.update({
+        where: { id: profileId },
+        data: { telegramChatId: user.id },
+      }),
+    ]);
+
+    return link;
   }
 
   async linkApple(profileId: string, zkLoginAddress: string) {

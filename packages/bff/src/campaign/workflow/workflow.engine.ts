@@ -18,6 +18,7 @@ export interface WorkflowStep {
   type: string;
   config: any;
   delay?: number; // milliseconds to wait before executing
+  nextStep?: number; // explicit jump target (overrides sequential +1)
 }
 
 @Injectable()
@@ -122,8 +123,11 @@ export class WorkflowEngine {
         },
       });
 
-      // Condition branching: use branch result to determine next step index
-      let nextStep = currentStep + 1;
+      // Determine next step:
+      // 1. Condition branching takes highest priority
+      // 2. Explicit nextStep on the step definition (for skipping over alternate branches)
+      // 3. Default: sequential +1
+      let nextStep = step.nextStep ?? currentStep + 1;
       if (step.type === 'condition' && result?.branch) {
         const branches = step.config?.branches;
         if (branches && typeof branches[result.branch] === 'number') {
