@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { VaultService } from './vault.service';
+import { VaultPolicyService } from './vault-policy.service';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { RbacGuard, RequirePermissions, WRITE, DELETE } from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
@@ -30,7 +31,26 @@ export class UpdateSecretBodyDto {
 @Controller('vault')
 @UseGuards(SessionGuard, RbacGuard)
 export class VaultController {
-  constructor(private readonly vaultService: VaultService) {}
+  constructor(
+    private readonly vaultService: VaultService,
+    private readonly policyService: VaultPolicyService,
+  ) {}
+
+  @Post('policies')
+  @RequirePermissions(WRITE)
+  async createPolicy(
+    @User() user: import('../auth/auth.service').UserPayload,
+    @Body()
+    body: {
+      name: string;
+      ruleType: 0 | 1 | 2;
+      allowedAddresses?: string[];
+      minRoleLevel?: number;
+      expiresAtMs?: string;
+    },
+  ) {
+    return this.policyService.createPolicy(user.workspaceId, body);
+  }
 
   @Post('secrets')
   @RequirePermissions(WRITE)

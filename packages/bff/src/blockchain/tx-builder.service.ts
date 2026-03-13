@@ -584,4 +584,73 @@ export class TxBuilderService {
 
     return tx;
   }
+
+  // ─── Vault Policy TX builders ─────────────────────────────────────────
+
+  buildCreateWorkspacePolicyTx(
+    globalConfigId: string,
+    workspaceId: string,
+    adminCapId: string,
+    name: string,
+    expiresAtMs: string, // u64 as string
+  ): Transaction {
+    const tx = new Transaction();
+    tx.moveCall({
+      target: `${this.crmVaultPackageId}::policy::create_workspace_policy`,
+      arguments: [
+        tx.object(globalConfigId),
+        tx.object(workspaceId),
+        tx.object(adminCapId),
+        tx.pure.string(name),
+        tx.pure.u64(BigInt(expiresAtMs)),
+      ],
+    });
+    return tx;
+  }
+
+  buildCreateAddressPolicyTx(
+    globalConfigId: string,
+    workspaceId: string,
+    adminCapId: string,
+    name: string,
+    allowedAddresses: string[],
+    expiresAtMs: string,
+  ): Transaction {
+    const tx = new Transaction();
+    tx.moveCall({
+      target: `${this.crmVaultPackageId}::policy::create_address_policy`,
+      arguments: [
+        tx.object(globalConfigId),
+        tx.object(workspaceId),
+        tx.object(adminCapId),
+        tx.pure.string(name),
+        tx.pure.vector('address', allowedAddresses),
+        tx.pure.u64(BigInt(expiresAtMs)),
+      ],
+    });
+    return tx;
+  }
+
+  buildCreateRolePolicyTx(
+    globalConfigId: string,
+    workspaceId: string,
+    adminCapId: string,
+    name: string,
+    minRoleLevel: number,
+    expiresAtMs: string,
+  ): Transaction {
+    const tx = new Transaction();
+    tx.moveCall({
+      target: `${this.crmVaultPackageId}::policy::create_role_policy`,
+      arguments: [
+        tx.object(globalConfigId),
+        tx.object(workspaceId),
+        tx.object(adminCapId),
+        tx.pure.string(name),
+        tx.pure.u8(minRoleLevel),
+        tx.pure.u64(BigInt(expiresAtMs)),
+      ],
+    });
+    return tx;
+  }
 }
