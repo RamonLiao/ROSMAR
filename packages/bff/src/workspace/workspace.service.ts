@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SuiClientService } from '../blockchain/sui.client';
 import { TxBuilderService } from '../blockchain/tx-builder.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { DEFAULT_WEIGHTS, EngagementWeights } from '../engagement/engagement.constants';
 
 @Injectable()
 export class WorkspaceService {
@@ -162,5 +163,38 @@ export class WorkspaceService {
     });
 
     return { success: true, txDigest: result.digest };
+  }
+
+  async getEngagementWeights(workspaceId: string): Promise<EngagementWeights> {
+    const ws = await this.prisma.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      select: { engagementWeights: true },
+    });
+    return (ws.engagementWeights as EngagementWeights | null) ?? { ...DEFAULT_WEIGHTS };
+  }
+
+  async setEngagementWeights(
+    workspaceId: string,
+    weights: EngagementWeights,
+  ): Promise<EngagementWeights> {
+    const sum =
+      weights.holdTime +
+      weights.txCount +
+      weights.txValue +
+      weights.voteCount +
+      weights.nftCount;
+
+    if (Math.abs(sum - 1.0) > 0.05) {
+      throw new BadRequestException(
+        `Weights must sum to ~1.0 (got ${sum.toFixed(4)})`,
+      );
+    }
+
+    await this.prisma.workspace.update({
+      where: { id: workspaceId },
+      data: { engagementWeights: weights as any },
+    });
+
+    return weights;
   }
 }

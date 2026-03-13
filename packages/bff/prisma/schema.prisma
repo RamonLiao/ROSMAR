@@ -11,8 +11,9 @@ model Workspace {
   suiObjectId   String?  @map("sui_object_id")
   name          String
   description   String?
-  ownerAddress  String   @map("owner_address")
-  createdAt     DateTime @default(now()) @map("created_at")
+  ownerAddress        String   @map("owner_address")
+  engagementWeights   Json?    @map("engagement_weights")
+  createdAt           DateTime @default(now()) @map("created_at")
 
   members         WorkspaceMember[]
   profiles        Profile[]

@@ -74,7 +74,15 @@ export class EngagementService {
   }
 
   async recalculateAndPersist(profileId: string, workspaceId: string): Promise<number> {
-    const result = await this.calculateScore(profileId);
+    // Load per-workspace custom weights (falls back to DEFAULT_WEIGHTS)
+    const ws = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { engagementWeights: true },
+    });
+    const weights: EngagementWeights =
+      (ws?.engagementWeights as EngagementWeights | null) ?? DEFAULT_WEIGHTS;
+
+    const result = await this.calculateScore(profileId, weights);
 
     await this.prisma.profile.update({
       where: { id: profileId },

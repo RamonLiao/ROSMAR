@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Put,
   Post,
   Patch,
   Delete,
@@ -14,6 +15,7 @@ import { RbacGuard, WRITE, MANAGE } from '../auth/guards/rbac.guard';
 import { RequirePermissions } from '../auth/decorators/permissions';
 import { CurrentUser } from '../auth/decorators/current-user';
 import { IsString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
+import type { EngagementWeights } from '../engagement/engagement.constants';
 
 export class CreateWorkspaceDto {
   @IsString()
@@ -41,6 +43,23 @@ export class AddMemberDto {
 
   @IsNumber()
   permissions: number;
+}
+
+export class EngagementWeightsDto {
+  @IsNumber()
+  holdTime: number;
+
+  @IsNumber()
+  txCount: number;
+
+  @IsNumber()
+  txValue: number;
+
+  @IsNumber()
+  voteCount: number;
+
+  @IsNumber()
+  nftCount: number;
 }
 
 @Controller('workspaces')
@@ -101,5 +120,19 @@ export class WorkspaceController {
     @Param('address') address: string,
   ) {
     return this.workspaceService.removeMember(workspaceId, address);
+  }
+
+  @Get(':id/engagement-weights')
+  async getEngagementWeights(@Param('id') workspaceId: string) {
+    return this.workspaceService.getEngagementWeights(workspaceId);
+  }
+
+  @Put(':id/engagement-weights')
+  @RequirePermissions(WRITE)
+  async setEngagementWeights(
+    @Param('id') workspaceId: string,
+    @Body() weights: EngagementWeightsDto,
+  ) {
+    return this.workspaceService.setEngagementWeights(workspaceId, weights);
   }
 }
