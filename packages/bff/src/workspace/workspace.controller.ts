@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { WorkspaceService } from './workspace.service';
+import { DiscordRoleSyncService } from '../social/discord-role-sync.service';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { RbacGuard, WRITE, MANAGE } from '../auth/guards/rbac.guard';
 import { RequirePermissions } from '../auth/decorators/permissions';
@@ -65,7 +66,10 @@ export class EngagementWeightsDto {
 @Controller('workspaces')
 @UseGuards(SessionGuard, RbacGuard)
 export class WorkspaceController {
-  constructor(private readonly workspaceService: WorkspaceService) {}
+  constructor(
+    private readonly workspaceService: WorkspaceService,
+    private readonly discordRoleSyncService: DiscordRoleSyncService,
+  ) {}
 
   @Post()
   async createWorkspace(
@@ -125,6 +129,23 @@ export class WorkspaceController {
   @Get(':id/engagement-weights')
   async getEngagementWeights(@Param('id') workspaceId: string) {
     return this.workspaceService.getEngagementWeights(workspaceId);
+  }
+
+  @Get(':id/discord-roles')
+  async getDiscordRoles(@Param('id') id: string) {
+    const workspace = await this.workspaceService.getWorkspace(id);
+    if (!workspace?.discordGuildId) {
+      return { roles: [], guildId: null };
+    }
+
+    const roles = await this.discordRoleSyncService.fetchGuildRoles(workspace.discordGuildId);
+    return {
+      guildId: workspace.discordGuildId,
+      roles: roles
+        .filter((r: any) => r.name !== '@everyone')
+        .sort((a: any, b: any) => b.position - a.position)
+        .map((r: any) => ({ id: r.id, name: r.name })),
+    };
   }
 
   @Put(':id/engagement-weights')

@@ -20,6 +20,8 @@ export class JobsService implements OnModuleInit {
     @InjectQueue('score-recalc') private readonly scoreRecalcQueue: Queue,
     @InjectQueue('broadcast-send') private readonly broadcastSendQueue: Queue,
     @InjectQueue('time-elapsed-trigger') private readonly timeElapsedQueue: Queue,
+    @InjectQueue('balance-sync') private readonly balanceSyncQueue: Queue,
+    @InjectQueue('discord-role-sync') private readonly discordRoleSyncQueue: Queue,
   ) {}
 
   async onModuleInit() {
@@ -83,6 +85,18 @@ export class JobsService implements OnModuleInit {
       { pattern: '*/15 * * * *' },
       { name: 'check-elapsed', data: {} },
     );
+
+    await this.balanceSyncQueue.upsertJobScheduler(
+      'balance-sync-cron',
+      { pattern: '0 */6 * * *' },
+      { name: 'sync-all', data: {} },
+    );
+
+    await this.discordRoleSyncQueue.upsertJobScheduler(
+      'discord-role-sync-cron',
+      { pattern: '0 3 * * *' },
+      { name: 'sync-all', data: {} },
+    );
   }
 
   async scheduleSegmentEval(segmentId: string): Promise<void> {
@@ -109,6 +123,8 @@ export class JobsService implements OnModuleInit {
       ['score-recalc', this.scoreRecalcQueue],
       ['broadcast-send', this.broadcastSendQueue],
       ['time-elapsed-trigger', this.timeElapsedQueue],
+      ['balance-sync', this.balanceSyncQueue],
+      ['discord-role-sync', this.discordRoleSyncQueue],
     ];
 
     const result: Record<string, { waiting: number; active: number; failed: number }> = {};

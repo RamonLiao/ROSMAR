@@ -12,15 +12,18 @@ import { ScoreRecalcJob } from './score-recalc.job';
 import { BroadcastSendJob } from './broadcast-send.job';
 import { WorkflowDelayJob } from './workflow-delay.job';
 import { TimeElapsedProcessor } from '../campaign/trigger/time-elapsed.processor';
+import { BalanceSyncJob } from './balance-sync.job';
+import { DiscordRoleSyncJob } from './discord-role-sync.job';
 import { AutoTagModule } from '../auto-tag/auto-tag.module';
 import { EngagementModule } from '../engagement/engagement.module';
 import { BlockchainModule } from '../blockchain/blockchain.module';
 import { SegmentModule } from '../segment/segment.module';
 import { CampaignModule } from '../campaign/campaign.module';
 import { NotificationModule } from '../notification/notification.module';
+import { SocialModule } from '../social/social.module';
 
 @Module({
-  imports: [BullQueueModule, AutoTagModule, EngagementModule, BlockchainModule, SegmentModule, CampaignModule, NotificationModule],
+  imports: [BullQueueModule, AutoTagModule, EngagementModule, BlockchainModule, SegmentModule, CampaignModule, NotificationModule, SocialModule],
   providers: [
     JobsService,
     SegmentEvalJob,
@@ -34,6 +37,8 @@ import { NotificationModule } from '../notification/notification.module';
     BroadcastSendJob,
     WorkflowDelayJob,
     TimeElapsedProcessor,
+    BalanceSyncJob,
+    DiscordRoleSyncJob,
   ],
   exports: [JobsService],
 })

@@ -5,6 +5,7 @@ import { DiscordOAuthAdapter } from './adapters/discord-oauth.adapter';
 import { TelegramOAuthAdapter } from './adapters/telegram-oauth.adapter';
 import { XOAuthAdapter } from './adapters/x-oauth.adapter';
 import { AppleZkLoginAdapter } from './adapters/apple-zklogin.adapter';
+import { DiscordRoleSyncService } from './discord-role-sync.service';
 
 @Module({
   controllers: [SocialLinkController],
@@ -14,7 +15,8 @@ import { AppleZkLoginAdapter } from './adapters/apple-zklogin.adapter';
     TelegramOAuthAdapter,
     XOAuthAdapter,
     AppleZkLoginAdapter,
+    DiscordRoleSyncService,
   ],
-  exports: [SocialLinkService],
+  exports: [SocialLinkService, DiscordRoleSyncService],
 })
 export class SocialModule {}

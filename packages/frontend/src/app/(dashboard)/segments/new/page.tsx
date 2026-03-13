@@ -14,9 +14,11 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useCreateSegment } from "@/lib/hooks/use-segments";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 
 export default function NewSegmentPage() {
   const router = useRouter();
+  const workspaceId = useWorkspaceStore((s) => s.activeWorkspace?.id);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [ruleGroups, setRuleGroups] = useState<RuleGroup[]>(defaultRuleGroups);
@@ -93,7 +95,7 @@ export default function NewSegmentPage() {
           <CardTitle>Segmentation Rules</CardTitle>
         </CardHeader>
         <CardContent>
-          <RuleBuilder value={ruleGroups} onChange={setRuleGroups} />
+          <RuleBuilder value={ruleGroups} onChange={setRuleGroups} workspaceId={workspaceId} />
         </CardContent>
       </Card>
     </div>

@@ -13,6 +13,7 @@ model Workspace {
   description   String?
   ownerAddress        String   @map("owner_address")
   engagementWeights   Json?    @map("engagement_weights")
+  discordGuildId      String?  @map("discord_guild_id")
   createdAt           DateTime @default(now()) @map("created_at")
 
   members         WorkspaceMember[]
@@ -34,6 +35,7 @@ model Workspace {
   quests            Quest[]           @relation("WorkspaceQuests")
   lookalikeResults  LookalikeResult[] @relation("WorkspaceLookalikes")
   gdprDeletionLogs  GdprDeletionLog[] @relation("WorkspaceGdprLogs")
+  walletBalances    WalletBalance[]
 
   @@map("workspaces")
 }
@@ -79,6 +81,7 @@ model Profile {
   wallets            ProfileWallet[]
   socialLinks        SocialLink[]
   questCompletions   QuestCompletion[]
+  walletBalances     WalletBalance[]
   gdprStatus         String   @default("NONE") @map("gdpr_status")
   gdprScheduledAt    DateTime? @map("gdpr_scheduled_at")
   gdprCompletedAt    DateTime? @map("gdpr_completed_at")
@@ -479,6 +482,7 @@ model SocialLink {
   oauthTokenEncrypted String?  @map("oauth_token_encrypted")
   verified            Boolean  @default(false)
   linkedAt            DateTime @default(now()) @map("linked_at")
+  metadata            Json?
 
   profile Profile @relation(fields: [profileId], references: [id])
 
@@ -715,4 +719,31 @@ model BffAuditLog {
   @@index([workspaceId, action, createdAt])
   @@index([actor, createdAt])
   @@map("bff_audit_logs")
+}
+
+// ─── Wave 2: Wallet Balance Snapshots ────────────
+
+model WalletBalance {
+  id              String   @id @default(uuid())
+  profileId       String   @map("profile_id")
+  workspaceId     String   @map("workspace_id")
+  chain           String
+  address         String
+  assetType       String   @map("asset_type")
+  contractAddress String   @map("contract_address")
+  collectionName  String?  @map("collection_name")
+  tokenSymbol     String?  @map("token_symbol")
+  rawBalance      Decimal  @db.Decimal(78, 0)   @map("raw_balance")
+  decimals        Int      @default(0)
+  lastSyncedAt    DateTime @map("last_synced_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  profile   Profile   @relation(fields: [profileId], references: [id])
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([profileId, chain, address, contractAddress])
+  @@index([workspaceId, assetType, tokenSymbol])
+  @@index([workspaceId, assetType, collectionName])
+  @@index([profileId, assetType])
+  @@map("wallet_balances")
 }

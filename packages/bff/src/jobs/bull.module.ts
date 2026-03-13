@@ -26,6 +26,8 @@ import { ConfigService } from '@nestjs/config';
       { name: 'broadcast-send' },
       { name: 'workflow-delay' },
       { name: 'time-elapsed-trigger' },
+      { name: 'balance-sync' },
+      { name: 'discord-role-sync' },
     ),
   ],
   exports: [BullModule],

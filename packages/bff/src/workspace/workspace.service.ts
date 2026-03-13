@@ -99,6 +99,7 @@ export class WorkspaceService {
       owner_address: workspace.ownerAddress,
       member_count: workspace._count.members,
       created_at: workspace.createdAt,
+      discordGuildId: workspace.discordGuildId,
     };
   }
 

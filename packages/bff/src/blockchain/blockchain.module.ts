@@ -7,6 +7,7 @@ import { EvmResolverService } from './evm-resolver.service';
 import { SolanaResolverService } from './solana-resolver.service';
 import { BalanceAggregatorService } from './balance-aggregator.service';
 import { PriceOracleService } from './price-oracle.service';
+import { BalanceSyncService } from './balance-sync.service';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
@@ -20,6 +21,7 @@ import { AuthModule } from '../auth/auth.module';
     SolanaResolverService,
     BalanceAggregatorService,
     PriceOracleService,
+    BalanceSyncService,
   ],
   exports: [
     EnokiSponsorService,
@@ -28,6 +30,7 @@ import { AuthModule } from '../auth/auth.module';
     SolanaResolverService,
     BalanceAggregatorService,
     PriceOracleService,
+    BalanceSyncService,
   ],
 })
 export class BlockchainModule {}

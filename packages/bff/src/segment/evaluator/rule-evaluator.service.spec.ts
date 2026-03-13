@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { Prisma } from '@prisma/client';
 import {
   RuleEvaluatorService,
   SegmentRules,
@@ -7,13 +8,17 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 describe('RuleEvaluatorService', () => {
   let service: RuleEvaluatorService;
-  let prisma: { profile: { findMany: jest.Mock } };
+  let prisma: {
+    profile: { findMany: jest.Mock };
+    $queryRaw: jest.Mock;
+  };
 
   beforeEach(async () => {
     prisma = {
       profile: {
         findMany: jest.fn().mockResolvedValue([]),
       },
+      $queryRaw: jest.fn().mockResolvedValue([]),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -152,5 +157,152 @@ describe('RuleEvaluatorService', () => {
       logic: 'AND',
     });
     expect(result).toEqual([]);
+  });
+
+  // ─── nft_collection ────────────────────────────────
+
+  it('nft_collection holds', async () => {
+    const where = await callAndGetWhere({
+      conditions: [
+        { field: 'nft_collection', operator: 'holds', value: 'CryptoPunks' },
+      ],
+      logic: 'AND',
+    });
+    expect(where.AND).toEqual([
+      {
+        walletBalances: {
+          some: {
+            assetType: 'nft',
+            rawBalance: { gt: new Prisma.Decimal(0) },
+            OR: [
+              {
+                collectionName: {
+                  contains: 'CryptoPunks',
+                  mode: 'insensitive',
+                },
+              },
+              { contractAddress: 'CryptoPunks' },
+            ],
+          },
+        },
+      },
+    ]);
+  });
+
+  it('nft_collection not_holds', async () => {
+    const where = await callAndGetWhere({
+      conditions: [
+        { field: 'nft_collection', operator: 'not_holds', value: 'Azuki' },
+      ],
+      logic: 'AND',
+    });
+    expect(where.AND).toEqual([
+      {
+        walletBalances: {
+          none: {
+            assetType: 'nft',
+            rawBalance: { gt: new Prisma.Decimal(0) },
+            OR: [
+              {
+                collectionName: {
+                  contains: 'Azuki',
+                  mode: 'insensitive',
+                },
+              },
+              { contractAddress: 'Azuki' },
+            ],
+          },
+        },
+      },
+    ]);
+  });
+
+  // ─── token_balance ─────────────────────────────────
+
+  it('token_balance gte via raw SQL', async () => {
+    prisma.$queryRaw.mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]);
+    const result = await service.evaluate(WS, {
+      conditions: [
+        {
+          field: 'token_balance',
+          operator: 'gte',
+          value: '{"token":"SUI","amount":"100"}',
+        },
+      ],
+      logic: 'AND',
+    });
+    expect(result).toEqual(['p1', 'p2']);
+    expect(prisma.$queryRaw).toHaveBeenCalled();
+  });
+
+  it('token_balance throws on invalid format', async () => {
+    await expect(
+      service.evaluate(WS, {
+        conditions: [
+          { field: 'token_balance', operator: 'gte', value: 'invalid' },
+        ],
+        logic: 'AND',
+      }),
+    ).rejects.toThrow(
+      'token_balance value must be JSON: {"token":"SUI","amount":"100"}',
+    );
+  });
+
+  // ─── discord_role ──────────────────────────────────
+
+  it('discord_role has_role returns profile IDs via raw query', async () => {
+    prisma.$queryRaw.mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]);
+    const result = await service.evaluate(WS, {
+      conditions: [
+        { field: 'discord_role', operator: 'has_role', value: '123456' },
+      ],
+      logic: 'AND',
+    });
+    expect(result).toEqual(['p1', 'p2']);
+    expect(prisma.$queryRaw).toHaveBeenCalled();
+  });
+
+  it('discord_role not_has_role', async () => {
+    prisma.$queryRaw.mockResolvedValue([{ id: 'p3' }]);
+    const result = await service.evaluate(WS, {
+      conditions: [
+        { field: 'discord_role', operator: 'not_has_role', value: '999' },
+      ],
+      logic: 'AND',
+    });
+    expect(result).toEqual(['p3']);
+    expect(prisma.$queryRaw).toHaveBeenCalled();
+  });
+
+  // ─── Mixed conditions (Prisma + raw SQL) ───────────
+
+  it('AND: prisma + discord_role intersects results', async () => {
+    prisma.profile.findMany.mockResolvedValue([
+      { id: 'p1' },
+      { id: 'p2' },
+      { id: 'p3' },
+    ]);
+    prisma.$queryRaw.mockResolvedValue([{ id: 'p2' }, { id: 'p3' }]);
+    const result = await service.evaluate(WS, {
+      conditions: [
+        { field: 'tier', operator: 'gte', value: 2 },
+        { field: 'discord_role', operator: 'has_role', value: '123' },
+      ],
+      logic: 'AND',
+    });
+    expect(result).toEqual(['p2', 'p3']);
+  });
+
+  it('OR: prisma + discord_role unions results', async () => {
+    prisma.profile.findMany.mockResolvedValue([{ id: 'p1' }]);
+    prisma.$queryRaw.mockResolvedValue([{ id: 'p2' }]);
+    const result = await service.evaluate(WS, {
+      conditions: [
+        { field: 'tier', operator: 'gte', value: 5 },
+        { field: 'discord_role', operator: 'has_role', value: '123' },
+      ],
+      logic: 'OR',
+    });
+    expect(result.sort()).toEqual(['p1', 'p2']);
   });
 });
