@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Lock, Unlock, Clock, Eye, EyeOff } from "lucide-react";
+import { Lock, Unlock, Clock, Eye, EyeOff, Trash2 } from "lucide-react";
 
 interface VaultItem {
   key: string;
@@ -89,6 +89,16 @@ export function VaultItemCard({ item, onDecrypt, onDelete }: VaultItemCardProps)
               <Eye className="h-4 w-4" />
             )}
           </Button>
+          {onDelete && (
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => onDelete(item.key, item.version)}
+              title="Delete"
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

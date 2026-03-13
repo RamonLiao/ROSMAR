@@ -9,9 +9,11 @@ import { VaultItemCard } from './vault-item-card';
 interface VaultItemListProps {
   profileId: string;
   vaultType: 'note' | 'file';
+  onDecrypt?: (key: string, sealPolicyId?: string | null) => Promise<string | null>;
+  onDelete?: (key: string, version: number) => Promise<void>;
 }
 
-export function VaultItemList({ profileId, vaultType }: VaultItemListProps) {
+export function VaultItemList({ profileId, vaultType, onDecrypt, onDelete }: VaultItemListProps) {
   const { data: secrets, isLoading } = useVaultSecrets(profileId || undefined);
 
   const filtered = secrets ?? [];
@@ -48,6 +50,8 @@ export function VaultItemList({ profileId, vaultType }: VaultItemListProps) {
                   createdAt: s.createdAt,
                   updatedAt: s.updatedAt,
                 }}
+                onDecrypt={onDecrypt ? (k) => onDecrypt(k, s.sealPolicyId) : undefined}
+                onDelete={onDelete}
               />
             ))}
           </div>
