@@ -5,12 +5,13 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalrusClient } from '../vault/walrus.client';
+import { VaultPolicyService } from '../vault/vault-policy.service';
 
 export interface UploadDocumentDto {
   dealId: string;
   name: string;
   encryptedData: string; // base64-encoded
-  sealPolicyId?: string;
+  sealPolicyId?: string; // if caller already has one
   mimeType?: string;
   fileSize?: number;
 }
@@ -20,6 +21,7 @@ export class DealDocumentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly walrusClient: WalrusClient,
+    private readonly policyService: VaultPolicyService,
   ) {}
 
   async uploadDocument(
@@ -29,11 +31,40 @@ export class DealDocumentService {
   ) {
     const deal = await this.prisma.deal.findUnique({
       where: { id: dto.dealId },
+      include: {
+        profile: { include: { wallets: true } },
+        escrows: true,
+      },
     });
 
     if (!deal) throw new NotFoundException('Deal not found');
     if (deal.workspaceId !== workspaceId) {
       throw new ForbiddenException('Deal not in your workspace');
+    }
+
+    // Auto-create Seal policy if not provided
+    let sealPolicyId = dto.sealPolicyId;
+    if (!sealPolicyId) {
+      // Collect all participant addresses: deal profile wallets + caller
+      const addresses = new Set<string>();
+      addresses.add(callerAddress);
+      deal.profile?.wallets?.forEach((w: { address: string }) =>
+        addresses.add(w.address),
+      );
+      deal.escrows?.forEach((e: { payer: string; payee: string }) => {
+        addresses.add(e.payer);
+        addresses.add(e.payee);
+      });
+
+      const result = await this.policyService.createPolicy(
+        workspaceId,
+        {
+          name: `deal-doc-${dto.name}`,
+          ruleType: 1, // address-list
+          allowedAddresses: Array.from(addresses),
+        },
+      );
+      sealPolicyId = result.policyId;
     }
 
     const uploadResult = await this.walrusClient.uploadBlob(
@@ -46,7 +77,7 @@ export class DealDocumentService {
         workspaceId,
         name: dto.name,
         walrusBlobId: uploadResult.blobId,
-        sealPolicyId: dto.sealPolicyId,
+        sealPolicyId,
         mimeType: dto.mimeType,
         fileSize: dto.fileSize,
         uploadedBy: callerAddress,

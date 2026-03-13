@@ -11,11 +11,12 @@ import { TxBuilderService } from '../blockchain/tx-builder.service';
 import { AuthModule } from '../auth/auth.module';
 import { NotificationModule } from '../notification/notification.module';
 import { WalrusClient } from '../vault/walrus.client';
+import { VaultModule } from '../vault/vault.module';
 import { DealEventListener } from './deal-event.listener';
 import { DealRoomGuard } from './deal-room.guard';
 
 @Module({
-  imports: [AuthModule, NotificationModule],
+  imports: [AuthModule, NotificationModule, VaultModule],
   controllers: [DealController, EscrowController, SaftTemplateController],
   providers: [
     DealService,
