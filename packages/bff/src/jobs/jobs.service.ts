@@ -19,6 +19,7 @@ export class JobsService implements OnModuleInit {
     @InjectQueue('vault-expiry') private readonly vaultExpiryQueue: Queue,
     @InjectQueue('score-recalc') private readonly scoreRecalcQueue: Queue,
     @InjectQueue('broadcast-send') private readonly broadcastSendQueue: Queue,
+    @InjectQueue('time-elapsed-trigger') private readonly timeElapsedQueue: Queue,
   ) {}
 
   async onModuleInit() {
@@ -76,6 +77,12 @@ export class JobsService implements OnModuleInit {
       { name: 'recalc-all', data: {} },
     );
     // broadcast-send: on-demand only, no cron
+
+    await this.timeElapsedQueue.upsertJobScheduler(
+      'time-elapsed-trigger-cron',
+      { pattern: '*/15 * * * *' },
+      { name: 'check-elapsed', data: {} },
+    );
   }
 
   async scheduleSegmentEval(segmentId: string): Promise<void> {
@@ -101,6 +108,7 @@ export class JobsService implements OnModuleInit {
       ['vault-expiry', this.vaultExpiryQueue],
       ['score-recalc', this.scoreRecalcQueue],
       ['broadcast-send', this.broadcastSendQueue],
+      ['time-elapsed-trigger', this.timeElapsedQueue],
     ];
 
     const result: Record<string, { waiting: number; active: number; failed: number }> = {};

@@ -11,6 +11,7 @@ import { VaultExpiryJob } from './vault-expiry.job';
 import { ScoreRecalcJob } from './score-recalc.job';
 import { BroadcastSendJob } from './broadcast-send.job';
 import { WorkflowDelayJob } from './workflow-delay.job';
+import { TimeElapsedProcessor } from '../campaign/trigger/time-elapsed.processor';
 import { AutoTagModule } from '../auto-tag/auto-tag.module';
 import { EngagementModule } from '../engagement/engagement.module';
 import { BlockchainModule } from '../blockchain/blockchain.module';
@@ -32,6 +33,7 @@ import { NotificationModule } from '../notification/notification.module';
     ScoreRecalcJob,
     BroadcastSendJob,
     WorkflowDelayJob,
+    TimeElapsedProcessor,
   ],
   exports: [JobsService],
 })

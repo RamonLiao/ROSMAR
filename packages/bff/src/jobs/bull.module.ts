@@ -25,6 +25,7 @@ import { ConfigService } from '@nestjs/config';
       { name: 'score-recalc' },
       { name: 'broadcast-send' },
       { name: 'workflow-delay' },
+      { name: 'time-elapsed-trigger' },
     ),
   ],
   exports: [BullModule],
