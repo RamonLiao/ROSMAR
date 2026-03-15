@@ -4,6 +4,7 @@ import "./globals.css";
 import SuiProvider from "@/lib/blockchain/sui-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
+import { WebVitalsReporter } from "@/components/web-vitals-reporter";
 import "@mysten/dapp-kit/dist/index.css";
 
 const geistSans = Geist({
@@ -32,6 +33,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <WebVitalsReporter />
         <ThemeProvider>
           <SuiProvider>
             <TooltipProvider>{children}</TooltipProvider>

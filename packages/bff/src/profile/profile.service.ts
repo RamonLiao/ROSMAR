@@ -1,13 +1,30 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { SuiClientService } from '../blockchain/sui.client';
 import { TxBuilderService } from '../blockchain/tx-builder.service';
 import { EvmResolverService } from '../blockchain/evm-resolver.service';
 import { SolanaResolverService } from '../blockchain/solana-resolver.service';
+import { SuinsService } from '../blockchain/suins.service';
 import { BalanceAggregatorService } from '../blockchain/balance-aggregator.service';
+import { DefiPositionService } from '../blockchain/defi-position.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateWalletDto } from './dto/wallet.dto';
+
+export interface NftTrait {
+  name: string;
+  value: string;
+}
+
+export interface NftWithTraits {
+  objectId: string;
+  type: string;
+  collection: string;
+  name: string;
+  imageUrl: string | null;
+  traits: NftTrait[];
+  rarityScore: number | null;
+}
 
 /** Convert ipfs:// URLs to an HTTPS gateway URL for browser display. */
 function normalizeIpfsUrl(url?: string | null): string | null {
@@ -42,6 +59,8 @@ export class ProfileService {
     private readonly evmResolver: EvmResolverService,
     private readonly solanaResolver: SolanaResolverService,
     private readonly balanceAggregator: BalanceAggregatorService,
+    private readonly defiPositionService: DefiPositionService,
+    private readonly suinsService: SuinsService,
   ) {
     // gRPC client for reads (to Rust Core)
     const coreGrpcUrl = this.configService.get<string>(
@@ -96,6 +115,11 @@ export class ProfileService {
         version: 1,
       },
     });
+
+    // Best-effort avatar resolution (non-blocking)
+    if (dto.suinsName) {
+      this.resolveAndUpdateAvatar(profileId).catch(() => {});
+    }
 
     return {
       profileId,
@@ -354,7 +378,7 @@ export class ProfileService {
       snsName = await this.solanaResolver.lookupAddress(dto.address);
     }
 
-    return this.prisma.profileWallet.create({
+    const wallet = await this.prisma.profileWallet.create({
       data: {
         profileId,
         chain: dto.chain,
@@ -363,6 +387,19 @@ export class ProfileService {
         snsName,
       },
     });
+
+    // Best-effort avatar resolution when adding EVM wallet with ENS name
+    if (dto.chain === 'evm' && ensName) {
+      const profile = await this.prisma.profile.findUnique({
+        where: { id: profileId },
+        select: { avatarUrl: true },
+      });
+      if (!profile?.avatarUrl) {
+        this.resolveAndUpdateAvatar(profileId).catch(() => {});
+      }
+    }
+
+    return wallet;
   }
 
   async listWallets(workspaceId: string, profileId: string) {
@@ -391,11 +428,274 @@ export class ProfileService {
     return { success: true };
   }
 
+  async resolveAndUpdateAvatar(profileId: string): Promise<string | null> {
+    const profile = await this.prisma.profile.findUnique({
+      where: { id: profileId },
+      include: { wallets: true },
+    });
+    if (!profile) return null;
+
+    let avatarUrl: string | null = null;
+
+    // Try SuiNS first
+    if (profile.suinsName) {
+      avatarUrl = await this.suinsService.resolveAvatar(profile.suinsName);
+    }
+
+    // Fallback to ENS from linked EVM wallets
+    if (!avatarUrl) {
+      const evmWallet = profile.wallets.find(
+        (w) => w.chain === 'evm' && w.ensName,
+      );
+      if (evmWallet?.ensName) {
+        avatarUrl = await this.evmResolver.resolveAvatar(evmWallet.ensName);
+      }
+    }
+
+    if (avatarUrl) {
+      await this.prisma.profile.update({
+        where: { id: profileId },
+        data: { avatarUrl },
+      });
+    }
+
+    return avatarUrl;
+  }
+
+  // ── NFT Trait Analysis & Rarity ─────────────────────────────
+
+  async fetchNftWithTraits(workspaceId: string, profileId: string) {
+    await this.prisma.profile.findFirstOrThrow({
+      where: { id: profileId, workspaceId },
+      select: { id: true },
+    });
+
+    const suiWallets = await this.prisma.profileWallet.findMany({
+      where: { profileId, chain: 'sui' },
+      select: { address: true },
+    });
+    if (suiWallets.length === 0) return [];
+
+    const allNfts: NftWithTraits[] = [];
+    const skipFields = new Set(['id', 'name', 'description', 'url', 'image_url', 'img_url']);
+
+    for (const wallet of suiWallets) {
+      try {
+        const response = await this.suiClient.getOwnedObjects(wallet.address, {
+          showContent: true,
+          showDisplay: true,
+          showType: true,
+          limit: 50,
+        });
+
+        for (const item of response.data) {
+          const obj = item.data;
+          if (!obj?.content || (obj.content as any).dataType !== 'moveObject') continue;
+
+          const fields = (obj.content as any).fields ?? {};
+          const display = (obj as any).display?.data ?? {};
+          const type = (obj.content as any).type ?? obj.type ?? '';
+
+          // Extract collection from type (e.g. "0xabc::my_nft::MyNFT" -> "my_nft::MyNFT")
+          const typeParts = type.split('::');
+          const collection =
+            typeParts.length >= 3
+              ? `${typeParts[typeParts.length - 2]}::${typeParts[typeParts.length - 1]}`
+              : type;
+
+          // Extract traits from fields (skip id, name, description, url fields)
+          const traits: NftTrait[] = [];
+          for (const [key, value] of Object.entries(fields)) {
+            if (skipFields.has(key)) continue;
+            if (typeof value === 'object' && value !== null) continue;
+            traits.push({ name: key, value: String(value) });
+          }
+
+          allNfts.push({
+            objectId: obj.objectId,
+            type,
+            collection,
+            name: display.name ?? fields.name ?? 'Unnamed',
+            imageUrl: normalizeIpfsUrl(display.image_url ?? fields.image_url) ?? null,
+            traits,
+            rarityScore: null,
+          });
+        }
+      } catch {
+        // Skip wallet on RPC failure
+      }
+    }
+
+    // Compute rarity scores per collection
+    const byCollection = new Map<string, NftWithTraits[]>();
+    for (const nft of allNfts) {
+      const list = byCollection.get(nft.collection) ?? [];
+      list.push(nft);
+      byCollection.set(nft.collection, list);
+    }
+
+    for (const [, nfts] of byCollection) {
+      if (nfts.length < 2) continue;
+
+      // Count trait value frequencies
+      const traitFreq = new Map<string, number>();
+      for (const nft of nfts) {
+        for (const t of nft.traits) {
+          const key = `${t.name}:${t.value}`;
+          traitFreq.set(key, (traitFreq.get(key) ?? 0) + 1);
+        }
+      }
+
+      // Compute rarity score per NFT (0-100, higher = rarer)
+      for (const nft of nfts) {
+        if (nft.traits.length === 0) continue;
+        let totalRarity = 0;
+        for (const t of nft.traits) {
+          const freq = traitFreq.get(`${t.name}:${t.value}`) ?? 1;
+          totalRarity += 1 / (freq / nfts.length);
+        }
+        nft.rarityScore = Math.min(100, Math.round((totalRarity / nft.traits.length) * 10));
+      }
+    }
+
+    return allNfts;
+  }
+
   async getNetWorth(workspaceId: string, profileId: string) {
     await this.prisma.profile.findFirstOrThrow({
       where: { id: profileId, workspaceId },
       select: { id: true },
     });
     return this.balanceAggregator.getNetWorth(profileId);
+  }
+
+  // ── DeFi Position Tracking ─────────────────────────────────
+
+  async getDefiPositions(workspaceId: string, profileId: string) {
+    await this.prisma.profile.findFirstOrThrow({
+      where: { id: profileId, workspaceId },
+      select: { id: true },
+    });
+
+    const wallets = await this.prisma.profileWallet.findMany({
+      where: { profileId, chain: 'sui' },
+      select: { address: true },
+    });
+
+    if (wallets.length === 0) {
+      return { totalStakedSui: '0', stakes: [], lpPositions: [] };
+    }
+
+    const allPositions = await Promise.all(
+      wallets.map((w) => this.defiPositionService.getPositions(w.address)),
+    );
+
+    return {
+      totalStakedSui: allPositions
+        .reduce((sum, p) => sum + BigInt(p.totalStakedSui), 0n)
+        .toString(),
+      stakes: allPositions.flatMap((p) => p.stakes),
+      lpPositions: allPositions.flatMap((p) => p.lpPositions),
+    };
+  }
+
+  // ── Primary Domain ─────────────────────────────────────────
+
+  async getAvailableDomains(profileId: string): Promise<{ domain: string; chain: string; source: string }[]> {
+    const profile = await this.prisma.profile.findUnique({
+      where: { id: profileId },
+      include: { wallets: true },
+    });
+    if (!profile) throw new NotFoundException('Profile not found');
+
+    const domains: { domain: string; chain: string; source: string }[] = [];
+
+    if (profile.suinsName) {
+      domains.push({ domain: profile.suinsName, chain: 'sui', source: 'suins' });
+    }
+
+    for (const w of profile.wallets) {
+      if (w.ensName) {
+        domains.push({ domain: w.ensName, chain: 'evm', source: 'ens' });
+      }
+      if (w.snsName) {
+        domains.push({ domain: w.snsName, chain: 'solana', source: 'sns' });
+      }
+    }
+
+    return domains;
+  }
+
+  async setPrimaryDomain(profileId: string, domain: string): Promise<void> {
+    const profile = await this.prisma.profile.findUnique({
+      where: { id: profileId },
+      include: { wallets: true },
+    });
+    if (!profile) throw new NotFoundException('Profile not found');
+
+    const validDomains = this.collectDomains(profile);
+    if (!validDomains.includes(domain)) {
+      throw new BadRequestException('Domain not associated with this profile');
+    }
+
+    await this.prisma.profile.update({
+      where: { id: profileId },
+      data: { primaryDomain: domain },
+    });
+  }
+
+  private collectDomains(profile: any): string[] {
+    const domains: string[] = [];
+    if (profile.suinsName) domains.push(profile.suinsName);
+    for (const w of profile.wallets ?? []) {
+      if (w.ensName) domains.push(w.ensName);
+      if (w.snsName) domains.push(w.snsName);
+    }
+    return domains;
+  }
+
+  // ── Summary Aggregation ─────────────────────────────────────
+
+  async getSummary(workspaceId: string, profileId: string) {
+    const profile = await this.prisma.profile.findFirstOrThrow({
+      where: { id: profileId, workspaceId },
+    });
+
+    const [
+      wallets,
+      netWorth,
+      recentActivity,
+      socialLinks,
+      assetCount,
+      organizationCount,
+      messageCount,
+    ] = await Promise.all([
+      this.prisma.profileWallet.findMany({
+        where: { profileId },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.balanceAggregator.getNetWorth(profileId),
+      this.prisma.walletEvent.findMany({
+        where: { profileId },
+        orderBy: { time: 'desc' },
+        take: 5,
+      }),
+      this.prisma.socialLink.findMany({
+        where: { profileId },
+        orderBy: { linkedAt: 'desc' },
+      }),
+      this.prisma.walletEvent.count({ where: { profileId } }),
+      this.prisma.profileOrganization.count({ where: { profileId } }),
+      this.prisma.message.count({ where: { profileId } }),
+    ]);
+
+    return {
+      profile,
+      wallets,
+      netWorth,
+      recentActivity,
+      socialLinks,
+      stats: { assetCount, organizationCount, messageCount },
+    };
   }
 }
