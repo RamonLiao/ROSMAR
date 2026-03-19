@@ -1,24 +1,33 @@
 # ROSMAR CRM — Progress
 
 ## Current Task
-All 13 spec gap items complete. Ready for integration testing / commit.
+None — ready for next phase.
 
 ## TODO
-- [ ] Run `prisma migrate dev` for VaultSecret `suiObjectId` field
-- [ ] Full test suite run + manual smoke test
+
+### S1: Foundation (next sprint, parallel)
+- [ ] P2-1: Rust Indexer pipeline wiring (Consumer→Router→Enricher→AlertEngine→Webhook)
+- [ ] P2-6: Seal SDK integration (replace Web Crypto, policy-based encrypt/decrypt)
+- [ ] E2E: Playwright test suite (12 tasks, independent of P2-1/P2-6)
+
+### S2: Automation
+- [ ] P3-1: LLM Integration Foundation (AgentModule, Vercel AI SDK)
+- [ ] P3-2: Journey Builder event triggers
+- [ ] P3-8: Gas Station auto-sponsor
+
+### S3–S8: See `docs/plans/roadmap.md`
 
 ## Recently Completed
-- [2026-03-11] **Wave 3**: 2.3 NFT Gallery, 2.4 HD Wallet Auto-Detection, 6.1 Yield Optimizer Agent
-- [2026-03-11] **Wave 2**: 1.2 Segment Rule Evaluator, 3.3 Deal Won Auto-Release, 4.1 Journey Delay Steps, 5.1 Vault Time-Lock
-- [2026-03-11] **Wave 1**: 1.1 BullMQ Scheduling, 2.1 SuiNS Resolution, 2.2 Price Oracle, 3.1 Escrow Fund TX, 3.2 Deal Room Gate, 4.2 Gas Station Auto-Sponsor
-- [2026-03-11] Spec vs implementation audit + plan creation
+- [2026-03-16] **Docs cleanup**: Deleted 26 old docs, consolidated into single `docs/plans/roadmap.md`
+- [2026-03-15] **P2 all code tasks complete** (P2-1 through P2-11, excluding P2-1 indexer & P2-6 Seal)
 
 ## Blockers
-- VaultSecret `suiObjectId` field added to schema — needs `prisma migrate dev`
+- P2-1 blocks P3-2 (Journey triggers need indexer webhook)
+- P2-6 blocks P4-4 (GDPR needs Seal key destruction)
 
 ## Notes
-- All 13/13 plan items from `tasks/plan-spec-gaps.md` implemented
-- Wave 1: 6 agents parallel, Wave 2: 4 agents parallel, Wave 3: 3 agents parallel
-- `tsc --noEmit` clean after each wave
-- New test files: rule-evaluator (11), deal-event-listener (5), vault-expiry (3), wallet-cluster (6), yield-optimizer (7) = 32 new tests
-- Pre-existing: `@mysten/sui` ESM requires `jest.mock` preamble in blockchain-importing specs
+- Pending Prisma migrations (run `cd packages/bff && npx prisma migrate dev`)
+- 5 test suites have pre-existing ESM/CJS import failures (social-link, gdpr, deal-document, whale-alert, profile-assets)
+- `@mysten/enoki` Apple provider: runtime cast workaround
+- Consolidated roadmap: `docs/plans/roadmap.md` (P2 remaining → P3 → P4 → future)
+- P2-10 smart contract audit: external engagement, not code

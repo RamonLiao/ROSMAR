@@ -113,15 +113,25 @@ module crm_core::profile {
     }
 
     /// @notice Updates the tier and engagement score of a profile
+    /// @param config - global config (pause check)
+    /// @param workspace - workspace the profile belongs to
+    /// @param cap - workspace admin capability
     /// @param profile - profile to update
     /// @param tier - new tier value
     /// @param score - new engagement score
+    /// @aborts EWorkspaceMismatch - if profile workspace doesn't match
     public fun update_tier_and_score(
+        config: &GlobalConfig,
+        workspace: &Workspace,
+        cap: &WorkspaceAdminCap,
         profile: &mut Profile,
         tier: u8,
         score: u64,
         ctx: &TxContext,
     ) {
+        capabilities::assert_not_paused(config);
+        capabilities::assert_cap_matches(cap, workspace::id(workspace));
+        assert!(profile.workspace_id == workspace::id(workspace), EWorkspaceMismatch);
         profile.tier = tier;
         profile.engagement_score = score;
         profile.version = profile.version + 1;
