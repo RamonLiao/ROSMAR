@@ -7,7 +7,9 @@ import { SuiClientService } from '../blockchain/sui.client';
 import { TxBuilderService } from '../blockchain/tx-builder.service';
 import { EvmResolverService } from '../blockchain/evm-resolver.service';
 import { SolanaResolverService } from '../blockchain/solana-resolver.service';
+import { SuinsService } from '../blockchain/suins.service';
 import { BalanceAggregatorService } from '../blockchain/balance-aggregator.service';
+import { DefiPositionService } from '../blockchain/defi-position.service';
 import { BlockchainModule } from '../blockchain/blockchain.module';
 import { AuthModule } from '../auth/auth.module';
 
@@ -22,6 +24,8 @@ import { AuthModule } from '../auth/auth.module';
     EvmResolverService,
     SolanaResolverService,
     BalanceAggregatorService,
+    DefiPositionService,
+    SuinsService,
   ],
   exports: [ProfileService],
 })

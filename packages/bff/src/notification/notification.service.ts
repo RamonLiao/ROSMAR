@@ -39,6 +39,14 @@ export class NotificationService {
     });
   }
 
+  async listByType(workspaceId: string, type: string, limit = 50) {
+    return this.prisma.notification.findMany({
+      where: { workspaceId, type },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
   async markAllRead(workspaceId: string, userId: string) {
     return this.prisma.notification.updateMany({
       where: { workspaceId, userId, isRead: false },

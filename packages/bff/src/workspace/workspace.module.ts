@@ -5,9 +5,10 @@ import { SuiClientService } from '../blockchain/sui.client';
 import { TxBuilderService } from '../blockchain/tx-builder.service';
 import { AuthModule } from '../auth/auth.module';
 import { SocialModule } from '../social/social.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
-  imports: [AuthModule, SocialModule],
+  imports: [AuthModule, SocialModule, NotificationModule],
   controllers: [WorkspaceController],
   providers: [WorkspaceService, SuiClientService, TxBuilderService],
   exports: [WorkspaceService],

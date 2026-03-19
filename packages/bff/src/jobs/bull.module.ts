@@ -28,6 +28,8 @@ import { ConfigService } from '@nestjs/config';
       { name: 'time-elapsed-trigger' },
       { name: 'balance-sync' },
       { name: 'discord-role-sync' },
+      { name: 'campaign-recurring' },
+      { name: 'vault-release' },
     ),
   ],
   exports: [BullModule],

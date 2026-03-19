@@ -21,6 +21,13 @@ export interface MergeResult {
   movedRecords: Record<string, number>;
 }
 
+export interface FundingCluster {
+  funderAddress: string;
+  ownWallets: string[];
+  relatedProfiles: { id: string; primaryAddress: string; suinsName: string | null }[];
+  confidence: number; // 0-1
+}
+
 @Injectable()
 export class WalletClusterService {
   constructor(private readonly prisma: PrismaService) {}
@@ -133,6 +140,121 @@ export class WalletClusterService {
     }
 
     return { profileId: bestId, sharedAddresses: bestAddrs };
+  }
+
+  // ── Funding Pattern Analysis ─────────────────────────────
+
+  /**
+   * Analyze on-chain funding patterns to detect wallets likely owned by the same entity.
+   * Looks for: same funder address sending initial funds to multiple profile wallets.
+   */
+  async detectFundingPatterns(
+    workspaceId: string,
+    profileId: string,
+  ): Promise<FundingCluster[]> {
+    const wallets = await this.prisma.profileWallet.findMany({
+      where: { profileId, chain: 'sui' },
+    });
+
+    if (wallets.length === 0) return [];
+
+    // For each wallet, find the earliest funding transaction (first inbound transfer)
+    const fundingSources: {
+      address: string;
+      funder: string;
+      amount: string;
+      time: Date;
+    }[] = [];
+
+    for (const wallet of wallets) {
+      const firstFunding = await this.prisma.walletEvent.findFirst({
+        where: {
+          address: wallet.address,
+          eventType: { in: ['TransferObject', 'transfer', 'coin_transfer'] },
+        },
+        orderBy: { time: 'asc' },
+      });
+
+      if (firstFunding?.rawData) {
+        const raw = firstFunding.rawData as Record<string, unknown>;
+        const sender = (raw.sender ?? raw.from ?? raw.source) as
+          | string
+          | undefined;
+        if (sender && sender !== wallet.address) {
+          fundingSources.push({
+            address: wallet.address,
+            funder: sender,
+            amount: firstFunding.amount?.toString() ?? '0',
+            time: firstFunding.time,
+          });
+        }
+      }
+    }
+
+    // Group wallets by funder address
+    const byFunder = new Map<string, typeof fundingSources>();
+    for (const fs of fundingSources) {
+      const list = byFunder.get(fs.funder) ?? [];
+      list.push(fs);
+      byFunder.set(fs.funder, list);
+    }
+
+    // Find other profiles with wallets funded by the same source
+    const clusters: FundingCluster[] = [];
+    for (const [funder, funded] of byFunder) {
+      if (funded.length < 1) continue;
+
+      // Search for other wallets in workspace funded by this same source
+      const relatedEvents = await this.prisma.walletEvent.findMany({
+        where: {
+          workspaceId,
+          eventType: { in: ['TransferObject', 'transfer', 'coin_transfer'] },
+          rawData: { path: ['sender'], equals: funder },
+        },
+        distinct: ['address'],
+        take: 20,
+      });
+
+      const relatedAddresses = relatedEvents
+        .map((e) => e.address)
+        .filter((a) => !wallets.some((w) => w.address === a));
+
+      if (relatedAddresses.length === 0) continue;
+
+      // Find profiles owning those addresses
+      const relatedWallets = await this.prisma.profileWallet.findMany({
+        where: {
+          address: { in: relatedAddresses },
+          profile: { workspaceId },
+        },
+        include: {
+          profile: {
+            select: { id: true, primaryAddress: true, suinsName: true },
+          },
+        },
+      });
+
+      const relatedProfiles = [
+        ...new Map(
+          relatedWallets.map((w) => [w.profileId, w.profile]),
+        ).values(),
+      ];
+
+      if (relatedProfiles.length > 0) {
+        clusters.push({
+          funderAddress: funder,
+          ownWallets: funded.map((f) => f.address),
+          relatedProfiles: relatedProfiles.map((p) => ({
+            id: p.id,
+            primaryAddress: p.primaryAddress,
+            suinsName: p.suinsName,
+          })),
+          confidence: Math.min(0.9, 0.5 + relatedProfiles.length * 0.1),
+        });
+      }
+    }
+
+    return clusters;
   }
 
   // ── Profile Merge ────────────────────────────────────────

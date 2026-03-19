@@ -22,6 +22,8 @@ export class JobsService implements OnModuleInit {
     @InjectQueue('time-elapsed-trigger') private readonly timeElapsedQueue: Queue,
     @InjectQueue('balance-sync') private readonly balanceSyncQueue: Queue,
     @InjectQueue('discord-role-sync') private readonly discordRoleSyncQueue: Queue,
+    @InjectQueue('campaign-recurring') private readonly campaignRecurringQueue: Queue,
+    @InjectQueue('vault-release') private readonly vaultReleaseQueue: Queue,
   ) {}
 
   async onModuleInit() {
@@ -97,6 +99,12 @@ export class JobsService implements OnModuleInit {
       { pattern: '0 3 * * *' },
       { name: 'sync-all', data: {} },
     );
+
+    await this.vaultReleaseQueue.upsertJobScheduler(
+      'vault-release-cron',
+      { pattern: '* * * * *' },
+      { name: 'check-release', data: {} },
+    );
   }
 
   async scheduleSegmentEval(segmentId: string): Promise<void> {
@@ -125,6 +133,8 @@ export class JobsService implements OnModuleInit {
       ['time-elapsed-trigger', this.timeElapsedQueue],
       ['balance-sync', this.balanceSyncQueue],
       ['discord-role-sync', this.discordRoleSyncQueue],
+      ['campaign-recurring', this.campaignRecurringQueue],
+      ['vault-release', this.vaultReleaseQueue],
     ];
 
     const result: Record<string, { waiting: number; active: number; failed: number }> = {};

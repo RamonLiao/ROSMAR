@@ -21,6 +21,7 @@ export class StoreSecretBodyDto {
   encryptedData: string; // base64
   sealPolicyId?: string;
   expiresAt?: string; // ISO date string
+  releaseAt?: string; // ISO date string — secret locked until this time
 }
 
 export class UpdateSecretBodyDto {
@@ -67,6 +68,7 @@ export class VaultController {
         encryptedData: Buffer.from(dto.encryptedData, 'base64'),
         sealPolicyId: dto.sealPolicyId,
         expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
+        releaseAt: dto.releaseAt ? new Date(dto.releaseAt) : undefined,
       },
     );
   }
@@ -132,6 +134,17 @@ export class VaultController {
       key,
       expectedVersion,
     );
+  }
+
+  @Post('secrets/:profileId/:key/release')
+  @RequirePermissions(WRITE)
+  async releaseSecret(
+    @User() user: import('../auth/auth.service').UserPayload,
+    @Param('profileId') profileId: string,
+    @Param('key') key: string,
+  ) {
+    await this.vaultService.releaseSecret(user.workspaceId, profileId, key);
+    return { success: true };
   }
 
   @Get('secrets/:profileId/:key/audit')

@@ -7,11 +7,18 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WalrusClient } from '../vault/walrus.client';
 import { VaultPolicyService } from '../vault/vault-policy.service';
 
+export interface CustomPolicyConfig {
+  ruleType: 0 | 1 | 2;
+  allowedAddresses?: string[];
+  minRoleLevel?: number;
+}
+
 export interface UploadDocumentDto {
   dealId: string;
   name: string;
   encryptedData: string; // base64-encoded
   sealPolicyId?: string; // if caller already has one
+  customPolicy?: CustomPolicyConfig; // per-document policy override
   mimeType?: string;
   fileSize?: number;
 }
@@ -42,10 +49,19 @@ export class DealDocumentService {
       throw new ForbiddenException('Deal not in your workspace');
     }
 
-    // Auto-create Seal policy if not provided
+    // Determine Seal policy: explicit > custom per-doc > auto shared
     let sealPolicyId = dto.sealPolicyId;
-    if (!sealPolicyId) {
-      // Collect all participant addresses: deal profile wallets + caller
+    if (!sealPolicyId && dto.customPolicy) {
+      // Create document-specific policy
+      const result = await this.policyService.createPolicy(workspaceId, {
+        name: `Doc: ${dto.name}`,
+        ruleType: dto.customPolicy.ruleType,
+        allowedAddresses: dto.customPolicy.allowedAddresses,
+        minRoleLevel: dto.customPolicy.minRoleLevel,
+      });
+      sealPolicyId = result.policyId;
+    } else if (!sealPolicyId) {
+      // Fallback: shared deal policy (all participants)
       const addresses = new Set<string>();
       addresses.add(callerAddress);
       deal.profile?.wallets?.forEach((w: { address: string }) =>
@@ -56,14 +72,11 @@ export class DealDocumentService {
         addresses.add(e.payee);
       });
 
-      const result = await this.policyService.createPolicy(
-        workspaceId,
-        {
-          name: `deal-doc-${dto.name}`,
-          ruleType: 1, // address-list
-          allowedAddresses: Array.from(addresses),
-        },
-      );
+      const result = await this.policyService.createPolicy(workspaceId, {
+        name: `deal-doc-${dto.name}`,
+        ruleType: 1, // address-list
+        allowedAddresses: Array.from(addresses),
+      });
       sealPolicyId = result.policyId;
     }
 
@@ -114,6 +127,43 @@ export class DealDocumentService {
     }
 
     return doc;
+  }
+
+  async updateDocumentPolicy(
+    workspaceId: string,
+    callerAddress: string,
+    documentId: string,
+    policyConfig: CustomPolicyConfig,
+  ): Promise<{ policyId: string }> {
+    const doc = await this.prisma.dealDocument.findUnique({
+      where: { id: documentId },
+      include: { deal: true },
+    });
+
+    if (!doc || doc.workspaceId !== workspaceId) {
+      throw new NotFoundException('Document not found');
+    }
+
+    // Only uploader or workspace admin can change policy
+    if (doc.uploadedBy !== callerAddress) {
+      throw new ForbiddenException(
+        'Only the document uploader can change its policy',
+      );
+    }
+
+    const result = await this.policyService.createPolicy(workspaceId, {
+      name: `Doc: ${doc.name}`,
+      ruleType: policyConfig.ruleType,
+      allowedAddresses: policyConfig.allowedAddresses,
+      minRoleLevel: policyConfig.minRoleLevel,
+    });
+
+    await this.prisma.dealDocument.update({
+      where: { id: documentId },
+      data: { sealPolicyId: result.policyId },
+    });
+
+    return { policyId: result.policyId };
   }
 
   async deleteDocument(

@@ -1,5 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SuiClientService } from '../blockchain/sui.client';
@@ -12,6 +14,7 @@ export interface CreateCampaignDto {
   description?: string;
   segmentId: string;
   workflowSteps: any[];
+  scheduledAt?: string;
 }
 
 export interface UpdateCampaignDto {
@@ -19,11 +22,13 @@ export interface UpdateCampaignDto {
   description?: string;
   status?: string;
   workflowSteps?: any[];
+  scheduledAt?: string;
   expectedVersion: number;
 }
 
 @Injectable()
 export class CampaignService {
+  private readonly logger = new Logger(CampaignService.name);
   private isDryRun: boolean;
 
   constructor(
@@ -33,6 +38,7 @@ export class CampaignService {
     private readonly workflowEngine: WorkflowEngine,
     private readonly configService: ConfigService,
     private readonly notificationService: NotificationService,
+    @InjectQueue('campaign-recurring') private readonly recurringQueue: Queue,
   ) {
     this.isDryRun = this.configService.get<string>('SUI_DRY_RUN', 'false') === 'true';
   }
@@ -69,6 +75,9 @@ export class CampaignService {
 
     const campaignId = (campaignCreatedEvent?.parsedJson as any)?.campaign_id || randomUUID();
 
+    const scheduledAt = dto.scheduledAt ? new Date(dto.scheduledAt) : null;
+    const status = scheduledAt && scheduledAt > new Date() ? 'scheduled' : 'draft';
+
     await this.prisma.campaign.create({
       data: {
         id: campaignId,
@@ -77,6 +86,8 @@ export class CampaignService {
         description: dto.description,
         segmentId: dto.segmentId,
         workflowSteps: dto.workflowSteps,
+        status,
+        scheduledAt,
       },
     });
 
@@ -142,6 +153,13 @@ export class CampaignService {
     if (dto.description !== undefined) updateData.description = dto.description;
     if (dto.status !== undefined) updateData.status = dto.status;
     if (dto.workflowSteps !== undefined) updateData.workflowSteps = dto.workflowSteps;
+    if (dto.scheduledAt !== undefined) {
+      const scheduledAt = new Date(dto.scheduledAt);
+      updateData.scheduledAt = scheduledAt;
+      if (scheduledAt > new Date()) {
+        updateData.status = 'scheduled';
+      }
+    }
 
     await this.prisma.campaign.update({
       where: { id: campaignId, version: dto.expectedVersion },
@@ -207,6 +225,61 @@ export class CampaignService {
     });
 
     return { success: true };
+  }
+
+  // --- Scheduling ---
+
+  async scheduleCampaign(campaignId: string, scheduledAt: Date): Promise<any> {
+    if (scheduledAt <= new Date()) {
+      throw new Error('scheduledAt must be in the future');
+    }
+
+    return this.prisma.campaign.update({
+      where: { id: campaignId },
+      data: {
+        scheduledAt,
+        status: 'scheduled',
+      },
+    });
+  }
+
+  async createRecurringTrigger(
+    campaignId: string,
+    cron: string,
+    timezone?: string,
+  ): Promise<any> {
+    const trigger = await this.createTrigger(campaignId, {
+      triggerType: 'recurring',
+      triggerConfig: { cron, timezone: timezone ?? 'UTC' },
+    });
+
+    // Add BullMQ repeatable job
+    await this.recurringQueue.add(
+      `recurring-${campaignId}`,
+      { campaignId },
+      { repeat: { pattern: cron, tz: timezone ?? 'UTC' } },
+    );
+
+    this.logger.log(
+      `Created recurring trigger for campaign ${campaignId}: ${cron} (${timezone ?? 'UTC'})`,
+    );
+
+    return trigger;
+  }
+
+  async removeRecurringTrigger(campaignId: string, triggerId: string): Promise<any> {
+    const trigger = await this.deleteTrigger(campaignId, triggerId);
+
+    // Remove BullMQ repeatable job
+    const repeatableJobs = await this.recurringQueue.getRepeatableJobs();
+    for (const job of repeatableJobs) {
+      if (job.name === `recurring-${campaignId}`) {
+        await this.recurringQueue.removeRepeatableByKey(job.key);
+        this.logger.log(`Removed recurring job for campaign ${campaignId}`);
+      }
+    }
+
+    return trigger;
   }
 
   // --- Trigger CRUD ---

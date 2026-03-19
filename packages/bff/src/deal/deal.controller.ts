@@ -33,10 +33,17 @@ export class UpdateDealDto {
   expectedVersion: number;
 }
 
+export class CustomPolicyBodyDto {
+  ruleType: 0 | 1 | 2;
+  allowedAddresses?: string[];
+  minRoleLevel?: number;
+}
+
 export class UploadDocumentBodyDto {
   name: string;
   encryptedData: string;
   sealPolicyId?: string;
+  customPolicy?: CustomPolicyBodyDto;
   mimeType?: string;
   fileSize?: number;
 }
@@ -192,6 +199,22 @@ export class DealController {
       user.address,
       dealId,
     );
+  }
+
+  @Put('documents/:docId/policy')
+  @RequirePermissions(WRITE)
+  async updateDocumentPolicy(
+    @Param('docId') docId: string,
+    @Body() body: CustomPolicyBodyDto,
+    @User() user: import('../auth/auth.service').UserPayload,
+  ) {
+    const result = await this.dealDocumentService.updateDocumentPolicy(
+      user.workspaceId,
+      user.address,
+      docId,
+      body,
+    );
+    return { success: true, policyId: result.policyId };
   }
 
   @Delete('documents/:docId')

@@ -122,6 +122,37 @@ export class CampaignController {
     return this.campaignService.getCampaignStats(id);
   }
 
+  @Post(':id/schedule')
+  @RequirePermissions(WRITE)
+  async schedule(
+    @Param('id') id: string,
+    @Body() body: { scheduledAt: string },
+  ) {
+    const campaign = await this.campaignService.scheduleCampaign(
+      id,
+      new Date(body.scheduledAt),
+    );
+    return { success: true, campaign };
+  }
+
+  @Post(':id/recurring')
+  @RequirePermissions(WRITE)
+  async createRecurringTrigger(
+    @Param('id') id: string,
+    @Body() body: { cron: string; timezone?: string },
+  ) {
+    return this.campaignService.createRecurringTrigger(id, body.cron, body.timezone);
+  }
+
+  @Delete(':id/recurring/:triggerId')
+  @RequirePermissions(WRITE)
+  async removeRecurringTrigger(
+    @Param('id') id: string,
+    @Param('triggerId') triggerId: string,
+  ) {
+    return this.campaignService.removeRecurringTrigger(id, triggerId);
+  }
+
   // --- Trigger CRUD ---
 
   @Post(':id/triggers')

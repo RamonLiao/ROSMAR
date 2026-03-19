@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalrusClient } from './walrus.client';
@@ -10,6 +10,7 @@ export interface StoreSecretDto {
   encryptedData: Buffer;
   sealPolicyId?: string;
   expiresAt?: Date;
+  releaseAt?: Date;
 }
 
 export interface UpdateSecretDto {
@@ -40,6 +41,8 @@ export class VaultService {
 
     const uploadResult = await this.walrusClient.uploadBlob(dto.encryptedData);
 
+    const hasRelease = !!dto.releaseAt;
+
     const secret = await this.prisma.vaultSecret.upsert({
       where: {
         workspaceId_profileId_key: {
@@ -52,6 +55,8 @@ export class VaultService {
         walrusBlobId: uploadResult.blobId,
         sealPolicyId: dto.sealPolicyId ?? null,
         expiresAt: dto.expiresAt ?? null,
+        releaseAt: dto.releaseAt ?? null,
+        isReleased: !hasRelease,
         version: { increment: 1 },
       },
       create: {
@@ -61,6 +66,8 @@ export class VaultService {
         walrusBlobId: uploadResult.blobId,
         sealPolicyId: dto.sealPolicyId ?? null,
         expiresAt: dto.expiresAt ?? null,
+        releaseAt: dto.releaseAt ?? null,
+        isReleased: !hasRelease,
       },
     });
 
@@ -85,6 +92,12 @@ export class VaultService {
     });
 
     if (!secret) return null;
+
+    if (secret.releaseAt && !secret.isReleased) {
+      throw new ForbiddenException(
+        `Secret is time-locked until ${secret.releaseAt.toISOString()}`,
+      );
+    }
 
     await this.verifyPolicyAccess(workspaceId, callerAddress, secret.sealPolicyId);
     await this.logAccess(workspaceId, secret.id, callerAddress, 'read');
@@ -115,6 +128,8 @@ export class VaultService {
         version: s.version,
         sealPolicyId: s.sealPolicyId,
         expiresAt: s.expiresAt,
+        releaseAt: s.releaseAt,
+        isReleased: s.isReleased,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
       })),
@@ -202,6 +217,20 @@ export class VaultService {
       success: true,
       deletedBlobId: existing.walrusBlobId,
     };
+  }
+
+  async releaseSecret(workspaceId: string, profileId: string, key: string): Promise<void> {
+    const secret = await this.prisma.vaultSecret.findUnique({
+      where: { workspaceId_profileId_key: { workspaceId, profileId, key } },
+    });
+    if (!secret) throw new NotFoundException('Secret not found');
+
+    await this.prisma.vaultSecret.update({
+      where: { id: secret.id },
+      data: { isReleased: true },
+    });
+
+    await this.logAccess(workspaceId, secret.id, 'system', 'RELEASE');
   }
 
   async getAccessLog(workspaceId: string, profileId: string, key: string) {

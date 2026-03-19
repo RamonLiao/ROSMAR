@@ -17,6 +17,7 @@ import { ConditionAction } from './workflow/actions/condition.action';
 import { SuiClientService } from '../blockchain/sui.client';
 import { TxBuilderService } from '../blockchain/tx-builder.service';
 import { TriggerMatcherService } from './trigger/trigger-matcher.service';
+import { RecurringProcessor } from './trigger/recurring.processor';
 import { AuthModule } from '../auth/auth.module';
 import { NotificationModule } from '../notification/notification.module';
 import { AgentModule } from '../agent/agent.module';
@@ -31,6 +32,7 @@ import { MessagingModule } from '../messaging/messaging.module';
     QuestModule,
     MessagingModule,
     BullModule.registerQueue({ name: 'workflow-delay' }),
+    BullModule.registerQueue({ name: 'campaign-recurring' }),
   ],
   controllers: [CampaignController],
   providers: [
@@ -48,6 +50,7 @@ import { MessagingModule } from '../messaging/messaging.module';
     UpdateTierAction,
     ConditionAction,
     TriggerMatcherService,
+    RecurringProcessor,
     SuiClientService,
     TxBuilderService,
   ],

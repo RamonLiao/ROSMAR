@@ -75,6 +75,44 @@ export class SuinsService {
   }
 
   /**
+   * Resolve avatar URL from SuiNS name object Display metadata.
+   */
+  async resolveAvatar(name: string): Promise<string | null> {
+    const cacheKey = `suins:avatar:${name}`;
+    const cached = this.cacheGet(cacheKey);
+    if (cached !== undefined) return cached;
+
+    try {
+      const address = await this.resolveNameToAddress(name);
+      if (!address) return null;
+
+      const client = this.suiClient.getClient();
+      const objects = await client.getOwnedObjects({
+        owner: address,
+        filter: {
+          StructType:
+            '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration',
+        },
+        options: { showContent: true, showDisplay: true },
+      });
+
+      const nameObj = objects.data.find((obj) => {
+        const fields = (obj.data?.content as any)?.fields;
+        return fields?.domain_name === name || fields?.name === name;
+      });
+
+      const display = (nameObj?.data?.display as any)?.data;
+      const avatarUrl = display?.avatar_url ?? display?.image_url ?? null;
+
+      this.cacheSet(cacheKey, avatarUrl);
+      return avatarUrl;
+    } catch (error) {
+      this.logger.warn(`Failed to resolve SuiNS avatar for "${name}": ${(error as Error).message}`);
+      return null;
+    }
+  }
+
+  /**
    * Check if a .sui name is available
    */
   async isNameAvailable(name: string): Promise<boolean> {
