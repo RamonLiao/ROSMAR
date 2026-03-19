@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
 import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
 import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { CacheService } from '../common/cache/cache.service';
 import { AuditTrailService } from '../common/audit-trail/audit-trail.service';
@@ -43,6 +44,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
     private readonly auditTrail: AuditTrailService,
+    private readonly eventEmitter: EventEmitter2,
   ) {
     this.refreshExpiresIn = this.configService.get<string>(
       'REFRESH_TOKEN_EXPIRES_IN',
@@ -107,7 +109,7 @@ export class AuthService {
 
   async generateChallenge(): Promise<string> {
     const nonce = randomBytes(32).toString('hex');
-    await this.cacheService.set(`challenge:${nonce}`, Date.now().toString(), 300); // 5 min TTL
+    await this.cacheService.set(`challenge:${nonce}`, (Date.now() + 300_000).toString(), 300); // 5 min TTL
     return `Sign this message to authenticate with ROSMAR CRM:\n${nonce}`;
   }
 
@@ -138,6 +140,7 @@ export class AuthService {
 
     const user = await this.resolveOrCreateMembership(address);
     const result = this.issueTokens(user);
+    this.emitWalletConnect(address, undefined, 'wallet');
     this.auditTrail.log({
       actor: address,
       action: 'AUTH_WALLET_LOGIN',
@@ -151,6 +154,7 @@ export class AuthService {
     const address = await this.deriveZkLoginAddress(jwt, salt);
     const user = await this.resolveOrCreateMembership(address);
     const result = this.issueTokens(user);
+    this.emitWalletConnect(address, undefined, 'zklogin');
     this.auditTrail.log({
       actor: address,
       action: 'AUTH_ZK_LOGIN',
@@ -301,6 +305,7 @@ export class AuthService {
     });
 
     const user = await this.resolveOrCreateMembership(credential.address);
+    this.emitWalletConnect(credential.address, undefined, 'passkey');
     return this.issueTokens(user);
   }
 
@@ -399,6 +404,22 @@ export class AuthService {
       expiresIn: this.refreshExpiresIn,
     } as Record<string, unknown>);
     return { accessToken, refreshToken, user };
+  }
+
+  private emitWalletConnect(
+    address: string,
+    profileId: string | undefined,
+    method: 'wallet' | 'zklogin' | 'passkey',
+  ): void {
+    this.eventEmitter.emit('indexer.event', {
+      event_id: `auth-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      event_type: 'wallet_connect',
+      address,
+      profile_id: profileId,
+      data: { method },
+      tx_digest: '',
+      timestamp: Date.now(),
+    });
   }
 
   private async deriveZkLoginAddress(jwt: string, salt: string): Promise<string> {

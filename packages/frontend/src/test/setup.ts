@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom';
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports */
 import { vi } from 'vitest';
 
 // Mock Next.js router

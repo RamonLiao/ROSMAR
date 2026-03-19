@@ -4,9 +4,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DiscordOAuthAdapter } from './adapters/discord-oauth.adapter';
 import { TelegramOAuthAdapter, TelegramLoginData } from './adapters/telegram-oauth.adapter';
 import { XOAuthAdapter } from './adapters/x-oauth.adapter';
+import { GoogleZkLoginAdapter } from './adapters/google-zklogin.adapter';
+import { AppleZkLoginAdapter } from './adapters/apple-zklogin.adapter';
 import * as crypto from 'crypto';
 
-export type SocialPlatform = 'discord' | 'telegram' | 'x' | 'apple';
+export type SocialPlatform = 'discord' | 'telegram' | 'x' | 'apple' | 'google';
 
 interface OAuthState {
   profileId: string;
@@ -26,6 +28,8 @@ export class SocialLinkService {
     private discordAdapter: DiscordOAuthAdapter,
     private telegramAdapter: TelegramOAuthAdapter,
     private xAdapter: XOAuthAdapter,
+    private googleAdapter: GoogleZkLoginAdapter,
+    private appleAdapter: AppleZkLoginAdapter,
   ) {
     const keyHex = this.config.get<string>('SOCIAL_ENCRYPTION_KEY', '0'.repeat(64));
     this.encryptionKey = Buffer.from(keyHex, 'hex');
@@ -112,27 +116,98 @@ export class SocialLinkService {
 
     const user = this.telegramAdapter.getUserInfo(data);
 
+    const [link] = await this.prisma.$transaction([
+      this.prisma.socialLink.upsert({
+        where: {
+          profileId_platform: { profileId, platform: 'telegram' },
+        },
+        create: {
+          profileId,
+          platform: 'telegram',
+          platformUserId: user.id,
+          platformUsername: user.username,
+          verified: true,
+        },
+        update: {
+          platformUserId: user.id,
+          platformUsername: user.username,
+          verified: true,
+          linkedAt: new Date(),
+        },
+      }),
+      this.prisma.profile.update({
+        where: { id: profileId },
+        data: { telegramChatId: user.id },
+      }),
+    ]);
+
+    return link;
+  }
+
+  async linkGoogle(profileId: string, jwt: string) {
+    const claims = this.googleAdapter.decodeJwt(jwt);
+    if (!claims.sub) {
+      throw new BadRequestException('Invalid Google JWT: missing sub claim');
+    }
+
     return this.prisma.socialLink.upsert({
       where: {
-        profileId_platform: { profileId, platform: 'telegram' },
+        profileId_platform: { profileId, platform: 'google' },
       },
       create: {
         profileId,
-        platform: 'telegram',
-        platformUserId: user.id,
-        platformUsername: user.username,
+        platform: 'google',
+        platformUserId: claims.sub,
+        platformUsername: claims.email ?? null,
         verified: true,
+        metadata: {
+          name: claims.name ?? null,
+          picture: claims.picture ?? null,
+        },
       },
       update: {
-        platformUserId: user.id,
-        platformUsername: user.username,
+        platformUserId: claims.sub,
+        platformUsername: claims.email ?? null,
         verified: true,
         linkedAt: new Date(),
+        metadata: {
+          name: claims.name ?? null,
+          picture: claims.picture ?? null,
+        },
       },
     });
   }
 
-  async linkApple(profileId: string, zkLoginAddress: string) {
+  async linkApple(profileId: string, jwtOrAddress: string) {
+    // Support both JWT-based (new) and raw address (legacy) linking
+    if (jwtOrAddress.includes('.')) {
+      // JWT path
+      const claims = this.appleAdapter.decodeJwt(jwtOrAddress);
+      if (!claims.sub) {
+        throw new BadRequestException('Invalid Apple JWT: missing sub claim');
+      }
+
+      return this.prisma.socialLink.upsert({
+        where: {
+          profileId_platform: { profileId, platform: 'apple' },
+        },
+        create: {
+          profileId,
+          platform: 'apple',
+          platformUserId: claims.sub,
+          platformUsername: claims.email ?? null,
+          verified: true,
+        },
+        update: {
+          platformUserId: claims.sub,
+          platformUsername: claims.email ?? null,
+          verified: true,
+          linkedAt: new Date(),
+        },
+      });
+    }
+
+    // Legacy: raw zkLogin address
     return this.prisma.socialLink.upsert({
       where: {
         profileId_platform: { profileId, platform: 'apple' },
@@ -140,12 +215,12 @@ export class SocialLinkService {
       create: {
         profileId,
         platform: 'apple',
-        platformUserId: zkLoginAddress,
+        platformUserId: jwtOrAddress,
         platformUsername: null,
         verified: true,
       },
       update: {
-        platformUserId: zkLoginAddress,
+        platformUserId: jwtOrAddress,
         verified: true,
         linkedAt: new Date(),
       },

@@ -109,7 +109,7 @@ const darkGlowStyle: React.CSSProperties = {
 export function DynamicBackground() {
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  useEffect(() => { queueMicrotask(() => setMounted(true)); }, []);
 
   const isDark = resolvedTheme === "dark";
 

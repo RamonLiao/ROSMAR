@@ -25,6 +25,16 @@ export class EvmResolverService {
     }
   }
 
+  /** Resolve ENS avatar (EIP-155 compliant) for a given ENS name, or null */
+  async resolveAvatar(ensName: string): Promise<string | null> {
+    try {
+      return await this.provider.getAvatar(ensName);
+    } catch (err) {
+      this.logger.warn(`Failed to resolve ENS avatar for "${ensName}": ${err}`);
+      return null;
+    }
+  }
+
   /** Reverse-resolve address → ENS name, or null */
   async lookupAddress(address: string): Promise<string | null> {
     try {

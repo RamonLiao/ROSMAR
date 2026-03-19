@@ -50,8 +50,8 @@ export function ActionPlanWizard() {
       const result = await planAction({ instruction: instruction.trim() });
       setPlan(result);
       setStep("review");
-    } catch (err: any) {
-      setErrorMsg(err?.message || "Failed to generate plan");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to generate plan");
       setStep("error");
     }
   };
@@ -63,8 +63,8 @@ export function ActionPlanWizard() {
     try {
       await executeAction({ planId: plan.planId });
       setStep("success");
-    } catch (err: any) {
-      setErrorMsg(err?.message || "Failed to execute plan");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to execute plan");
       setStep("error");
     }
   };

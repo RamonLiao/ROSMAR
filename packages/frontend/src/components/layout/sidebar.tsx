@@ -11,6 +11,7 @@ import {
   Megaphone,
   Radio,
   Ticket,
+  Fish,
   Vault,
   BarChart3,
   Settings,
@@ -37,6 +38,7 @@ const navGroups = [
       { icon: Megaphone, label: "Campaigns", href: "/campaigns" },
       { icon: Radio, label: "Broadcasts", href: "/broadcasts" },
       { icon: Ticket, label: "Tickets", href: "/tickets" },
+      { icon: Fish, label: "Whales", href: "/whales" },
     ],
   },
   {

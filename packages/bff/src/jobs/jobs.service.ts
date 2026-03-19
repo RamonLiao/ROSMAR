@@ -19,6 +19,11 @@ export class JobsService implements OnModuleInit {
     @InjectQueue('vault-expiry') private readonly vaultExpiryQueue: Queue,
     @InjectQueue('score-recalc') private readonly scoreRecalcQueue: Queue,
     @InjectQueue('broadcast-send') private readonly broadcastSendQueue: Queue,
+    @InjectQueue('time-elapsed-trigger') private readonly timeElapsedQueue: Queue,
+    @InjectQueue('balance-sync') private readonly balanceSyncQueue: Queue,
+    @InjectQueue('discord-role-sync') private readonly discordRoleSyncQueue: Queue,
+    @InjectQueue('campaign-recurring') private readonly campaignRecurringQueue: Queue,
+    @InjectQueue('vault-release') private readonly vaultReleaseQueue: Queue,
   ) {}
 
   async onModuleInit() {
@@ -76,6 +81,30 @@ export class JobsService implements OnModuleInit {
       { name: 'recalc-all', data: {} },
     );
     // broadcast-send: on-demand only, no cron
+
+    await this.timeElapsedQueue.upsertJobScheduler(
+      'time-elapsed-trigger-cron',
+      { pattern: '*/15 * * * *' },
+      { name: 'check-elapsed', data: {} },
+    );
+
+    await this.balanceSyncQueue.upsertJobScheduler(
+      'balance-sync-cron',
+      { pattern: '0 */6 * * *' },
+      { name: 'sync-all', data: {} },
+    );
+
+    await this.discordRoleSyncQueue.upsertJobScheduler(
+      'discord-role-sync-cron',
+      { pattern: '0 3 * * *' },
+      { name: 'sync-all', data: {} },
+    );
+
+    await this.vaultReleaseQueue.upsertJobScheduler(
+      'vault-release-cron',
+      { pattern: '* * * * *' },
+      { name: 'check-release', data: {} },
+    );
   }
 
   async scheduleSegmentEval(segmentId: string): Promise<void> {
@@ -101,6 +130,11 @@ export class JobsService implements OnModuleInit {
       ['vault-expiry', this.vaultExpiryQueue],
       ['score-recalc', this.scoreRecalcQueue],
       ['broadcast-send', this.broadcastSendQueue],
+      ['time-elapsed-trigger', this.timeElapsedQueue],
+      ['balance-sync', this.balanceSyncQueue],
+      ['discord-role-sync', this.discordRoleSyncQueue],
+      ['campaign-recurring', this.campaignRecurringQueue],
+      ['vault-release', this.vaultReleaseQueue],
     ];
 
     const result: Record<string, { waiting: number; active: number; failed: number }> = {};

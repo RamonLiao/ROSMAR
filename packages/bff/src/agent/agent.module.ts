@@ -11,9 +11,10 @@ import { ActionController } from './action/action.controller';
 import { YieldOptimizerService } from './yield/yield-optimizer.service';
 import { YieldOptimizerController } from './yield/yield-optimizer.controller';
 import { CampaignModule } from '../campaign/campaign.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [forwardRef(() => CampaignModule)],
+  imports: [forwardRef(() => CampaignModule), AuthModule],
   controllers: [AgentController, AnalystController, ContentController, ActionController, YieldOptimizerController],
   providers: [
     LlmClientService,

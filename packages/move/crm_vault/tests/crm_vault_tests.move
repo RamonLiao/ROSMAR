@@ -3,6 +3,7 @@ module crm_vault::crm_vault_tests {
     use std::string;
     use sui::test_scenario::{Self as ts};
     use sui::test_utils;
+    use sui::clock;
     use crm_core::capabilities;
     use crm_core::workspace;
     use crm_vault::vault;
@@ -145,7 +146,7 @@ module crm_vault::crm_vault_tests {
         let config = capabilities::test_create_config(ctx);
         let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
 
-        let p = policy::create_workspace_policy(&config, &workspace, &admin_cap, string::utf8(b"Default Access"), ctx);
+        let p = policy::create_workspace_policy(&config, &workspace, &admin_cap, string::utf8(b"Default Access"), 0, ctx);
 
         assert!(policy::rule_type(&p) == policy::rule_workspace_member());
         assert!(policy::version(&p) == 0);
@@ -165,7 +166,7 @@ module crm_vault::crm_vault_tests {
         let config = capabilities::test_create_config(ctx);
         let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
 
-        let p = policy::create_address_policy(&config, &workspace, &admin_cap, string::utf8(b"Restricted"), vector[USER1, USER2], ctx);
+        let p = policy::create_address_policy(&config, &workspace, &admin_cap, string::utf8(b"Restricted"), vector[USER1, USER2], 0, ctx);
 
         assert!(policy::rule_type(&p) == policy::rule_specific_address());
         assert!(policy::allowed_addresses(&p).length() == 2);
@@ -184,7 +185,7 @@ module crm_vault::crm_vault_tests {
         let config = capabilities::test_create_config(ctx);
         let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
 
-        let p = policy::create_role_policy(&config, &workspace, &admin_cap, string::utf8(b"Admin Only"), 2, ctx);
+        let p = policy::create_role_policy(&config, &workspace, &admin_cap, string::utf8(b"Admin Only"), 2, 0, ctx);
 
         assert!(policy::rule_type(&p) == policy::rule_role_based());
         assert!(policy::min_role_level(&p) == 2);
@@ -202,7 +203,7 @@ module crm_vault::crm_vault_tests {
         let ctx = ts::ctx(&mut scenario);
         let config = capabilities::test_create_config(ctx);
         let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
-        let mut p = policy::create_address_policy(&config, &workspace, &admin_cap, string::utf8(b"Custom"), vector[], ctx);
+        let mut p = policy::create_address_policy(&config, &workspace, &admin_cap, string::utf8(b"Custom"), vector[], 0, ctx);
 
         policy::add_address(&config, &workspace, &admin_cap, &mut p, 0, USER1, ctx);
         assert!(policy::allowed_addresses(&p).length() == 1);
@@ -225,7 +226,7 @@ module crm_vault::crm_vault_tests {
         let ctx = ts::ctx(&mut scenario);
         let config = capabilities::test_create_config(ctx);
         let (workspace, admin_cap) = workspace::create(&config, string::utf8(b"Test"), ctx);
-        let mut p = policy::create_address_policy(&config, &workspace, &admin_cap, string::utf8(b"Custom"), vector[], ctx);
+        let mut p = policy::create_address_policy(&config, &workspace, &admin_cap, string::utf8(b"Custom"), vector[], 0, ctx);
 
         policy::add_address(&config, &workspace, &admin_cap, &mut p, 99, USER1, ctx);
 
@@ -248,13 +249,16 @@ module crm_vault::crm_vault_tests {
         let p = policy::create_workspace_policy(
             &config, &workspace, &admin_cap,
             string::utf8(b"Default"),
+            0,
             ctx,
         );
 
         // ADMIN is the owner/member — should pass
         let correct_id = sui::address::to_bytes(object::id_address(&p));
-        policy::seal_approve(correct_id, &p, &workspace, ctx);
+        let clk = clock::create_for_testing(ctx);
+        policy::seal_approve(correct_id, &p, &workspace, &clk, ctx);
 
+        clock::destroy_for_testing(clk);
         test_utils::destroy(config);
         test_utils::destroy(workspace);
         test_utils::destroy(admin_cap);
@@ -273,10 +277,12 @@ module crm_vault::crm_vault_tests {
             &config, &workspace, &admin_cap,
             string::utf8(b"Restricted"),
             vector[USER1],
+            0,
             ctx,
         );
 
         let correct_id = sui::address::to_bytes(object::id_address(&p));
+        let clk = clock::create_for_testing(ctx);
 
         test_utils::destroy(config);
         test_utils::destroy(admin_cap);
@@ -285,8 +291,9 @@ module crm_vault::crm_vault_tests {
         ts::next_tx(&mut scenario, USER1);
         let ctx = ts::ctx(&mut scenario);
 
-        policy::seal_approve(correct_id, &p, &workspace, ctx);
+        policy::seal_approve(correct_id, &p, &workspace, &clk, ctx);
 
+        clock::destroy_for_testing(clk);
         test_utils::destroy(workspace);
         test_utils::destroy(p);
         ts::end(scenario);
@@ -307,10 +314,12 @@ module crm_vault::crm_vault_tests {
             &config, &workspace, &admin_cap,
             string::utf8(b"Member+"),
             1,
+            0,
             ctx,
         );
 
         let correct_id = sui::address::to_bytes(object::id_address(&p));
+        let clk = clock::create_for_testing(ctx);
 
         test_utils::destroy(config);
         test_utils::destroy(admin_cap);
@@ -319,8 +328,9 @@ module crm_vault::crm_vault_tests {
         ts::next_tx(&mut scenario, USER1);
         let ctx = ts::ctx(&mut scenario);
 
-        policy::seal_approve(correct_id, &p, &workspace, ctx);
+        policy::seal_approve(correct_id, &p, &workspace, &clk, ctx);
 
+        clock::destroy_for_testing(clk);
         test_utils::destroy(workspace);
         test_utils::destroy(p);
         ts::end(scenario);

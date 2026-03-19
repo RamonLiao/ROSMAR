@@ -61,14 +61,26 @@ export class SocialLinkController {
     return { success: true, link };
   }
 
+  // --- Google ---
+  @Post(':profileId/google')
+  async linkGoogle(
+    @Param('profileId') profileId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    if (!body.jwt) throw new BadRequestException('jwt required');
+    const link = await this.socialLinkService.linkGoogle(profileId, body.jwt as string);
+    return { success: true, link };
+  }
+
   // --- Apple ---
   @Post(':profileId/apple')
   async linkApple(
     @Param('profileId') profileId: string,
     @Body() body: Record<string, unknown>,
   ) {
-    if (!body.zkLoginAddress) throw new BadRequestException('zkLoginAddress required');
-    const link = await this.socialLinkService.linkApple(profileId, body.zkLoginAddress as string);
+    const jwtOrAddress = (body.jwt as string) ?? (body.zkLoginAddress as string);
+    if (!jwtOrAddress) throw new BadRequestException('jwt or zkLoginAddress required');
+    const link = await this.socialLinkService.linkApple(profileId, jwtOrAddress);
     return { success: true, link };
   }
 

@@ -11,6 +11,6 @@ import { NotificationModule } from '../notification/notification.module';
   imports: [AuthModule, NotificationModule],
   controllers: [MessagingController],
   providers: [MessagingService, TelegramService, EmailService, DiscordService],
-  exports: [MessagingService],
+  exports: [MessagingService, EmailService],
 })
 export class MessagingModule {}

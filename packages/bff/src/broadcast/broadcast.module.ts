@@ -5,8 +5,10 @@ import { ChannelAdapterRegistry } from './adapters/channel-adapter.registry';
 import { TelegramChannelAdapter } from './adapters/telegram-channel.adapter';
 import { DiscordChannelAdapter } from './adapters/discord-channel.adapter';
 import { XChannelAdapter } from './adapters/x-channel.adapter';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
+  imports: [AuthModule],
   controllers: [BroadcastController],
   providers: [
     BroadcastService,

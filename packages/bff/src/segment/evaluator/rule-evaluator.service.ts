@@ -20,28 +20,77 @@ export class RuleEvaluatorService {
   constructor(private readonly prisma: PrismaService) {}
 
   async evaluate(workspaceId: string, rules: SegmentRules): Promise<string[]> {
-    const prismaConditions = rules.conditions.map((c) =>
-      this.toPrismaWhere(c),
+    // Split conditions into Prisma-native vs raw-SQL paths
+    const discordConditions = rules.conditions.filter(
+      (c) => c.field === 'discord_role',
+    );
+    const tokenBalConditions = rules.conditions.filter(
+      (c) => c.field === 'token_balance',
+    );
+    const prismaConditions = rules.conditions.filter(
+      (c) => c.field !== 'discord_role' && c.field !== 'token_balance',
     );
 
-    const where: Prisma.ProfileWhereInput = {
-      workspaceId,
-      isArchived: false,
-      ...(rules.logic === 'OR'
-        ? { OR: prismaConditions }
-        : { AND: prismaConditions }),
-    };
+    const resultSets: string[][] = [];
 
-    const profiles = await this.prisma.profile.findMany({
-      where,
-      select: { id: true },
-    });
+    // 1. Prisma-native conditions (tags, tier, engagement_score, wallet_chain, created_after, nft_collection)
+    if (prismaConditions.length > 0) {
+      const mapped = prismaConditions.map((c) => this.toPrismaWhere(c));
+      const where: Prisma.ProfileWhereInput = {
+        workspaceId,
+        isArchived: false,
+        ...(rules.logic === 'OR' ? { OR: mapped } : { AND: mapped }),
+      };
+      const profiles = await this.prisma.profile.findMany({
+        where,
+        select: { id: true },
+      });
+      resultSets.push(profiles.map((p) => p.id));
+    }
+
+    // 2. Token balance (raw SQL)
+    if (tokenBalConditions.length > 0) {
+      resultSets.push(
+        await this.evaluateTokenBalance(
+          workspaceId,
+          tokenBalConditions,
+          rules.logic,
+        ),
+      );
+    }
+
+    // 3. Discord role (raw SQL)
+    if (discordConditions.length > 0) {
+      resultSets.push(
+        await this.evaluateDiscordRoles(
+          workspaceId,
+          discordConditions,
+          rules.logic,
+        ),
+      );
+    }
+
+    // Combine result sets
+    let result: string[];
+    if (resultSets.length === 0) {
+      result = [];
+    } else if (resultSets.length === 1) {
+      result = resultSets[0];
+    } else if (rules.logic === 'AND') {
+      // Intersection
+      const [first, ...rest] = resultSets;
+      const sets = rest.map((s) => new Set(s));
+      result = first.filter((id) => sets.every((s) => s.has(id)));
+    } else {
+      // Union
+      result = [...new Set(resultSets.flat())];
+    }
 
     this.logger.debug(
-      `Evaluated ${rules.conditions.length} conditions (${rules.logic}): ${profiles.length} profiles matched`,
+      `Evaluated ${rules.conditions.length} conditions (${rules.logic}): ${result.length} profiles matched`,
     );
 
-    return profiles.map((p) => p.id);
+    return result;
   }
 
   toPrismaWhere(condition: RuleCondition): Prisma.ProfileWhereInput {
@@ -70,8 +119,124 @@ export class RuleEvaluatorService {
       case 'created_after':
         return { createdAt: { gte: new Date(value) } };
 
+      case 'nft_collection': {
+        const matchFilter = {
+          assetType: 'nft',
+          rawBalance: { gt: new Prisma.Decimal(0) },
+          OR: [
+            {
+              collectionName: {
+                contains: value as string,
+                mode: 'insensitive' as const,
+              },
+            },
+            { contractAddress: value as string },
+          ],
+        };
+        if (operator === 'holds') {
+          return { walletBalances: { some: matchFilter } };
+        }
+        if (operator === 'not_holds') {
+          return { walletBalances: { none: matchFilter } };
+        }
+        throw new Error(
+          `Unsupported operator "${operator}" for field "nft_collection"`,
+        );
+      }
+
       default:
         throw new Error(`Unsupported rule field: "${field}"`);
+    }
+  }
+
+  private async evaluateTokenBalance(
+    workspaceId: string,
+    conditions: RuleCondition[],
+    logic: 'AND' | 'OR',
+  ): Promise<string[]> {
+    const fragments = conditions.map((c) => {
+      let parsed: { token: string; amount: string };
+      try {
+        parsed = JSON.parse(c.value as string);
+      } catch {
+        throw new Error(
+          'token_balance value must be JSON: {"token":"SUI","amount":"100"}',
+        );
+      }
+      if (!parsed.token || !parsed.amount || isNaN(Number(parsed.amount))) {
+        throw new Error(
+          'token_balance value must be JSON: {"token":"SUI","amount":"100"}',
+        );
+      }
+      const sqlOp = this.toSqlOperator(c.operator);
+      return `(wb.token_symbol = '${parsed.token}' AND wb.raw_balance ${sqlOp} ${parsed.amount} * power(10, wb.decimals))`;
+    });
+
+    const joiner = logic === 'AND' ? ' AND ' : ' OR ';
+
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>(
+      Prisma.sql`
+        SELECT DISTINCT p.id
+        FROM profiles p
+        JOIN wallet_balances wb ON wb.profile_id = p.id
+        WHERE p.workspace_id = ${workspaceId}
+          AND p.is_archived = false
+          AND wb.asset_type = 'token'
+          AND (${Prisma.raw(fragments.join(joiner))})
+      `,
+    );
+
+    return rows.map((r) => r.id);
+  }
+
+  private async evaluateDiscordRoles(
+    workspaceId: string,
+    conditions: RuleCondition[],
+    logic: 'AND' | 'OR',
+  ): Promise<string[]> {
+    const fragmentStrings = conditions.map((c) => {
+      const roleId = c.value as string;
+      if (c.operator === 'has_role') {
+        return `sl.metadata->'roles' @> '"${roleId}"'::jsonb`;
+      }
+      if (c.operator === 'not_has_role') {
+        return `NOT (COALESCE(sl.metadata->'roles', '[]'::jsonb) @> '"${roleId}"'::jsonb)`;
+      }
+      throw new Error(
+        `Unsupported operator "${c.operator}" for field "discord_role"`,
+      );
+    });
+
+    const joiner = logic === 'AND' ? ' AND ' : ' OR ';
+    const combinedClause = fragmentStrings.join(joiner);
+
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>(
+      Prisma.sql`
+        SELECT DISTINCT p.id
+        FROM profiles p
+        JOIN social_links sl ON sl.profile_id = p.id AND sl.platform = 'discord'
+        WHERE p.workspace_id = ${workspaceId}
+          AND p.is_archived = false
+          AND (${Prisma.raw(combinedClause)})
+      `,
+    );
+
+    this.logger.debug(`Discord role eval: ${rows.length} profiles matched`);
+    return rows.map((r) => r.id);
+  }
+
+  private toSqlOperator(operator: string): string {
+    switch (operator) {
+      case 'gte':
+        return '>=';
+      case 'gt':
+        return '>';
+      case 'lte':
+        return '<=';
+      case 'lt':
+        return '<';
+      default:
+        throw new Error(`Unsupported numeric operator: "${operator}"`);
     }
   }
 

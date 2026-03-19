@@ -7,6 +7,7 @@ import { EngagementBadge } from "./engagement-badge";
 interface ProfileCardProps {
   address: string;
   suinsName?: string;
+  primaryDomain?: string;
   tier: number;
   score: number;
   avatarUrl?: string;
@@ -15,12 +16,14 @@ interface ProfileCardProps {
 export function ProfileCard({
   address,
   suinsName,
+  primaryDomain,
   tier,
   score,
   avatarUrl,
 }: ProfileCardProps) {
-  const initials = suinsName
-    ? suinsName.slice(0, 2).toUpperCase()
+  const displayName = primaryDomain ?? suinsName;
+  const initials = displayName
+    ? displayName.slice(0, 2).toUpperCase()
     : address.slice(0, 2).toUpperCase();
 
   return (
@@ -29,14 +32,14 @@ export function ProfileCard({
         <div className="flex items-center gap-4">
           <Avatar className="h-16 w-16">
             {avatarUrl ? (
-              <img src={avatarUrl} alt={suinsName || address} />
+              <img src={avatarUrl} alt={displayName || address} />
             ) : (
               <AvatarFallback>{initials}</AvatarFallback>
             )}
           </Avatar>
           <div className="flex-1">
             <h3 className="text-lg font-semibold">
-              {suinsName || "Unknown"}
+              {displayName || "Unknown"}
             </h3>
             <AddressDisplay address={address} />
           </div>

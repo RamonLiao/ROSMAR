@@ -5,6 +5,8 @@ export interface Profile {
   id: string;
   primaryAddress: string;
   suinsName: string | null;
+  avatarUrl: string | null;
+  primaryDomain: string | null;
   tags: string[];
   tier: number;
   engagementScore: number;

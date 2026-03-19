@@ -12,11 +12,13 @@ import { SocialTab } from "@/components/profile/social-tab";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Pencil, X, Loader2, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useProfile, useUpdateProfileTags, useProfileOrganizations } from "@/lib/hooks/use-profiles";
-import { useSendMessage, useMessageHistory } from "@/lib/hooks/use-messaging";
+import { useUpdateProfileTags, useProfileOrganizations } from "@/lib/hooks/use-profiles";
+import { useProfileSummary } from "@/lib/hooks/use-profile-summary";
+import { useSendMessage, useMessageHistory, type Message } from "@/lib/hooks/use-messaging";
 import { Textarea } from "@/components/ui/textarea";
 import { WalletsTab } from "@/components/profile/wallets-tab";
 import { NetWorthCard } from "@/components/profile/net-worth-card";
+import { DomainPicker } from "@/components/profile/domain-picker";
 
 export default function ProfileDetailPage({
   params,
@@ -25,7 +27,8 @@ export default function ProfileDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const { data: profile, isLoading, error } = useProfile(id);
+  const { data: summary, isLoading, error } = useProfileSummary(id);
+  const profile = summary?.profile;
   const { mutateAsync: updateTags, isPending: isUpdating } =
     useUpdateProfileTags();
   const { data: relatedOrgs, isLoading: orgsLoading } = useProfileOrganizations(id);
@@ -77,8 +80,8 @@ export default function ProfileDetailPage({
         expectedVersion: profile.version,
       });
       setEditing(false);
-    } catch (err: any) {
-      setUpdateError(err?.message || "Failed to update tags");
+    } catch (err: unknown) {
+      setUpdateError(err instanceof Error ? err.message : "Failed to update tags");
     }
   };
 
@@ -147,9 +150,19 @@ export default function ProfileDetailPage({
       <ProfileCard
         address={profile.primaryAddress}
         suinsName={profile.suinsName ?? undefined}
+        primaryDomain={profile.primaryDomain ?? undefined}
         tier={profile.tier}
         score={profile.engagementScore}
+        avatarUrl={profile.avatarUrl ?? undefined}
       />
+
+      <div className="flex items-center gap-3">
+        <span className="text-sm text-muted-foreground">Primary Domain</span>
+        <DomainPicker
+          profileId={id}
+          currentDomain={profile.primaryDomain ?? undefined}
+        />
+      </div>
 
       <Card>
         <CardHeader>
@@ -313,7 +326,7 @@ export default function ProfileDetailPage({
             <CardContent>
               {messageHistory?.messages && messageHistory.messages.length > 0 ? (
                 <div className="space-y-3">
-                  {messageHistory.messages.map((msg: any) => (
+                  {messageHistory.messages.map((msg: Message) => (
                     <div key={msg.id} className="flex items-start justify-between rounded-lg border p-3">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Lock, Unlock, Clock, Eye, EyeOff } from "lucide-react";
+import { Lock, Unlock, Clock, Eye, EyeOff, Trash2, Timer, LockKeyhole } from "lucide-react";
 
 interface VaultItem {
   key: string;
@@ -12,6 +12,8 @@ interface VaultItem {
   version: number;
   sealPolicyId?: string | null;
   expiresAt?: string | null;
+  releaseAt?: string | null;
+  isReleased?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,12 +48,16 @@ export function VaultItemCard({ item, onDecrypt, onDelete }: VaultItemCardProps)
 
   const isExpired =
     item.expiresAt && new Date(item.expiresAt) < new Date();
+  const isTimeLocked = item.releaseAt && !item.isReleased;
+  const isDisabled = !!isExpired || !!isTimeLocked;
 
   return (
-    <Card className={isExpired ? "opacity-50" : ""}>
+    <Card className={isDisabled ? "opacity-50" : ""}>
       <CardContent className="flex items-center justify-between py-3">
         <div className="flex items-center gap-3">
-          {item.sealPolicyId ? (
+          {isTimeLocked ? (
+            <LockKeyhole className="h-4 w-4 text-orange-500" />
+          ) : item.sealPolicyId ? (
             <Lock className="h-4 w-4 text-amber-500" />
           ) : (
             <Unlock className="h-4 w-4 text-muted-foreground" />
@@ -62,6 +68,17 @@ export function VaultItemCard({ item, onDecrypt, onDelete }: VaultItemCardProps)
               v{item.version} &middot; {new Date(item.updatedAt).toLocaleDateString()}
             </p>
           </div>
+          {isTimeLocked && item.releaseAt && (
+            <Badge variant="outline" className="text-xs gap-1 border-orange-300 text-orange-600">
+              <Timer className="h-3 w-3" />
+              Locked until {new Date(item.releaseAt).toLocaleString()}
+            </Badge>
+          )}
+          {item.releaseAt && item.isReleased && (
+            <Badge variant="outline" className="text-xs gap-1 border-green-300 text-green-600">
+              Released
+            </Badge>
+          )}
           {item.expiresAt && (
             <Badge variant="outline" className="text-xs gap-1">
               <Clock className="h-3 w-3" />
@@ -80,7 +97,7 @@ export function VaultItemCard({ item, onDecrypt, onDelete }: VaultItemCardProps)
             size="icon"
             variant="ghost"
             onClick={handleDecrypt}
-            disabled={isDecrypting || !!isExpired}
+            disabled={isDecrypting || isDisabled}
             title={showValue ? "Hide" : "Decrypt"}
           >
             {showValue ? (
@@ -89,6 +106,16 @@ export function VaultItemCard({ item, onDecrypt, onDelete }: VaultItemCardProps)
               <Eye className="h-4 w-4" />
             )}
           </Button>
+          {onDelete && (
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => onDelete(item.key, item.version)}
+              title="Delete"
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

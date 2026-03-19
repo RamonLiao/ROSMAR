@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2 } from "lucide-react";
+import { useDiscordRoles } from "@/hooks/use-discord-roles";
 
 export interface Condition {
   id: string;
@@ -31,27 +32,112 @@ export interface SegmentRules {
   groups: RuleGroup[];
 }
 
-const FIELDS = [
-  { value: "tier", label: "Tier" },
-  { value: "engagement_score", label: "Engagement Score" },
-  { value: "tags", label: "Tags" },
-  { value: "last_active_at", label: "Last Active" },
-];
+// ─── Field-aware configuration ───────────────────
 
-const OPERATORS = [
-  { value: "equals", label: "Equals" },
-  { value: "not_equals", label: "Not Equals" },
-  { value: "greater_than", label: "Greater Than" },
-  { value: "less_than", label: "Less Than" },
-  { value: "contains", label: "Contains" },
+interface FieldConfig {
+  value: string;
+  label: string;
+  category: "profile" | "on-chain" | "social";
+  operators: { value: string; label: string }[];
+  valueType: "text" | "number" | "token-amount" | "discord-role";
+}
+
+const FIELD_CONFIG: FieldConfig[] = [
+  {
+    value: "tier",
+    label: "Tier",
+    category: "profile",
+    operators: [
+      { value: "equals", label: "Equals" },
+      { value: "gt", label: "Greater Than" },
+      { value: "gte", label: "Greater Than or Equal" },
+      { value: "lt", label: "Less Than" },
+      { value: "lte", label: "Less Than or Equal" },
+    ],
+    valueType: "number",
+  },
+  {
+    value: "engagement_score",
+    label: "Engagement Score",
+    category: "profile",
+    operators: [
+      { value: "equals", label: "Equals" },
+      { value: "gt", label: "Greater Than" },
+      { value: "gte", label: "Greater Than or Equal" },
+      { value: "lt", label: "Less Than" },
+      { value: "lte", label: "Less Than or Equal" },
+    ],
+    valueType: "number",
+  },
+  {
+    value: "tags",
+    label: "Tags",
+    category: "profile",
+    operators: [{ value: "contains", label: "Contains" }],
+    valueType: "text",
+  },
+  {
+    value: "wallet_chain",
+    label: "Wallet Chain",
+    category: "on-chain",
+    operators: [{ value: "equals", label: "Equals" }],
+    valueType: "text",
+  },
+  {
+    value: "created_after",
+    label: "Created After",
+    category: "profile",
+    operators: [{ value: "gte", label: "On or After" }],
+    valueType: "text",
+  },
+  {
+    value: "nft_collection",
+    label: "NFT Collection",
+    category: "on-chain",
+    operators: [
+      { value: "holds", label: "Holds" },
+      { value: "not_holds", label: "Does Not Hold" },
+    ],
+    valueType: "text",
+  },
+  {
+    value: "token_balance",
+    label: "Token Balance",
+    category: "on-chain",
+    operators: [
+      { value: "gt", label: "Greater Than" },
+      { value: "gte", label: "Greater Than or Equal" },
+      { value: "lt", label: "Less Than" },
+      { value: "lte", label: "Less Than or Equal" },
+    ],
+    valueType: "token-amount",
+  },
+  {
+    value: "discord_role",
+    label: "Discord Role",
+    category: "social",
+    operators: [
+      { value: "has_role", label: "Has Role" },
+      { value: "not_has_role", label: "Does Not Have Role" },
+    ],
+    valueType: "discord-role",
+  },
 ];
 
 interface RuleBuilderProps {
   value: RuleGroup[];
   onChange: (groups: RuleGroup[]) => void;
+  workspaceId?: string;
 }
 
-export function RuleBuilder({ value: groups, onChange }: RuleBuilderProps) {
+export function RuleBuilder({ value: groups, onChange, workspaceId }: RuleBuilderProps) {
+  const { roles: discordRoles } = useDiscordRoles(workspaceId);
+
+  const fieldMap = useMemo(
+    () => new Map(FIELD_CONFIG.map((f) => [f.value, f])),
+    [],
+  );
+
   const update = useCallback(
     (fn: (prev: RuleGroup[]) => RuleGroup[]) => onChange(fn(groups)),
     [groups, onChange],
@@ -127,6 +213,79 @@ export function RuleBuilder({ value: groups, onChange }: RuleBuilderProps) {
     );
   };
 
+  const renderValueInput = (
+    group: RuleGroup,
+    condition: Condition,
+    fieldConfig: FieldConfig | undefined,
+  ) => {
+    if (fieldConfig?.valueType === "token-amount") {
+      const parsed = (() => {
+        try {
+          return JSON.parse(condition.value || "{}");
+        } catch {
+          return {};
+        }
+      })();
+      return (
+        <div className="flex flex-1 items-center gap-1">
+          <Input
+            placeholder="Token (e.g., SUI)"
+            value={parsed.token ?? ""}
+            onChange={(e) =>
+              updateCondition(group.id, condition.id, {
+                value: JSON.stringify({ ...parsed, token: e.target.value }),
+              })
+            }
+            className="w-[120px]"
+          />
+          <Input
+            type="number"
+            placeholder="Amount"
+            value={parsed.amount ?? ""}
+            onChange={(e) =>
+              updateCondition(group.id, condition.id, {
+                value: JSON.stringify({ ...parsed, amount: e.target.value }),
+              })
+            }
+            className="flex-1"
+          />
+        </div>
+      );
+    }
+
+    if (fieldConfig?.valueType === "discord-role") {
+      return (
+        <Select
+          value={condition.value}
+          onValueChange={(v) => updateCondition(group.id, condition.id, { value: v })}
+        >
+          <SelectTrigger className="flex-1">
+            <SelectValue placeholder="Select role" />
+          </SelectTrigger>
+          <SelectContent>
+            {discordRoles.map((role) => (
+              <SelectItem key={role.id} value={role.id}>
+                {role.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    }
+
+    return (
+      <Input
+        placeholder="Value"
+        type={fieldConfig?.valueType === "number" ? "number" : "text"}
+        value={condition.value}
+        onChange={(e) =>
+          updateCondition(group.id, condition.id, { value: e.target.value })
+        }
+        className="flex-1"
+      />
+    );
+  };
+
   return (
     <div className="space-y-4">
       {groups.map((group, groupIndex) => (
@@ -155,64 +314,67 @@ export function RuleBuilder({ value: groups, onChange }: RuleBuilderProps) {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            {group.conditions.map((condition) => (
-              <div key={condition.id} className="flex items-center gap-2">
-                <Select
-                  value={condition.field}
-                  onValueChange={(v) =>
-                    updateCondition(group.id, condition.id, { field: v })
-                  }
-                >
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Select field" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FIELDS.map((field) => (
-                      <SelectItem key={field.value} value={field.value}>
-                        {field.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {group.conditions.map((condition) => {
+              const fieldConfig = fieldMap.get(condition.field);
+              const operators = fieldConfig?.operators ?? [];
 
-                <Select
-                  value={condition.operator}
-                  onValueChange={(v) =>
-                    updateCondition(group.id, condition.id, { operator: v })
-                  }
-                >
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Operator" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {OPERATORS.map((op) => (
-                      <SelectItem key={op.value} value={op.value}>
-                        {op.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Input
-                  placeholder="Value"
-                  value={condition.value}
-                  onChange={(e) =>
-                    updateCondition(group.id, condition.id, { value: e.target.value })
-                  }
-                  className="flex-1"
-                />
-
-                {group.conditions.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeCondition(group.id, condition.id)}
+              return (
+                <div key={condition.id} className="flex items-center gap-2">
+                  <Select
+                    value={condition.field}
+                    onValueChange={(v) => {
+                      // Reset operator and value when field changes
+                      updateCondition(group.id, condition.id, {
+                        field: v,
+                        operator: "",
+                        value: "",
+                      });
+                    }}
                   >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            ))}
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select field" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FIELD_CONFIG.map((field) => (
+                        <SelectItem key={field.value} value={field.value}>
+                          {field.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Select
+                    value={condition.operator}
+                    onValueChange={(v) =>
+                      updateCondition(group.id, condition.id, { operator: v })
+                    }
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Operator" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {operators.map((op) => (
+                        <SelectItem key={op.value} value={op.value}>
+                          {op.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {renderValueInput(group, condition, fieldConfig)}
+
+                  {group.conditions.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeCondition(group.id, condition.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
 
             <Button
               variant="outline"

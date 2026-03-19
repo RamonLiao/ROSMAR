@@ -1,5 +1,29 @@
 # ROSMAR CRM — Lessons Learned
 
+## 2026-03-20 (Session 19)
+
+### NestJS DI 是 module-scoped，新增 service/guard 要同步更新 module
+- **錯誤**: `TxBuilderService` 建了 `@Injectable()` class 但沒加進 `BlockchainModule` 的 providers/exports；多個 module 的 controller 用 `@UseGuards(SessionGuard)` 但沒 import `AuthModule`
+- **正確做法**: 新增 service 後立即加到所屬 module 的 `providers` + `exports`。任何 controller 用了 guard/interceptor，確認該 guard 的 module 已被 import。
+- **要點**: NestJS 遇到第一個 DI 失敗就停止 bootstrap，一次只能看到一個錯誤。系統性掃描比逐個修有效：grep `SessionGuard` 出現的 controller → 回溯 module → 確認 import
+
+### Cache TTL + timestamp 雙重驗證的時間語意要一致
+- **錯誤**: `generateChallenge` 存 `Date.now()`（建立時間），`consumeChallenge` 檢查 `Date.now() < storedValue` → 永遠 false，因為驗證時間一定 >= 建立時間
+- **正確做法**: 存過期時間 `Date.now() + TTL_MS`，或存建立時間但比對 `Date.now() - storedValue < TTL_MS`
+- **要點**: 時間比較的兩端語意要一致（都是 timestamp 或都是 duration）。這類 bug 不會在 unit test 裡直接暴露，因為 Redis TTL 層已經處理了過期清理，只有 TTL 內的合法請求才被錯殺
+
+## 2026-03-11 (Session 17)
+
+### Move 中 assert 順序要跟狀態變更邏輯一致
+- **錯誤**: `revoke_badge()` 先檢查 dedup entry 存在，再檢查 revoked。但 revoke 會移除 dedup entry，導致 double-revoke 時命中 `EBadgeNotFound` 而非語意正確的 `EAlreadyRevoked`
+- **正確做法**: 會被操作刪除的 guard 放後面，permanent marker（revoked table）的 guard 放前面。Assertion 順序要考慮「前一次操作改了什麼狀態」
+- **要點**: 寫 expected_failure 測試時，先想清楚第二次呼叫時各 assert 會命中哪一個
+
+### Move test 不能直接存取外部 module 的 struct field
+- **錯誤**: 測試裡直接用 `registry.minted` 和 `sui::table::borrow()` 存取 QuestRegistry 內部欄位 → `restricted visibility` 編譯錯誤
+- **正確做法**: 在 source module 加 `#[test_only]` helper（如 `test_get_badge_id()`），封裝內部存取
+- **要點**: Move 2024 Edition 的 struct field 只對定義 module 可見。跨 module 測試一律用 test_only helper
+
 ## 2026-03-07 (Session 16)
 
 ### 平行 worktree agents 的 API surface 衝突

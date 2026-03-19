@@ -108,7 +108,7 @@ module crm_core::capabilities {
 
     /// @notice Creates a new WorkspaceAdminCap for the given workspace
     /// @param workspace_id - ID of the workspace this cap grants admin over
-    public fun create_admin_cap(
+    public(package) fun create_admin_cap(
         workspace_id: ID,
         ctx: &mut TxContext,
     ): WorkspaceAdminCap {

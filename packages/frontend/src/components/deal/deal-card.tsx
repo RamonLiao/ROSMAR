@@ -46,7 +46,7 @@ export function DealCard({
   // Distinguish click from drag: record pointer start, check distance on up
   const handlePointerDown = (e: React.PointerEvent) => {
     pointerStart.current = { x: e.clientX, y: e.clientY };
-    listeners?.onPointerDown?.(e as any);
+    listeners?.onPointerDown?.(e as unknown as React.PointerEvent<Element>);
   };
 
   const handleClick = (e: React.MouseEvent) => {

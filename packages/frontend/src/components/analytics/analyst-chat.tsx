@@ -24,7 +24,7 @@ interface ChatMessage {
   timestamp: Date;
 }
 
-function DataTable({ data }: { data: any[] }) {
+function DataTable({ data }: { data: Record<string, unknown>[] }) {
   if (!data || data.length === 0) return null;
 
   const columns = Object.keys(data[0]).filter(
@@ -120,11 +120,11 @@ export function AnalystChat() {
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, assistantMsg]);
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errorMsg: ChatMessage = {
         id: `error-${Date.now()}`,
         role: "assistant",
-        content: `Error: ${err.message || "Failed to process query"}`,
+        content: `Error: ${err instanceof Error ? err.message : "Failed to process query"}`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMsg]);

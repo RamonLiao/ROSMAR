@@ -1,0 +1,35 @@
+name: Bundle Analysis
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/frontend/**'
+      - 'pnpm-lock.yaml'
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        working-directory: packages/frontend
+        run: pnpm build
+
+      - name: Analyze bundle
+        uses: hashicorp/nextjs-bundle-analysis@v0.7
+        with:
+          working-directory: packages/frontend
+          build-directory: .next

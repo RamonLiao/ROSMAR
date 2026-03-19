@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trash2, Plus } from "lucide-react";
+import { useCollectionWatchlist } from "@/lib/hooks/use-collection-watchlist";
 
 const TRIGGER_TYPES = [
   { value: "nft_minted", label: "NFT Minted", configFields: ["collection"] },
@@ -21,6 +22,7 @@ const TRIGGER_TYPES = [
   { value: "wallet_connected", label: "Wallet Connected", configFields: [] },
   { value: "segment_entered", label: "Segment Entered", configFields: ["segmentId"] },
   { value: "segment_exited", label: "Segment Exited", configFields: ["segmentId"] },
+  { value: "whale_alert", label: "Whale Alert", configFields: ["token", "minAmount"] },
 ] as const;
 
 export interface TriggerNodeData {
@@ -39,6 +41,7 @@ export function TriggerNodeEditor({ value, onChange, onRemove }: TriggerNodeEdit
   const [triggerType, setTriggerType] = useState(value?.triggerType ?? "");
   const [config, setConfig] = useState<Record<string, string>>(value?.triggerConfig ?? {});
   const [isEnabled, setIsEnabled] = useState(value?.isEnabled ?? true);
+  const { data: watchlist = [] } = useCollectionWatchlist();
 
   const selectedType = TRIGGER_TYPES.find((t) => t.value === triggerType);
 
@@ -102,11 +105,29 @@ export function TriggerNodeEditor({ value, onChange, onRemove }: TriggerNodeEdit
         {selectedType?.configFields.map((field) => (
           <div key={field} className="space-y-1.5">
             <Label className="text-xs capitalize">{field.replace(/([A-Z])/g, " $1")}</Label>
-            <Input
-              value={config[field] ?? ""}
-              onChange={(e) => handleConfigChange(field, e.target.value)}
-              placeholder={`Enter ${field}`}
-            />
+            {field === "collection" && triggerType === "nft_minted" && watchlist.length > 0 ? (
+              <Select
+                value={config[field] ?? ""}
+                onValueChange={(val) => handleConfigChange(field, val)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select collection" />
+                </SelectTrigger>
+                <SelectContent>
+                  {watchlist.map((c) => (
+                    <SelectItem key={c.contractAddress} value={c.contractAddress}>
+                      {c.name} ({c.chain.toUpperCase()})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                value={config[field] ?? ""}
+                onChange={(e) => handleConfigChange(field, e.target.value)}
+                placeholder={`Enter ${field}`}
+              />
+            )}
           </div>
         ))}
       </CardContent>

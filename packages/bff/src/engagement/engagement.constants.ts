@@ -6,7 +6,13 @@ export const DEFAULT_WEIGHTS = {
   nftCount: 0.1,
 } as const;
 
-export type EngagementWeights = typeof DEFAULT_WEIGHTS;
+export interface EngagementWeights {
+  holdTime: number;
+  txCount: number;
+  txValue: number;
+  voteCount: number;
+  nftCount: number;
+}
 
 // Max raw values for normalization (tunable per workspace)
 export const DEFAULT_CAPS = {

@@ -3,7 +3,7 @@ import { apiClient } from '@/lib/api/client';
 
 export interface AnalystResult {
   summary: string;
-  data: any[];
+  data: Record<string, unknown>[];
   chartConfig?: { type: string; xKey: string; yKey: string };
 }
 

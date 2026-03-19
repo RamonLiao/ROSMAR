@@ -209,7 +209,7 @@ export default function MembersSettingsPage() {
       ) : (
         <DataTable
           data={members as (WorkspaceMember & Record<string, unknown>)[]}
-          columns={columns as any}
+          columns={columns as { key: string; label: string; render?: (item: WorkspaceMember & Record<string, unknown>) => React.ReactNode }[]}
           searchable
           searchPlaceholder="Search members..."
         />

@@ -116,6 +116,66 @@ export class TriggerMatcherService {
     }
   }
 
+  @OnEvent('whale_alert')
+  async handleWhaleAlert(event: {
+    event_type: string;
+    address: string;
+    profile_id?: string;
+    data: Record<string, unknown>;
+  }): Promise<void> {
+    const triggers = await this.prisma.campaignTrigger.findMany({
+      where: {
+        triggerType: 'whale_alert',
+        isEnabled: true,
+        campaign: { status: 'active' },
+      },
+      include: { campaign: true },
+    });
+
+    for (const trigger of triggers) {
+      const config = trigger.triggerConfig as Record<string, unknown>;
+
+      // Match config filters (token, minAmount)
+      if (
+        config.token &&
+        (config.token as string).toUpperCase() !==
+          (event.data.token as string)?.toUpperCase()
+      ) {
+        continue;
+      }
+      if (
+        config.minAmount &&
+        (event.data.amount as number) < (config.minAmount as number)
+      ) {
+        continue;
+      }
+
+      // Resolve profile
+      let profileIds: string[] = [];
+      if (event.profile_id) {
+        profileIds = [event.profile_id];
+      } else if (event.address) {
+        const profile = await this.prisma.profile.findFirst({
+          where: { primaryAddress: event.address },
+          select: { id: true },
+        });
+        if (profile) profileIds = [profile.id];
+      }
+
+      if (profileIds.length === 0) continue;
+
+      this.logger.log(
+        `Whale trigger matched: ${trigger.id} -> campaign ${trigger.campaignId}`,
+      );
+
+      await this.workflowEngine.startWorkflow(
+        trigger.campaignId,
+        trigger.campaign.workflowSteps as any[],
+        profileIds,
+      );
+    }
+  }
+
   private matchesConfig(
     config: Record<string, unknown>,
     eventData: Record<string, unknown>,

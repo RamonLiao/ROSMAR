@@ -1,6 +1,7 @@
 module crm_vault::policy {
     use std::string::String;
     use sui::event;
+    use sui::clock::{Self, Clock};
     use crm_core::capabilities::{Self, GlobalConfig, WorkspaceAdminCap};
     use crm_core::workspace::{Self, Workspace};
 
@@ -9,6 +10,7 @@ module crm_vault::policy {
     const EWorkspaceMismatch: u64 = 1201;
     const ESealNoAccess: u64 = 1202;
     const ESealInvalidIdentity: u64 = 1203;
+    const EPolicyExpired: u64 = 1204;
 
     // Access rule types
     const RULE_WORKSPACE_MEMBER: u8 = 0;
@@ -32,6 +34,8 @@ module crm_vault::policy {
         allowed_addresses: vector<address>,
         /// Minimum role level required (for RULE_ROLE_BASED)
         min_role_level: u8,
+        /// TTL: unix timestamp in ms when this policy expires (0 = no expiry)
+        expires_at_ms: u64,
         version: u64,
         created_at: u64,
         updated_at: u64,
@@ -64,6 +68,7 @@ module crm_vault::policy {
         workspace: &Workspace,
         cap: &WorkspaceAdminCap,
         name: String,
+        expires_at_ms: u64,
         ctx: &mut TxContext,
     ): AccessPolicy {
         capabilities::assert_not_paused(config);
@@ -76,6 +81,7 @@ module crm_vault::policy {
             rule_type: RULE_WORKSPACE_MEMBER,
             allowed_addresses: vector::empty(),
             min_role_level: 0,
+            expires_at_ms,
             version: 0,
             created_at: tx_context::epoch_timestamp_ms(ctx),
             updated_at: tx_context::epoch_timestamp_ms(ctx),
@@ -109,6 +115,7 @@ module crm_vault::policy {
         cap: &WorkspaceAdminCap,
         name: String,
         allowed_addresses: vector<address>,
+        expires_at_ms: u64,
         ctx: &mut TxContext,
     ): AccessPolicy {
         capabilities::assert_not_paused(config);
@@ -121,6 +128,7 @@ module crm_vault::policy {
             rule_type: RULE_SPECIFIC_ADDRESS,
             allowed_addresses,
             min_role_level: 0,
+            expires_at_ms,
             version: 0,
             created_at: tx_context::epoch_timestamp_ms(ctx),
             updated_at: tx_context::epoch_timestamp_ms(ctx),
@@ -154,6 +162,7 @@ module crm_vault::policy {
         cap: &WorkspaceAdminCap,
         name: String,
         min_role_level: u8,
+        expires_at_ms: u64,
         ctx: &mut TxContext,
     ): AccessPolicy {
         capabilities::assert_not_paused(config);
@@ -166,6 +175,7 @@ module crm_vault::policy {
             rule_type: RULE_ROLE_BASED,
             allowed_addresses: vector::empty(),
             min_role_level,
+            expires_at_ms,
             version: 0,
             created_at: tx_context::epoch_timestamp_ms(ctx),
             updated_at: tx_context::epoch_timestamp_ms(ctx),
@@ -240,8 +250,14 @@ module crm_vault::policy {
         id: vector<u8>,
         policy: &AccessPolicy,
         workspace: &Workspace,
+        clock: &Clock,
         ctx: &TxContext,
     ) {
+        // Check TTL expiry (0 = no expiry)
+        if (policy.expires_at_ms > 0) {
+            assert!(clock::timestamp_ms(clock) < policy.expires_at_ms, EPolicyExpired);
+        };
+
         // Verify policy belongs to this workspace (prevents cross-workspace attack)
         assert!(policy.workspace_id == workspace::id(workspace), EWorkspaceMismatch);
 
@@ -276,6 +292,8 @@ module crm_vault::policy {
     public fun allowed_addresses(p: &AccessPolicy): &vector<address> { &p.allowed_addresses }
     /// @notice Return the minimum role level required
     public fun min_role_level(p: &AccessPolicy): u8 { p.min_role_level }
+    /// @notice Return the TTL expiry timestamp in ms (0 = no expiry)
+    public fun expires_at_ms(p: &AccessPolicy): u64 { p.expires_at_ms }
     /// @notice Return the current optimistic-lock version
     public fun version(p: &AccessPolicy): u64 { p.version }
 

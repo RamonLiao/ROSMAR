@@ -1,4 +1,7 @@
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api/client";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 
 export interface EngagementWeights {
   holdTime: number;
@@ -8,8 +11,6 @@ export interface EngagementWeights {
   nftCount: number;
 }
 
-const STORAGE_KEY = "engagement-weights";
-
 const DEFAULT_WEIGHTS: EngagementWeights = {
   holdTime: 0.3,
   txCount: 0.2,
@@ -18,48 +19,63 @@ const DEFAULT_WEIGHTS: EngagementWeights = {
   nftCount: 0.1,
 };
 
-function loadWeights(): EngagementWeights {
-  if (typeof window === "undefined") return DEFAULT_WEIGHTS;
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return JSON.parse(stored);
-  } catch {
-    // ignore
-  }
-  return DEFAULT_WEIGHTS;
-}
-
 export function useEngagementSettings() {
-  const [weights, setWeightsState] = useState<EngagementWeights>(loadWeights);
+  const workspaceId = useWorkspaceStore((s) => s.activeWorkspace?.id);
+  const queryClient = useQueryClient();
+
+  const queryKey = ["workspace", workspaceId, "engagement-weights"] as const;
+
+  const { data: weights = DEFAULT_WEIGHTS, isLoading } = useQuery({
+    queryKey,
+    queryFn: () =>
+      apiClient.get<EngagementWeights>(
+        `/workspaces/${workspaceId}/engagement-weights`,
+      ),
+    enabled: !!workspaceId,
+  });
+
+  const mutation = useMutation({
+    mutationFn: (newWeights: EngagementWeights) =>
+      apiClient.put<EngagementWeights>(
+        `/workspaces/${workspaceId}/engagement-weights`,
+        newWeights,
+      ),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(queryKey, saved);
+    },
+  });
 
   const setWeight = useCallback(
     (key: keyof EngagementWeights, value: number) => {
-      setWeightsState((prev) => {
-        const updated = { ...prev, [key]: value };
-        // Normalize so sum = 1.0
-        const sum = Object.values(updated).reduce((a, b) => a + b, 0);
-        if (sum > 0) {
-          const normalized = Object.fromEntries(
-            Object.entries(updated).map(([k, v]) => [
-              k,
-              Math.round((v / sum) * 100) / 100,
-            ]),
-          ) as unknown as EngagementWeights;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
-          return normalized;
-        }
-        return updated;
-      });
+      const updated = { ...weights, [key]: value };
+      // Normalize so sum = 1.0
+      const sum = Object.values(updated).reduce((a, b) => a + b, 0);
+      if (sum > 0) {
+        const normalized = Object.fromEntries(
+          Object.entries(updated).map(([k, v]) => [
+            k,
+            Math.round((v / sum) * 100) / 100,
+          ]),
+        ) as unknown as EngagementWeights;
+        mutation.mutate(normalized);
+        return;
+      }
     },
-    [],
+    [weights, mutation],
   );
 
   const reset = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_WEIGHTS));
-    setWeightsState(DEFAULT_WEIGHTS);
-  }, []);
+    mutation.mutate(DEFAULT_WEIGHTS);
+  }, [mutation]);
 
   const total = Object.values(weights).reduce((a, b) => a + b, 0);
 
-  return { weights, setWeight, reset, total: Math.round(total * 10) / 10 };
+  return {
+    weights,
+    setWeight,
+    reset,
+    total: Math.round(total * 10) / 10,
+    isLoading,
+    isSaving: mutation.isPending,
+  };
 }
