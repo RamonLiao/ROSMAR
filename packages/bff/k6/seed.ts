@@ -66,9 +66,7 @@ async function main() {
     time: new Date(Date.now() - i * 3600_000),
   }));
 
-  for (const e of events) {
-    await prisma.walletEvent.create({ data: e });
-  }
+  await prisma.walletEvent.createMany({ data: events });
 
   // Add social links
   await prisma.socialLink.upsert({
