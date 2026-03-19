@@ -109,7 +109,7 @@ export class AuthService {
 
   async generateChallenge(): Promise<string> {
     const nonce = randomBytes(32).toString('hex');
-    await this.cacheService.set(`challenge:${nonce}`, Date.now().toString(), 300); // 5 min TTL
+    await this.cacheService.set(`challenge:${nonce}`, (Date.now() + 300_000).toString(), 300); // 5 min TTL
     return `Sign this message to authenticate with ROSMAR CRM:\n${nonce}`;
   }
 

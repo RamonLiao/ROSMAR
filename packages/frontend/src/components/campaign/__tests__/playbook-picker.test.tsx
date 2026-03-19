@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { render, screen, fireEvent } from "@/test/test-utils";
 import { describe, it, expect, vi } from "vitest";
 import { PlaybookPicker, PlaybookTemplate } from "../playbook-picker";
