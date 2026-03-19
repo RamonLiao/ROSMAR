@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PolicySelector, type PolicyValue } from "./policy-selector";
-import { Lock, Save } from "lucide-react";
+import { Lock, Save, Timer } from "lucide-react";
 
 interface VaultItemFormProps {
   profileId?: string;
@@ -16,6 +16,7 @@ interface VaultItemFormProps {
     content: string;
     policy: PolicyValue;
     expiresAt: string | null;
+    releaseAt: string | null;
   }) => Promise<void>;
 }
 
@@ -24,6 +25,7 @@ export function VaultItemForm({ profileId, onSubmit }: VaultItemFormProps) {
   const [content, setContent] = useState("");
   const [policy, setPolicy] = useState<PolicyValue>({ ruleType: 0 });
   const [expiresAt, setExpiresAt] = useState("");
+  const [releaseAt, setReleaseAt] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
@@ -35,10 +37,12 @@ export function VaultItemForm({ profileId, onSubmit }: VaultItemFormProps) {
         content,
         policy,
         expiresAt: expiresAt || null,
+        releaseAt: releaseAt || null,
       });
       setKey("");
       setContent("");
       setExpiresAt("");
+      setReleaseAt("");
       setPolicy({ ruleType: 0 });
     } finally {
       setIsSaving(false);
@@ -87,6 +91,22 @@ export function VaultItemForm({ profileId, onSubmit }: VaultItemFormProps) {
             type="datetime-local"
             value={expiresAt}
             onChange={(e) => setExpiresAt(e.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="vault-release" className="flex items-center gap-1">
+            <Timer className="h-3.5 w-3.5" />
+            Release At{" "}
+            <span className="text-muted-foreground text-xs">
+              (optional — secret locked until this time)
+            </span>
+          </Label>
+          <Input
+            id="vault-release"
+            type="datetime-local"
+            value={releaseAt}
+            onChange={(e) => setReleaseAt(e.target.value)}
           />
         </div>
 

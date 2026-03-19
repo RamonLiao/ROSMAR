@@ -43,7 +43,7 @@ export default function WorkflowEditorPage({
       const apiSteps = Array.isArray(campaign.workflowSteps)
         ? campaign.workflowSteps
         : [];
-      setLocalSteps(apiSteps);
+      queueMicrotask(() => setLocalSteps(apiSteps));
       initialized.current = true;
     }
   }, [campaign]);

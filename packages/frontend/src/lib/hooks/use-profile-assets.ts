@@ -58,6 +58,68 @@ export function useProfileAssets(profileId: string) {
   });
 }
 
+// ── NFT Trait Analysis & Rarity ─────────────────────────────
+
+export interface NftTrait {
+  name: string;
+  value: string;
+}
+
+export interface NftWithTraits {
+  objectId: string;
+  type: string;
+  collection: string;
+  name: string;
+  imageUrl: string | null;
+  traits: NftTrait[];
+  rarityScore: number | null;
+}
+
+export function useNftTraits(profileId: string) {
+  return useQuery({
+    queryKey: ["nft-traits", profileId],
+    queryFn: () =>
+      apiClient
+        .get<{ nfts: NftWithTraits[] }>(`/profiles/${profileId}/nft-traits`)
+        .then((r) => r.nfts),
+    enabled: !!profileId,
+  });
+}
+
+// ── DeFi Position Tracking ──────────────────────────────────
+
+export interface StakePosition {
+  validatorAddress: string;
+  stakeAmount: string;
+  estimatedReward: string;
+  stakeActivationEpoch: string;
+  status: "active" | "pending" | "unstaked";
+}
+
+export interface LpPosition {
+  protocol: string;
+  poolId: string;
+  tokenA: string;
+  tokenB: string;
+  liquidity: string;
+  objectId: string;
+}
+
+export interface DefiPositions {
+  totalStakedSui: string;
+  stakes: StakePosition[];
+  lpPositions: LpPosition[];
+}
+
+export function useDefiPositions(profileId: string) {
+  return useQuery({
+    queryKey: ["defi-positions", profileId],
+    queryFn: () =>
+      apiClient.get<DefiPositions>(`/profiles/${profileId}/defi-positions`),
+    enabled: !!profileId,
+  });
+}
+
 export function useProfileTimeline(
   profileId: string,
   limit = 20,

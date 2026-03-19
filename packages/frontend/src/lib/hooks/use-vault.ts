@@ -10,6 +10,8 @@ export interface VaultSecretSummary {
   blobId: string;
   sealPolicyId?: string;
   version: number;
+  releaseAt?: string | null;
+  isReleased?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -26,6 +28,7 @@ export interface StoreSecretPayload {
   key: string;
   encryptedData: string; // base64
   sealPolicyId?: string;
+  releaseAt?: string; // ISO date string
 }
 
 export interface StoreSecretResult {
@@ -103,6 +106,29 @@ export function useDeleteSecret() {
       apiClient.delete(
         `/vault/secrets/${profileId}/${key}?expectedVersion=${expectedVersion}`,
       ),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({
+        queryKey: ["vault-secrets", variables.profileId],
+      });
+    },
+  });
+}
+
+/**
+ * Manually release a time-locked vault secret.
+ */
+export function useReleaseSecret() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      profileId,
+      key,
+    }: {
+      profileId: string;
+      key: string;
+    }) =>
+      apiClient.post(`/vault/secrets/${profileId}/${key}/release`, {}),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({
         queryKey: ["vault-secrets", variables.profileId],

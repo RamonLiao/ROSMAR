@@ -32,7 +32,7 @@ import { Bell, Check, ChevronDown, Loader2, LogOut, Plus, Settings, User, UserRo
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useRouter } from "next/navigation";
 import { useDisconnectWallet } from "@mysten/dapp-kit";
-import { useNotifications, useUnreadCount, useMarkRead, useMarkAllRead } from "@/lib/hooks/use-notifications";
+import { useNotifications, useUnreadCount, useMarkRead, useMarkAllRead, type Notification } from "@/lib/hooks/use-notifications";
 import { resetSealInstances } from "@/lib/crypto/seal-crypto";
 
 export function Topbar() {
@@ -162,7 +162,7 @@ export function Topbar() {
             <ScrollArea className="max-h-72">
               {notifications && notifications.length > 0 ? (
                 <div className="divide-y">
-                  {notifications.map((n: any) => (
+                  {notifications.map((n: Notification) => (
                     <div
                       key={n.id}
                       className={`flex flex-col gap-1 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors ${

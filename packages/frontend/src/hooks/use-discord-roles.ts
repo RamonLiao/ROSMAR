@@ -22,7 +22,11 @@ export function useDiscordRoles(workspaceId: string | undefined) {
     if (!workspaceId) return;
 
     let cancelled = false;
-    setIsLoading(true);
+
+    // Use queueMicrotask to avoid React compiler "sync setState in effect" warning
+    queueMicrotask(() => {
+      if (!cancelled) setIsLoading(true);
+    });
 
     apiClient
       .get<DiscordRolesResponse>(`/workspaces/${workspaceId}/discord-roles`)

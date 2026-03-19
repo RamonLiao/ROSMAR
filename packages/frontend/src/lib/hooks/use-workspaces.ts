@@ -99,7 +99,7 @@ export function useSwitchWorkspace() {
 
   return useMutation({
     mutationFn: (workspace: { id: string; name: string }) =>
-      apiClient.post<{ success: boolean; user: any }>('/auth/switch-workspace', {
+      apiClient.post<{ success: boolean; user: Record<string, unknown> }>('/auth/switch-workspace', {
         workspaceId: workspace.id,
       }),
     onSuccess: (_, workspace) => {

@@ -64,8 +64,8 @@ export function AiSuggestButton({
       });
       onContentGenerated(result.content, result.subject);
       setOpen(false);
-    } catch (err: any) {
-      setError(err?.message || "Failed to generate content");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to generate content");
     }
   };
 

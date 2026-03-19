@@ -73,6 +73,26 @@ export function useRemoveWallet() {
   });
 }
 
+// ── Funding Pattern Analysis ──────────────────────────────
+
+export interface FundingCluster {
+  funderAddress: string;
+  ownWallets: string[];
+  relatedProfiles: { id: string; primaryAddress: string; suinsName: string | null }[];
+  confidence: number;
+}
+
+export function useFundingPatterns(profileId: string) {
+  return useQuery({
+    queryKey: ['profile', profileId, 'funding-patterns'],
+    queryFn: () =>
+      apiClient
+        .get<{ clusters: FundingCluster[] }>(`/profiles/${profileId}/funding-patterns`)
+        .then((r) => r.clusters),
+    enabled: false, // manual trigger
+  });
+}
+
 export function useNetWorth(profileId: string) {
   return useQuery({
     queryKey: ['profile', profileId, 'net-worth'],

@@ -70,7 +70,7 @@ export function KanbanBoard({ deals, onStageChange }: KanbanBoardProps) {
     deals.filter((deal) => deal.stage === stageValue);
 
   // Custom Kanban Column component to make empty columns droppable
-  const KanbanColumn = ({ stage, stageDeals }: { stage: any, stageDeals: Deal[] }) => {
+  const KanbanColumn = ({ stage, stageDeals }: { stage: { value: string; label: string }, stageDeals: Deal[] }) => {
     const { setNodeRef, isOver } = useDroppable({
       id: stage.value,
     });

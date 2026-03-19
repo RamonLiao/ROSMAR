@@ -85,8 +85,8 @@ export default function CampaignDetailPage({
         expectedVersion: campaign.version,
       });
       setEditing(false);
-    } catch (err: any) {
-      setUpdateError(err?.message || "Failed to update campaign");
+    } catch (err: unknown) {
+      setUpdateError(err instanceof Error ? err.message : "Failed to update campaign");
     }
   };
 
@@ -159,8 +159,8 @@ export default function CampaignDetailPage({
             onClick={async () => {
               try {
                 await startCampaign(id);
-              } catch (err: any) {
-                setUpdateError(err?.message || "Failed to start campaign");
+              } catch (err: unknown) {
+                setUpdateError(err instanceof Error ? err.message : "Failed to start campaign");
               }
             }}
           >
@@ -179,8 +179,8 @@ export default function CampaignDetailPage({
             onClick={async () => {
               try {
                 await pauseCampaign(id);
-              } catch (err: any) {
-                setUpdateError(err?.message || "Failed to pause campaign");
+              } catch (err: unknown) {
+                setUpdateError(err instanceof Error ? err.message : "Failed to pause campaign");
               }
             }}
           >

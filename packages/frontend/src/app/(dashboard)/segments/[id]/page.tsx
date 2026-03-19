@@ -69,8 +69,8 @@ export default function SegmentDetailPage({
         expectedVersion: segment.version,
       });
       setEditing(false);
-    } catch (err: any) {
-      setUpdateError(err?.message || "Failed to update segment");
+    } catch (err: unknown) {
+      setUpdateError(err instanceof Error ? err.message : "Failed to update segment");
     }
   };
 

@@ -4,15 +4,25 @@ import {
   useDealDocuments,
   useUploadDealDocument,
   useDeleteDealDocument,
+  useUpdateDocumentPolicy,
+  type DealDocument,
 } from "@/lib/hooks/use-deal-documents";
 import { DocumentUploadForm } from "./document-upload-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileIcon, Trash2, Lock, ShieldAlert } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { FileIcon, Trash2, Lock, ShieldAlert, Shield } from "lucide-react";
 import { useState } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useAuthStore } from "@/stores/auth-store";
+import { PolicySelector, type PolicyValue } from "@/components/vault/policy-selector";
 
 function formatFileSize(bytes: number | null | undefined): string {
   if (!bytes) return "";
@@ -30,6 +40,16 @@ function formatRelativeTime(dateStr: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+function PolicyBadge({ doc }: { doc: DealDocument }) {
+  if (!doc.sealPolicyId) return null;
+  return (
+    <Badge variant="outline" className="text-xs gap-1">
+      <Lock className="h-3 w-3 text-amber-500" />
+      Encrypted
+    </Badge>
+  );
 }
 
 export function DealDocuments({
@@ -61,7 +81,21 @@ export function DealDocuments({
   const { data: documents = [], isLoading } = useDealDocuments(dealId);
   const upload = useUploadDealDocument(dealId);
   const deleteMut = useDeleteDealDocument(dealId);
+  const updatePolicy = useUpdateDocumentPolicy(dealId);
   const [showUpload, setShowUpload] = useState(false);
+
+  // Edit policy dialog state
+  const [editingDoc, setEditingDoc] = useState<DealDocument | null>(null);
+  const [editPolicy, setEditPolicy] = useState<PolicyValue>({ ruleType: 0 });
+
+  const handleSavePolicy = async () => {
+    if (!editingDoc) return;
+    await updatePolicy.mutateAsync({
+      docId: editingDoc.id,
+      policy: editPolicy,
+    });
+    setEditingDoc(null);
+  };
 
   if (!isAuthorized) {
     return (
@@ -99,11 +133,11 @@ export function DealDocuments({
         />
       )}
 
-      {(documents as any[]).length === 0 ? (
+      {(documents as DealDocument[]).length === 0 ? (
         <p className="text-muted-foreground text-sm">No documents yet.</p>
       ) : (
         <div className="grid gap-3">
-          {(documents as any[]).map((doc: any) => (
+          {(documents as DealDocument[]).map((doc) => (
             <Card key={doc.id}>
               <CardContent className="flex items-center justify-between py-3">
                 <div className="flex items-center gap-3">
@@ -116,14 +150,20 @@ export function DealDocuments({
                       {formatRelativeTime(doc.createdAt)}
                     </p>
                   </div>
-                  {doc.sealPolicyId && (
-                    <Badge variant="outline" className="text-xs gap-1">
-                      <Lock className="h-3 w-3 text-amber-500" />
-                      Encrypted
-                    </Badge>
-                  )}
+                  <PolicyBadge doc={doc} />
                 </div>
                 <div className="flex gap-2">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    title="Edit access policy"
+                    onClick={() => {
+                      setEditPolicy({ ruleType: 0 });
+                      setEditingDoc(doc);
+                    }}
+                  >
+                    <Shield className="h-4 w-4 text-muted-foreground" />
+                  </Button>
                   <Button
                     size="icon"
                     variant="ghost"
@@ -142,6 +182,37 @@ export function DealDocuments({
           ))}
         </div>
       )}
+
+      {/* Edit Policy Dialog */}
+      <Dialog
+        open={!!editingDoc}
+        onOpenChange={(open) => {
+          if (!open) setEditingDoc(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Edit Access Policy: {editingDoc?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <PolicySelector value={editPolicy} onChange={setEditPolicy} />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditingDoc(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSavePolicy}
+              disabled={updatePolicy.isPending}
+            >
+              {updatePolicy.isPending ? "Saving..." : "Save Policy"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

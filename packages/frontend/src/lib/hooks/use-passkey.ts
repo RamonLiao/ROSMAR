@@ -30,6 +30,6 @@ export function usePasskeyLoginOptions() {
 export function usePasskeyLoginVerify() {
   return useMutation({
     mutationFn: (data: WebAuthnResponse) =>
-      apiClient.post<{ success: boolean; user: any }>('/auth/passkey/login/verify', data),
+      apiClient.post<{ success: boolean; user: { address: string } }>('/auth/passkey/login/verify', data),
   });
 }

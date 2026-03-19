@@ -5,12 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Trash2, Wallet } from "lucide-react";
+import { Loader2, Plus, Trash2, Wallet, Search, Link2 } from "lucide-react";
 import {
   useProfileWallets,
   useAddWallet,
   useRemoveWallet,
+  useFundingPatterns,
   type ProfileWallet,
+  type FundingCluster,
 } from "@/lib/hooks/use-profile-wallets";
 
 const CHAIN_OPTIONS = [
@@ -25,10 +27,22 @@ const CHAIN_COLORS: Record<string, string> = {
   solana: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
 };
 
+function truncateAddress(addr: string) {
+  if (addr.length <= 14) return addr;
+  return `${addr.slice(0, 8)}...${addr.slice(-6)}`;
+}
+
+function confidenceLabel(c: number): { text: string; className: string } {
+  if (c >= 0.7) return { text: "High", className: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" };
+  if (c >= 0.5) return { text: "Medium", className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" };
+  return { text: "Low", className: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200" };
+}
+
 export function WalletsTab({ profileId }: { profileId: string }) {
   const { data: wallets, isLoading } = useProfileWallets(profileId);
   const addWallet = useAddWallet();
   const removeWallet = useRemoveWallet();
+  const { data: clusters, isFetching: isFetchingPatterns, refetch: fetchPatterns } = useFundingPatterns(profileId);
 
   const [showAdd, setShowAdd] = useState(false);
   const [chain, setChain] = useState("sui");
@@ -55,6 +69,7 @@ export function WalletsTab({ profileId }: { profileId: string }) {
   );
 
   return (
+    <div className="space-y-4">
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
@@ -163,5 +178,97 @@ export function WalletsTab({ profileId }: { profileId: string }) {
         )}
       </CardContent>
     </Card>
+
+    {/* Funding Pattern Analysis */}
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="flex items-center gap-2">
+          <Link2 className="h-5 w-5" />
+          Funding Pattern Analysis
+        </CardTitle>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => fetchPatterns()}
+          disabled={isFetchingPatterns}
+        >
+          {isFetchingPatterns ? (
+            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+          ) : (
+            <Search className="mr-1 h-4 w-4" />
+          )}
+          Analyze Funding Patterns
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isFetchingPatterns ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : clusters === undefined ? (
+          <p className="text-sm text-muted-foreground">
+            Click &quot;Analyze Funding Patterns&quot; to detect wallets funded by the same source address.
+          </p>
+        ) : clusters.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No funding patterns detected
+          </p>
+        ) : (
+          clusters.map((cluster, idx) => {
+            const conf = confidenceLabel(cluster.confidence);
+            return (
+              <div
+                key={`${cluster.funderAddress}-${idx}`}
+                className="space-y-2 rounded-lg border p-4"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      Funder:{" "}
+                      <span className="font-mono text-xs">
+                        {truncateAddress(cluster.funderAddress)}
+                      </span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Funded {cluster.ownWallets.length} of your wallet{cluster.ownWallets.length !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <Badge className={conf.className} variant="secondary">
+                    {conf.text} confidence
+                  </Badge>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Own Wallets Funded
+                  </p>
+                  {cluster.ownWallets.map((addr) => (
+                    <p key={addr} className="text-xs font-mono text-muted-foreground">
+                      {truncateAddress(addr)}
+                    </p>
+                  ))}
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Related Profiles (same funder)
+                  </p>
+                  {cluster.relatedProfiles.map((rp) => (
+                    <a
+                      key={rp.id}
+                      href={`/profiles/${rp.id}`}
+                      className="flex items-center gap-2 text-sm hover:underline text-primary"
+                    >
+                      {rp.suinsName ?? truncateAddress(rp.primaryAddress)}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </CardContent>
+    </Card>
+    </div>
   );
 }

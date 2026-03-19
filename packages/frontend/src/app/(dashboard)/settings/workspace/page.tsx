@@ -12,13 +12,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Save, Fingerprint, CheckCircle2, Bot, Fuel } from "lucide-react";
+import { Loader2, Save, Fingerprint, CheckCircle2, Bot, Fuel, Library, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspace, useUpdateWorkspace } from "@/lib/hooks/use-workspaces";
 import { usePasskeyRegisterOptions, usePasskeyRegisterVerify } from "@/lib/hooks/use-passkey";
 import { useAiConfig, useUpdateAiConfig } from "@/lib/hooks/use-ai-settings";
 import { useGasSettings } from "@/lib/hooks/use-gas-settings";
+import {
+  useCollectionWatchlist,
+  useSetCollectionWatchlist,
+  type CollectionEntry,
+} from "@/lib/hooks/use-collection-watchlist";
 import { startRegistration } from "@simplewebauthn/browser";
 
 function AiConfigSection() {
@@ -154,6 +159,178 @@ function AiConfigSection() {
   );
 }
 
+const CHAIN_OPTIONS = ["sui", "evm", "solana"] as const;
+
+function CollectionWatchlistSection() {
+  const { data: collections = [], isLoading } = useCollectionWatchlist();
+  const setWatchlist = useSetCollectionWatchlist();
+
+  const [localList, setLocalList] = useState<CollectionEntry[]>([]);
+  const [synced, setSynced] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newAddress, setNewAddress] = useState("");
+  const [newChain, setNewChain] = useState<CollectionEntry["chain"]>("sui");
+
+  // Sync from server once
+  useEffect(() => {
+    if (collections.length > 0 || (!isLoading && !synced)) {
+      queueMicrotask(() => {
+        setLocalList(collections);
+        setSynced(true);
+      });
+    }
+  }, [collections, isLoading, synced]);
+
+  const handleAdd = () => {
+    if (!newName.trim() || !newAddress.trim()) return;
+    const entry: CollectionEntry = {
+      name: newName.trim(),
+      contractAddress: newAddress.trim(),
+      chain: newChain,
+    };
+    const updated = [...localList, entry];
+    setLocalList(updated);
+    setNewName("");
+    setNewAddress("");
+    setNewChain("sui");
+    setAdding(false);
+    setWatchlist.mutate(updated);
+  };
+
+  const handleRemove = (index: number) => {
+    const updated = localList.filter((_, i) => i !== index);
+    setLocalList(updated);
+    setWatchlist.mutate(updated);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Library className="h-5 w-5" />
+            Collection Watchlist
+          </CardTitle>
+          <Button variant="outline" size="sm" onClick={() => setAdding(!adding)}>
+            <Plus className="mr-1 h-3 w-3" />
+            Add Collection
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          NFT collections tracked by this workspace. Used as options for campaign mint triggers.
+        </p>
+
+        {isLoading ? (
+          <div className="flex items-center gap-2 text-muted-foreground py-4">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading watchlist...
+          </div>
+        ) : localList.length === 0 && !adding ? (
+          <p className="text-sm text-muted-foreground py-2">
+            No collections added yet.
+          </p>
+        ) : (
+          <div className="rounded-md border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="px-3 py-2 text-left font-medium">Name</th>
+                  <th className="px-3 py-2 text-left font-medium">Contract Address</th>
+                  <th className="px-3 py-2 text-left font-medium">Chain</th>
+                  <th className="px-3 py-2 w-10" />
+                </tr>
+              </thead>
+              <tbody>
+                {localList.map((entry, i) => (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="px-3 py-2">{entry.name}</td>
+                    <td className="px-3 py-2 font-mono text-xs truncate max-w-[200px]">
+                      {entry.contractAddress}
+                    </td>
+                    <td className="px-3 py-2 capitalize">{entry.chain}</td>
+                    <td className="px-3 py-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => handleRemove(i)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {adding && (
+          <div className="grid gap-3 rounded-md border p-3 md:grid-cols-4">
+            <div className="space-y-1">
+              <Label className="text-xs">Name</Label>
+              <Input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="e.g. Sui Punks"
+              />
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <Label className="text-xs">Contract Address</Label>
+              <Input
+                value={newAddress}
+                onChange={(e) => setNewAddress(e.target.value)}
+                placeholder="0x..."
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Chain</Label>
+              <Select value={newChain} onValueChange={(v) => setNewChain(v as CollectionEntry["chain"])}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CHAIN_OPTIONS.map((c) => (
+                    <SelectItem key={c} value={c} className="capitalize">
+                      {c.toUpperCase()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end gap-2 md:col-span-4">
+              <Button
+                size="sm"
+                onClick={handleAdd}
+                disabled={!newName.trim() || !newAddress.trim() || setWatchlist.isPending}
+              >
+                {setWatchlist.isPending ? (
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                ) : (
+                  <Plus className="mr-1 h-3 w-3" />
+                )}
+                Add
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setAdding(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {setWatchlist.isError && (
+          <p className="text-sm text-destructive">
+            Failed to save: {(setWatchlist.error as Error).message}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function WorkspaceSettingsPage() {
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace);
   const { data: workspace, isLoading } = useWorkspace(activeWorkspace?.id ?? "");
@@ -183,8 +360,8 @@ export default function WorkspaceSettingsPage() {
       if (result.verified) {
         setPasskeySuccess(true);
       }
-    } catch (err: any) {
-      setPasskeyError(err.message ?? "Failed to register passkey");
+    } catch (err: unknown) {
+      setPasskeyError(err instanceof Error ? err.message : "Failed to register passkey");
     } finally {
       setPasskeyLoading(false);
     }
@@ -375,6 +552,8 @@ export default function WorkspaceSettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <CollectionWatchlistSection />
 
       <Card>
         <CardHeader>

@@ -47,6 +47,8 @@ export function VaultItemList({ profileId, vaultType, onDecrypt, onDelete }: Vau
                   blobId: s.blobId,
                   version: s.version,
                   sealPolicyId: s.sealPolicyId,
+                  releaseAt: s.releaseAt,
+                  isReleased: s.isReleased,
                   createdAt: s.createdAt,
                   updatedAt: s.updatedAt,
                 }}

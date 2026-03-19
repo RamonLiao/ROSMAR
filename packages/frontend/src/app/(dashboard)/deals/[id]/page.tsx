@@ -72,8 +72,8 @@ export default function DealDetailPage({
         expectedVersion: deal.version,
       });
       setEditing(false);
-    } catch (err: any) {
-      setUpdateError(err?.message || "Failed to update deal");
+    } catch (err: unknown) {
+      setUpdateError(err instanceof Error ? err.message : "Failed to update deal");
     }
   };
 
