@@ -1,5 +1,7 @@
+use serde_json::Value;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::time::Duration;
+use uuid::Uuid;
 
 pub async fn create_pool(database_url: &str) -> Result<PgPool, sqlx::Error> {
     PgPoolOptions::new()
@@ -33,6 +35,67 @@ pub async fn update_checkpoint(
     .execute(pool)
     .await?;
 
+    Ok(())
+}
+
+pub async fn insert_dead_letter(
+    pool: &PgPool,
+    event_type: &str,
+    payload: &Value,
+    error_msg: &str,
+    source: &str,
+    attempts: i32,
+) -> Result<Uuid, sqlx::Error> {
+    let row: (Uuid,) = sqlx::query_as(
+        "INSERT INTO dead_letter_events (event_type, payload, error_msg, source, attempts)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id"
+    )
+    .bind(event_type)
+    .bind(payload)
+    .bind(error_msg)
+    .bind(source)
+    .bind(attempts)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(row.0)
+}
+
+pub async fn list_dead_letters(
+    pool: &PgPool,
+    since_hours: i64,
+    source_filter: Option<&str>,
+) -> Result<Vec<(Uuid, String, Value)>, sqlx::Error> {
+    if let Some(source) = source_filter {
+        sqlx::query_as(
+            "SELECT id, event_type, payload FROM dead_letter_events
+             WHERE created_at > now() - make_interval(hours => $1)
+             AND replayed_at IS NULL AND source = $2
+             ORDER BY created_at"
+        )
+        .bind(since_hours as i32)
+        .bind(source)
+        .fetch_all(pool)
+        .await
+    } else {
+        sqlx::query_as(
+            "SELECT id, event_type, payload FROM dead_letter_events
+             WHERE created_at > now() - make_interval(hours => $1)
+             AND replayed_at IS NULL
+             ORDER BY created_at"
+        )
+        .bind(since_hours as i32)
+        .fetch_all(pool)
+        .await
+    }
+}
+
+pub async fn mark_replayed(pool: &PgPool, id: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE dead_letter_events SET replayed_at = now() WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
