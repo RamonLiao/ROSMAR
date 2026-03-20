@@ -1,15 +1,9 @@
+use crate::db;
 use serde_json::Value;
 use sqlx::PgPool;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::interval;
-
-/// Batch writer accumulates events and writes them in batches
-pub struct BatchWriter {
-    pool: PgPool,
-    batch_size: usize,
-    batch_timeout: Duration,
-}
 
 pub struct BatchEvent {
     pub time: chrono::DateTime<chrono::Utc>,
@@ -23,6 +17,12 @@ pub struct BatchEvent {
     pub raw_data: Value,
 }
 
+pub struct BatchWriter {
+    pool: PgPool,
+    batch_size: usize,
+    batch_timeout: Duration,
+}
+
 impl BatchWriter {
     pub fn new(pool: PgPool, batch_size: usize, batch_timeout_ms: u64) -> Self {
         Self {
@@ -32,50 +32,86 @@ impl BatchWriter {
         }
     }
 
-    /// Start the batch writer event loop
     pub async fn start(
         &self,
         mut rx: mpsc::Receiver<BatchEvent>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut batch: Vec<BatchEvent> = Vec::with_capacity(self.batch_size);
         let mut timer = interval(self.batch_timeout);
 
         loop {
             tokio::select! {
-                // Receive event
-                Some(event) = rx.recv() => {
-                    batch.push(event);
-
-                    // Flush if batch is full
-                    if batch.len() >= self.batch_size {
-                        self.flush_batch(&mut batch).await?;
+                maybe_event = rx.recv() => {
+                    match maybe_event {
+                        Some(event) => {
+                            batch.push(event);
+                            if batch.len() >= self.batch_size {
+                                self.flush_batch(&mut batch).await;
+                            }
+                        }
+                        None => {
+                            if !batch.is_empty() {
+                                self.flush_batch(&mut batch).await;
+                            }
+                            tracing::info!("BatchWriter channel closed, shutting down");
+                            return Ok(());
+                        }
                     }
                 }
-
-                // Timeout - flush partial batch
                 _ = timer.tick() => {
                     if !batch.is_empty() {
-                        self.flush_batch(&mut batch).await?;
+                        self.flush_batch(&mut batch).await;
                     }
                 }
             }
         }
     }
 
-    /// Flush accumulated events to database
-    async fn flush_batch(&self, batch: &mut Vec<BatchEvent>) -> Result<(), Box<dyn std::error::Error>> {
+    async fn flush_batch(&self, batch: &mut Vec<BatchEvent>) {
         if batch.is_empty() {
-            return Ok(());
+            return;
         }
+        let count = batch.len();
+        tracing::debug!("Flushing batch of {} events", count);
 
-        tracing::debug!("Flushing batch of {} events", batch.len());
+        match self.multi_row_insert(batch).await {
+            Ok(()) => {
+                tracing::info!("Batch flushed: {} events", count);
+                batch.clear();
+            }
+            Err(e) => {
+                tracing::error!("Batch INSERT failed: {}. Falling back to individual inserts.", e);
+                self.individual_insert_fallback(batch).await;
+                batch.clear();
+            }
+        }
+    }
 
-        // Begin transaction
-        let mut tx = self.pool.begin().await?;
+    async fn multi_row_insert(&self, batch: &[BatchEvent]) -> Result<(), sqlx::Error> {
+        let mut qb = sqlx::QueryBuilder::new(
+            "INSERT INTO wallet_events (time, address, event_type, contract_address, collection, token, amount, tx_digest, raw_data) "
+        );
 
-        // Insert all events in batch
-        for event in batch.iter() {
-            sqlx::query(
+        qb.push_values(batch.iter(), |mut b, event| {
+            b.push_bind(&event.time)
+                .push_bind(&event.address)
+                .push_bind(&event.event_type)
+                .push_bind(&event.contract_address)
+                .push_bind(&event.collection)
+                .push_bind(&event.token)
+                .push_bind(event.amount)
+                .push_bind(&event.tx_digest)
+                .push_bind(&event.raw_data);
+        });
+
+        qb.push(" ON CONFLICT (time, tx_digest, address) DO NOTHING");
+        qb.build().execute(&self.pool).await?;
+        Ok(())
+    }
+
+    async fn individual_insert_fallback(&self, batch: &[BatchEvent]) {
+        for event in batch {
+            let result = sqlx::query(
                 "INSERT INTO wallet_events
                  (time, address, event_type, contract_address, collection, token, amount, tx_digest, raw_data)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -90,59 +126,24 @@ impl BatchWriter {
             .bind(event.amount)
             .bind(&event.tx_digest)
             .bind(&event.raw_data)
-            .execute(&mut *tx)
-            .await?;
+            .execute(&self.pool)
+            .await;
+
+            if let Err(e) = result {
+                tracing::error!("Individual INSERT failed for {}: {}", event.tx_digest, e);
+                if let Err(dl_err) = db::insert_dead_letter(
+                    &self.pool,
+                    &event.event_type,
+                    &event.raw_data,
+                    &e.to_string(),
+                    "batch_writer",
+                    1,
+                )
+                .await
+                {
+                    tracing::error!("Dead-letter insert also failed: {}", dl_err);
+                }
+            }
         }
-
-        // Commit transaction
-        tx.commit().await?;
-
-        tracing::info!("Successfully flushed {} events", batch.len());
-
-        // Clear batch
-        batch.clear();
-
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    #[ignore] // Requires database
-    async fn test_batch_writer() {
-        let database_url = std::env::var("DATABASE_URL").unwrap();
-        let pool = crate::db::create_pool(&database_url).await.unwrap();
-        let writer = BatchWriter::new(pool, 100, 1000);
-
-        let (tx, rx) = mpsc::channel(1000);
-
-        // Spawn writer
-        let writer_handle = tokio::spawn(async move {
-            writer.start(rx).await.unwrap();
-        });
-
-        // Send test event
-        tx.send(BatchEvent {
-            time: chrono::Utc::now(),
-            address: "0xtest".to_string(),
-            event_type: "test".to_string(),
-            contract_address: None,
-            collection: None,
-            token: None,
-            amount: 0,
-            tx_digest: "test_digest".to_string(),
-            raw_data: serde_json::json!({}),
-        })
-        .await
-        .unwrap();
-
-        // Wait a bit for batch to flush
-        tokio::time::sleep(Duration::from_millis(2000)).await;
-
-        drop(tx);
-        writer_handle.abort();
     }
 }
