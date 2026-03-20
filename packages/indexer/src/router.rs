@@ -91,9 +91,7 @@ impl EventRouter {
 
         // Step 2: Queue to BatchWriter
         let address = wallet_event.address.clone();
-        let wallet_event_type = wallet_event.event_type.clone();
         let tx_digest = wallet_event.tx_digest.clone();
-        let raw_data = wallet_event.raw_data.clone();
 
         let batch_event = BatchEvent {
             time: chrono::Utc::now(),
