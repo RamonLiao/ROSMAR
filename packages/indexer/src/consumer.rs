@@ -204,7 +204,8 @@ mod tests {
         let cache = crate::cache::AddressCache::new();
         let enricher = Arc::new(crate::enricher::Enricher::new(cache, pool.clone()));
         let alert_engine = Arc::new(crate::alerts::AlertEngine::new(config.clone(), pool.clone()));
-        let router = Arc::new(crate::router::EventRouter::new(pool.clone(), enricher, alert_engine));
+        let (batch_tx, _batch_rx) = tokio::sync::mpsc::channel(1000);
+        let router = Arc::new(crate::router::EventRouter::new(pool.clone(), config.clone(), enricher, alert_engine, batch_tx));
         let consumer = CheckpointConsumer::new(config, pool, router);
 
         let checkpoint = consumer.fetch_checkpoint(0).await.unwrap();

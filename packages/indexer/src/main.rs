@@ -52,9 +52,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ));
     tracing::info!("Webhook dispatcher initialized");
 
+    // Create BatchWriter channel
+    let (batch_tx, batch_rx) = tokio::sync::mpsc::channel(1000);
+    let batch_writer = writer::BatchWriter::new(
+        pool.clone(),
+        config.batch_size,
+        config.batch_timeout_ms,
+    );
+
+    // Spawn BatchWriter as background task
+    tokio::spawn(async move {
+        if let Err(e) = batch_writer.start(batch_rx).await {
+            tracing::error!("BatchWriter error: {}", e);
+        }
+    });
+    tracing::info!("BatchWriter started");
+
     // Create event router
     let router = Arc::new(
-        router::EventRouter::new(pool.clone(), enricher.clone(), alert_engine)
+        router::EventRouter::new(pool.clone(), config.clone(), enricher.clone(), alert_engine, batch_tx)
             .with_webhook(webhook_dispatcher),
     );
     tracing::info!("Event router initialized");

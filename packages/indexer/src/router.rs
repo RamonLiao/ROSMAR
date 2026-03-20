@@ -1,22 +1,43 @@
 use crate::alerts::AlertEngine;
+use crate::config::Config;
 use crate::enricher::Enricher;
-use crate::handlers::{audit, defi, governance, nft};
+use crate::handlers::{audit, defi, governance, nft, WalletEvent};
+use crate::retry::RetryManager;
 use crate::webhook::WebhookDispatcher;
+use crate::writer::BatchEvent;
 use serde_json::Value;
 use sqlx::PgPool;
 use std::sync::Arc;
+use tokio::sync::mpsc;
 
-/// Event router dispatches events to appropriate handlers based on event type
 pub struct EventRouter {
     pool: PgPool,
+    config: Config,
     enricher: Arc<Enricher>,
     webhook: Option<Arc<WebhookDispatcher>>,
     alert_engine: Arc<AlertEngine>,
+    batch_tx: mpsc::Sender<BatchEvent>,
+    retry: Arc<RetryManager>,
 }
 
 impl EventRouter {
-    pub fn new(pool: PgPool, enricher: Arc<Enricher>, alert_engine: Arc<AlertEngine>) -> Self {
-        Self { pool, enricher, webhook: None, alert_engine }
+    pub fn new(
+        pool: PgPool,
+        config: Config,
+        enricher: Arc<Enricher>,
+        alert_engine: Arc<AlertEngine>,
+        batch_tx: mpsc::Sender<BatchEvent>,
+    ) -> Self {
+        let retry = Arc::new(RetryManager::new(config.max_retries, 1000));
+        Self {
+            pool,
+            config,
+            enricher,
+            webhook: None,
+            alert_engine,
+            batch_tx,
+            retry,
+        }
     }
 
     pub fn with_webhook(mut self, webhook: Arc<WebhookDispatcher>) -> Self {
@@ -24,30 +45,7 @@ impl EventRouter {
         self
     }
 
-    /// Check if an event type is a governance event
-    fn is_governance_event(event_type: &str) -> bool {
-        event_type.contains("VoteEvent")
-            || event_type.contains("ProposalEvent")
-            || event_type.contains("DelegateEvent")
-            || event_type.contains("GovernanceEvent")
-            || event_type.contains("vote")
-            || event_type.contains("proposal")
-            || event_type.contains("delegate")
-    }
-
-    /// Extract the primary address from an event's parsedJson
-    fn extract_address(event: &Value) -> Option<&str> {
-        let data = event.get("parsedJson").unwrap_or(event);
-        data.get("sender")
-            .or_else(|| data.get("user"))
-            .or_else(|| data.get("actor"))
-            .or_else(|| data.get("recipient"))
-            .and_then(|a| a.as_str())
-    }
-
-    /// Route event to appropriate handler
     pub async fn route_event(&self, event: &Value) -> Result<(), Box<dyn std::error::Error>> {
-        // Extract event type
         let event_type = event
             .get("type")
             .and_then(|t| t.as_str())
@@ -55,44 +53,67 @@ impl EventRouter {
 
         tracing::debug!("Routing event type: {}", event_type);
 
-        // Match event type and dispatch to handler
-        match event_type {
-            // CRM audit events
+        // Step 1: Handler -> WalletEvent
+        let wallet_event = match event_type {
             t if t.contains("AuditEventV1") => {
-                audit::handle_audit_event(&self.pool, event).await?;
+                audit::handle_audit_event(&self.pool, event).await?
             }
-
-            // NFT events
             t if t.contains("MintNFTEvent")
                 || t.contains("TransferObject")
-                || t.contains("BurnEvent") => {
-                nft::handle_nft_event(&self.pool, event).await?;
+                || t.contains("BurnEvent") =>
+            {
+                nft::handle_nft_event(event)?
             }
-
-            // DeFi events
             t if t.contains("SwapEvent")
                 || t.contains("AddLiquidityEvent")
                 || t.contains("StakeEvent")
-                || t.contains("UnstakeEvent") => {
-                defi::handle_defi_event(&self.pool, event).await?;
+                || t.contains("UnstakeEvent") =>
+            {
+                defi::handle_defi_event(event)?
             }
-
-            // Governance events
-            t if Self::is_governance_event(t) => {
-                governance::handle_governance_event(&self.pool, event).await?;
+            t if self.is_governance_event(t) => {
+                governance::handle_governance_event(event)?
             }
-
-            // Unknown event type - log and skip
             _ => {
-                tracing::trace!("Unhandled event type: {}", event_type);
-                return Ok(());
+                tracing::warn!("Unknown event type: {}", event_type);
+                WalletEvent {
+                    address: WalletEvent::extract_address(event),
+                    event_type: "unknown".to_string(),
+                    contract_address: None,
+                    collection: None,
+                    token: None,
+                    amount: 0,
+                    tx_digest: WalletEvent::extract_tx_digest(event),
+                    raw_data: event.clone(),
+                }
             }
+        };
+
+        // Step 2: Queue to BatchWriter
+        let address = wallet_event.address.clone();
+        let wallet_event_type = wallet_event.event_type.clone();
+        let tx_digest = wallet_event.tx_digest.clone();
+        let raw_data = wallet_event.raw_data.clone();
+
+        let batch_event = BatchEvent {
+            time: chrono::Utc::now(),
+            address: wallet_event.address,
+            event_type: wallet_event.event_type,
+            contract_address: wallet_event.contract_address,
+            collection: wallet_event.collection,
+            token: wallet_event.token,
+            amount: wallet_event.amount,
+            tx_digest: wallet_event.tx_digest,
+            raw_data: wallet_event.raw_data,
+        };
+
+        if let Err(e) = self.batch_tx.send(batch_event).await {
+            tracing::error!("Failed to queue event to BatchWriter: {}", e);
         }
 
-        // Check alert engine for whale alerts (before enrichment / webhook)
+        // Step 3: AlertEngine check
         {
             let data = event.get("parsedJson").unwrap_or(event);
-            let address_for_alert = Self::extract_address(event).unwrap_or("0x0");
             let amount = data
                 .get("amount")
                 .or_else(|| data.get("value"))
@@ -102,68 +123,75 @@ impl EventRouter {
                 .get("coinType")
                 .or_else(|| data.get("token"))
                 .and_then(|t| t.as_str());
-            let tx_digest = event
-                .get("id")
-                .and_then(|id| id.get("txDigest"))
-                .and_then(|d| d.as_str())
-                .unwrap_or("unknown");
 
-            if let Err(e) = self
+            if let Ok(Some(_whale_alert)) = self
                 .alert_engine
-                .check_and_alert(address_for_alert, event_type, amount, token, tx_digest)
+                .check_and_alert(&address, event_type, amount, token, &tx_digest)
                 .await
             {
-                tracing::warn!("Alert engine error: {}", e);
+                if let Some(ref webhook) = self.webhook {
+                    let alert_event = WebhookDispatcher::build_event(
+                        event,
+                        "whale_alert",
+                        &address,
+                        None, // profile_id resolved inside alert engine
+                    );
+                    if let Err(e) = webhook
+                        .dispatch_with_retry(&alert_event, &self.retry, &self.pool, "alert_webhook")
+                        .await
+                    {
+                        tracing::error!("Whale alert webhook failed: {}", e);
+                    }
+                }
             }
         }
 
-        // After handler writes, resolve address -> profile_id for enrichment
-        let address = Self::extract_address(event)
-            .unwrap_or("0x0")
-            .to_string();
+        // Step 4: Enrich
         let profile_id = match self.enricher.resolve_address(&address).await {
             Ok(Some(pid)) => {
-                tracing::debug!("Enriched address {} -> profile {}", address, pid);
+                tracing::debug!("Enriched {} -> {}", address, pid);
                 Some(pid)
             }
-            Ok(None) => {
-                tracing::trace!("No profile found for address {}", address);
-                None
-            }
+            Ok(None) => None,
             Err(e) => {
-                tracing::warn!("Enrichment failed for address {}: {}", address, e);
+                tracing::warn!("Enrichment failed for {}: {}", address, e);
                 None
             }
         };
 
-        // Fire-and-forget webhook dispatch to BFF
+        // Step 5: General webhook with retry
         if let Some(ref webhook) = self.webhook {
             let indexer_event = WebhookDispatcher::build_event(
-                event,
-                event_type,
-                &address,
-                profile_id,
+                event, event_type, &address, profile_id,
             );
-            let wh = webhook.clone();
-            tokio::spawn(async move {
-                if let Err(e) = wh.dispatch(&indexer_event).await {
-                    tracing::warn!("Webhook dispatch error: {}", e);
-                }
-            });
+            if let Err(e) = webhook
+                .dispatch_with_retry(&indexer_event, &self.retry, &self.pool, "webhook")
+                .await
+            {
+                tracing::error!("Webhook dispatch failed: {}", e);
+            }
         }
 
         Ok(())
     }
 
-    /// Batch route multiple events
     pub async fn route_batch(&self, events: &[Value]) -> Result<(), Box<dyn std::error::Error>> {
         for event in events {
             if let Err(e) = self.route_event(event).await {
                 tracing::error!("Error routing event: {}", e);
-                // Continue processing other events
             }
         }
         Ok(())
+    }
+
+    fn is_governance_event(&self, event_type: &str) -> bool {
+        let pkg = &self.config.crm_core_package_id;
+        event_type == format!("{}::governance::VoteEvent", pkg)
+            || event_type == format!("{}::governance::ProposalEvent", pkg)
+            || event_type == format!("{}::governance::DelegateEvent", pkg)
+            || event_type.contains("VoteEvent")
+            || event_type.contains("ProposalEvent")
+            || event_type.contains("DelegateEvent")
     }
 }
 
@@ -180,8 +208,9 @@ mod tests {
         let cache = crate::cache::AddressCache::new();
         let enricher = Arc::new(crate::enricher::Enricher::new(cache, pool.clone()));
         let config = crate::config::Config::from_env().unwrap();
-        let alert_engine = Arc::new(crate::alerts::AlertEngine::new(config, pool.clone()));
-        let router = EventRouter::new(pool, enricher, alert_engine);
+        let alert_engine = Arc::new(crate::alerts::AlertEngine::new(config.clone(), pool.clone()));
+        let (batch_tx, _batch_rx) = mpsc::channel(1000);
+        let router = EventRouter::new(pool, config, enricher, alert_engine, batch_tx);
 
         let event = json!({
             "type": "0x123::profile::AuditEventV1",
