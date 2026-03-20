@@ -1,105 +1,62 @@
+use crate::handlers::WalletEvent;
 use serde_json::Value;
 use sqlx::PgPool;
 
 /// Handle CRM AuditEventV1 events
+/// Keeps pool param for audit_logs side-effect INSERT, returns WalletEvent
 pub async fn handle_audit_event(
     pool: &PgPool,
     event: &Value,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<WalletEvent, Box<dyn std::error::Error>> {
     tracing::debug!("Processing AuditEventV1");
 
-    // Extract event data
     let data = event.get("parsedJson").unwrap_or(event);
 
-    // Check version field
-    let version = data
-        .get("version")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(1);
-
+    let version = data.get("version").and_then(|v| v.as_u64()).unwrap_or(1);
     if version != 1 {
-        tracing::warn!("Unsupported AuditEvent version: {}", version);
-        return Ok(());
+        return Err(format!("Unsupported AuditEvent version: {}", version).into());
     }
 
-    // Extract fields
-    let workspace_id = data
-        .get("workspace_id")
-        .and_then(|w| w.as_str())
-        .ok_or("Missing workspace_id")?;
+    let address = WalletEvent::extract_address(event);
+    let tx_digest = WalletEvent::extract_tx_digest(event);
 
-    let actor_address = data
-        .get("actor")
-        .and_then(|a| a.as_str())
-        .ok_or("Missing actor")?;
-
-    let action = data
-        .get("action")
-        .and_then(|a| a.as_u64())
-        .ok_or("Missing action")? as i16;
-
-    let object_type = data
-        .get("object_type")
-        .and_then(|o| o.as_u64())
-        .ok_or("Missing object_type")? as i16;
-
-    let object_id = data
-        .get("object_id")
-        .and_then(|o| o.as_str())
-        .ok_or("Missing object_id")?;
-
-    let tx_digest = event
-        .get("id")
-        .and_then(|id| id.get("txDigest"))
-        .and_then(|d| d.as_str())
-        .unwrap_or("unknown");
-
-    let timestamp_ms = data
-        .get("timestamp")
-        .and_then(|t| t.as_u64())
-        .or_else(|| {
-            event
-                .get("timestampMs")
-                .and_then(|t| t.as_str())
-                .and_then(|s| s.parse::<u64>().ok())
-        })
+    let action = data.get("action").and_then(|a| a.as_u64()).unwrap_or(0) as i16;
+    let object_type = data.get("object_type").and_then(|o| o.as_u64()).unwrap_or(0) as i16;
+    let object_id = data.get("object_id").and_then(|o| o.as_str()).unwrap_or("unknown");
+    let workspace_id = data.get("workspace_id").and_then(|w| w.as_str())
+        .unwrap_or("00000000-0000-0000-0000-000000000000");
+    let workspace_uuid = uuid::Uuid::parse_str(workspace_id).unwrap_or(uuid::Uuid::nil());
+    let timestamp_ms = data.get("timestamp").and_then(|t| t.as_u64())
         .unwrap_or_else(|| chrono::Utc::now().timestamp_millis() as u64);
 
-    // Parse workspace_id as UUID
-    let workspace_uuid = uuid::Uuid::parse_str(workspace_id)
-        .or_else(|_| {
-            // If not a valid UUID, try to lookup by sui_object_id
-            Ok::<uuid::Uuid, uuid::Error>(uuid::Uuid::nil())
-        })
-        .unwrap_or(uuid::Uuid::nil());
-
-    // Insert into audit_logs
-    sqlx::query(
+    // Side-effect: audit_logs INSERT (separate table, different schema)
+    let _ = sqlx::query(
         "INSERT INTO audit_logs
          (workspace_id, actor_address, action, object_type, object_id, tx_hash, metadata, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, to_timestamp($8::double precision / 1000))
          ON CONFLICT DO NOTHING"
     )
     .bind(workspace_uuid)
-    .bind(actor_address)
+    .bind(&address)
     .bind(action)
     .bind(object_type)
     .bind(object_id)
-    .bind(tx_digest)
+    .bind(&tx_digest)
     .bind(event)
     .bind(timestamp_ms as i64)
     .execute(pool)
-    .await?;
+    .await;
 
-    tracing::debug!(
-        "Inserted audit log: action={} object_type={} object_id={} (tx: {})",
-        action,
-        object_type,
-        object_id,
-        tx_digest
-    );
-
-    Ok(())
+    Ok(WalletEvent {
+        address,
+        event_type: format!("audit_action_{}", action),
+        contract_address: None,
+        collection: None,
+        token: None,
+        amount: 0,
+        tx_digest,
+        raw_data: event.clone(),
+    })
 }
 
 #[cfg(test)]
@@ -130,6 +87,9 @@ mod tests {
             }
         });
 
-        handle_audit_event(&pool, &event).await.unwrap();
+        let wallet_event = handle_audit_event(&pool, &event).await.unwrap();
+        assert_eq!(wallet_event.address, "0x789");
+        assert_eq!(wallet_event.event_type, "audit_action_0");
+        assert_eq!(wallet_event.tx_digest, "test_tx_audit");
     }
 }

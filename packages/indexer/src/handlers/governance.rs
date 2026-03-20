@@ -1,11 +1,11 @@
+use crate::handlers::WalletEvent;
 use serde_json::Value;
-use sqlx::PgPool;
 
 /// Handle governance events (voting, proposals, DAO participation)
-pub async fn handle_governance_event(
-    pool: &PgPool,
+/// Returns WalletEvent instead of direct DB insert
+pub fn handle_governance_event(
     event: &Value,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<WalletEvent, Box<dyn std::error::Error>> {
     let event_type = event
         .get("type")
         .and_then(|t| t.as_str())
@@ -13,17 +13,49 @@ pub async fn handle_governance_event(
 
     tracing::debug!("Processing governance event: {}", event_type);
 
-    // Extract event data
     let data = event.get("parsedJson").unwrap_or(event);
 
-    // Extract common governance fields
-    let voter = data
+    let address = data
         .get("voter")
         .or_else(|| data.get("sender"))
         .or_else(|| data.get("user"))
         .and_then(|a| a.as_str())
-        .unwrap_or("0x0");
+        .unwrap_or("0x0")
+        .to_string();
 
+    let tx_digest = WalletEvent::extract_tx_digest(event);
+
+    let protocol = data
+        .get("protocol")
+        .or_else(|| data.get("dao"))
+        .and_then(|p| p.as_str())
+        .map(|s| s.to_string());
+
+    let dao_id = data
+        .get("dao_id")
+        .or_else(|| data.get("daoId"))
+        .and_then(|d| d.as_str())
+        .map(|s| s.to_string());
+
+    let weight = data
+        .get("weight")
+        .or_else(|| data.get("votingPower"))
+        .or_else(|| data.get("amount"))
+        .and_then(|w| w.as_str().and_then(|s| s.parse::<i64>().ok()).or_else(|| w.as_i64()))
+        .unwrap_or(1);
+
+    // Determine event category
+    let event_category = if event_type.contains("Vote") || event_type.contains("vote") {
+        "vote"
+    } else if event_type.contains("Proposal") || event_type.contains("proposal") {
+        "proposal"
+    } else if event_type.contains("Delegate") || event_type.contains("delegate") {
+        "delegate"
+    } else {
+        "governance_event"
+    };
+
+    // Build extended data with governance-specific fields
     let proposal_id = data
         .get("proposal_id")
         .or_else(|| data.get("proposalId"))
@@ -37,49 +69,8 @@ pub async fn handle_governance_event(
         .and_then(|v| v.as_str())
         .unwrap_or("unknown");
 
-    let weight = data
-        .get("weight")
-        .or_else(|| data.get("votingPower"))
-        .or_else(|| data.get("amount"))
-        .and_then(|w| w.as_str().and_then(|s| s.parse::<i64>().ok()).or_else(|| w.as_i64()))
-        .unwrap_or(1);
-
-    let protocol = data
-        .get("protocol")
-        .or_else(|| data.get("dao"))
-        .and_then(|p| p.as_str());
-
-    let dao_id = data
-        .get("dao_id")
-        .or_else(|| data.get("daoId"))
-        .and_then(|d| d.as_str());
-
-    let tx_digest = event
-        .get("id")
-        .and_then(|id| id.get("txDigest"))
-        .and_then(|d| d.as_str())
-        .unwrap_or("unknown");
-
-    let timestamp_ms = event
-        .get("timestampMs")
-        .and_then(|t| t.as_str())
-        .and_then(|s| s.parse::<i64>().ok())
-        .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
-
-    // Determine event category
-    let event_category = if event_type.contains("Vote") || event_type.contains("vote") {
-        "vote"
-    } else if event_type.contains("Proposal") || event_type.contains("proposal") {
-        "proposal"
-    } else if event_type.contains("Delegate") || event_type.contains("delegate") {
-        "delegate"
-    } else {
-        "governance_event"
-    };
-
-    // Build extended data JSON with governance-specific fields
     let extended_data = serde_json::json!({
-        "voter": voter,
+        "voter": address,
         "proposal_id": proposal_id,
         "vote_type": vote_type,
         "weight": weight,
@@ -88,33 +79,16 @@ pub async fn handle_governance_event(
         "original_event": event,
     });
 
-    // Insert into wallet_events with ON CONFLICT idempotency
-    sqlx::query(
-        "INSERT INTO wallet_events
-         (time, address, event_type, contract_address, token, amount, tx_digest, raw_data)
-         VALUES (to_timestamp($1::double precision / 1000), $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT (time, tx_digest, address) DO NOTHING"
-    )
-    .bind(timestamp_ms)
-    .bind(voter)
-    .bind(event_category)
-    .bind(protocol)         // contract_address = protocol
-    .bind(dao_id)           // token = dao_id (repurposed)
-    .bind(weight)
-    .bind(tx_digest)
-    .bind(&extended_data)
-    .execute(pool)
-    .await?;
-
-    tracing::debug!(
-        "Inserted governance event: {} by {} on proposal {} (tx: {})",
-        event_category,
-        voter,
-        proposal_id,
-        tx_digest
-    );
-
-    Ok(())
+    Ok(WalletEvent {
+        address,
+        event_type: event_category.to_string(),
+        contract_address: protocol,  // contract_address = protocol
+        collection: None,
+        token: dao_id,               // token = dao_id (repurposed)
+        amount: weight,
+        tx_digest,
+        raw_data: extended_data,
+    })
 }
 
 #[cfg(test)]
@@ -122,17 +96,11 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    #[tokio::test]
-    #[ignore] // Requires database
-    async fn test_handle_governance_event() {
-        let database_url = std::env::var("DATABASE_URL").unwrap();
-        let pool = crate::db::create_pool(&database_url).await.unwrap();
-
+    #[test]
+    fn test_handle_governance_vote() {
         let event = json!({
             "type": "0x2::dao::VoteEvent",
-            "id": {
-                "txDigest": "test_tx_gov_123"
-            },
+            "id": { "txDigest": "test_tx_gov_123" },
             "timestampMs": "1234567890000",
             "parsedJson": {
                 "voter": "0xvoter123",
@@ -144,6 +112,11 @@ mod tests {
             }
         });
 
-        handle_governance_event(&pool, &event).await.unwrap();
+        let wallet_event = handle_governance_event(&event).unwrap();
+        assert_eq!(wallet_event.address, "0xvoter123");
+        assert_eq!(wallet_event.event_type, "vote");
+        assert_eq!(wallet_event.contract_address, Some("0xdao_protocol".to_string()));
+        assert_eq!(wallet_event.token, Some("dao_001".to_string()));
+        assert_eq!(wallet_event.amount, 1000);
     }
 }
