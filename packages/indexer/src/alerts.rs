@@ -145,10 +145,11 @@ mod tests {
             whale_alert_threshold_sui: 10_000_000_000,
             whale_alert_threshold_usd: 10_000,
             bff_webhook_url: "http://localhost:4000".to_string(),
-            batch_size: 100,
-            batch_timeout_ms: 1000,
+            batch_size: 50,
+            batch_timeout_ms: 2000,
             poll_interval_ms: 2000,
             checkpoint_batch_size: 10,
+            max_retries: 3,
         };
         let pool = sqlx::PgPool::connect_lazy(&config.database_url).unwrap();
         let engine = AlertEngine::new(config, pool);

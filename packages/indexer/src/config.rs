@@ -25,6 +25,9 @@ pub struct Config {
     pub batch_timeout_ms: u64,
     pub poll_interval_ms: u64,
     pub checkpoint_batch_size: u64,
+
+    // Retry settings
+    pub max_retries: u32,
 }
 
 impl Config {
@@ -61,13 +64,13 @@ impl Config {
                 .unwrap_or_else(|_| "http://localhost:4000/webhooks/indexer".to_string()),
 
             batch_size: env::var("BATCH_SIZE")
-                .unwrap_or_else(|_| "100".to_string())
+                .unwrap_or_else(|_| "50".to_string())
                 .parse()
-                .unwrap_or(100),
+                .unwrap_or(50),
             batch_timeout_ms: env::var("BATCH_TIMEOUT_MS")
-                .unwrap_or_else(|_| "1000".to_string())
+                .unwrap_or_else(|_| "2000".to_string())
                 .parse()
-                .unwrap_or(1000),
+                .unwrap_or(2000),
             poll_interval_ms: env::var("POLL_INTERVAL_MS")
                 .unwrap_or_else(|_| "2000".to_string())
                 .parse()
@@ -76,6 +79,10 @@ impl Config {
                 .unwrap_or_else(|_| "10".to_string())
                 .parse()
                 .unwrap_or(10),
+            max_retries: env::var("MAX_RETRIES")
+                .unwrap_or_else(|_| "3".to_string())
+                .parse()
+                .unwrap_or(3),
         })
     }
 }
