@@ -61,35 +61,6 @@ impl WebhookDispatcher {
         }
     }
 
-    /// Dispatch an IndexerEvent to the BFF webhook endpoint
-    pub async fn dispatch(&self, event: &IndexerEvent) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let url = format!("{}/webhooks/indexer-event", self.webhook_url);
-
-        let response = self
-            .client
-            .post(&url)
-            .json(event)
-            .send()
-            .await?;
-
-        if response.status().is_success() {
-            tracing::debug!(
-                "Webhook dispatched: {} (tx: {})",
-                event.event_type,
-                event.tx_digest
-            );
-        } else {
-            tracing::warn!(
-                "Webhook failed with status {}: {} (tx: {})",
-                response.status(),
-                event.event_type,
-                event.tx_digest
-            );
-        }
-
-        Ok(())
-    }
-
     /// Dispatch an IndexerEvent with retry and dead-letter on exhaustion
     pub async fn dispatch_with_retry(
         &self,

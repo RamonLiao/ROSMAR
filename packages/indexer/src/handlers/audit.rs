@@ -30,7 +30,7 @@ pub async fn handle_audit_event(
         .unwrap_or_else(|| chrono::Utc::now().timestamp_millis() as u64);
 
     // Side-effect: audit_logs INSERT (separate table, different schema)
-    let _ = sqlx::query(
+    if let Err(e) = sqlx::query(
         "INSERT INTO audit_logs
          (workspace_id, actor_address, action, object_type, object_id, tx_hash, metadata, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, to_timestamp($8::double precision / 1000))
@@ -45,7 +45,9 @@ pub async fn handle_audit_event(
     .bind(event)
     .bind(timestamp_ms as i64)
     .execute(pool)
-    .await;
+    .await {
+        tracing::warn!("Failed to insert audit_log (non-fatal): {}", e);
+    }
 
     Ok(WalletEvent {
         address,

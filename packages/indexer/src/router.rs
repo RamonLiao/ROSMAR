@@ -106,7 +106,7 @@ impl EventRouter {
         };
 
         if let Err(e) = self.batch_tx.send(batch_event).await {
-            tracing::error!("Failed to queue event to BatchWriter: {}", e);
+            return Err(format!("BatchWriter channel closed: {}", e).into());
         }
 
         // Step 3: AlertEngine check
@@ -122,7 +122,7 @@ impl EventRouter {
                 .or_else(|| data.get("token"))
                 .and_then(|t| t.as_str());
 
-            if let Ok(Some(_whale_alert)) = self
+            if let Ok(Some(whale_alert)) = self
                 .alert_engine
                 .check_and_alert(&address, event_type, amount, token, &tx_digest)
                 .await
@@ -131,8 +131,8 @@ impl EventRouter {
                     let alert_event = WebhookDispatcher::build_event(
                         event,
                         "whale_alert",
-                        &address,
-                        None, // profile_id resolved inside alert engine
+                        &whale_alert.address,
+                        whale_alert.profile_id,
                     );
                     if let Err(e) = webhook
                         .dispatch_with_retry(&alert_event, &self.retry, &self.pool, "alert_webhook")
