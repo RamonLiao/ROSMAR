@@ -1,0 +1,31 @@
+{
+  "result": {
+    "events": [
+      {
+        "type": "0x0::profile::AuditEventV1",
+        "id": { "txDigest": "test_audit_tx_001" },
+        "timestampMs": "1700000000000",
+        "parsedJson": {
+          "version": 1,
+          "workspace_id": "00000000-0000-0000-0000-000000000000",
+          "actor": "0xintegration_test_001",
+          "action": 0,
+          "object_type": 0,
+          "object_id": "0xprofile_test_001",
+          "timestamp": 1700000000000
+        }
+      },
+      {
+        "type": "0x2::dex::SwapEvent",
+        "id": { "txDigest": "test_swap_tx_001" },
+        "timestampMs": "1700000001000",
+        "parsedJson": {
+          "sender": "0xintegration_test_002",
+          "amount": "50000000000",
+          "coinType": "0x2::sui::SUI",
+          "token": "0x2::sui::SUI"
+        }
+      }
+    ]
+  }
+}
