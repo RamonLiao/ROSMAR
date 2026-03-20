@@ -11,6 +11,7 @@ import {
 import { SEAL_PACKAGE_ID, CRM_VAULT_PACKAGE_ID } from "@/lib/crypto/seal-config";
 import { apiClient } from "@/lib/api/client";
 import { useSuiClient } from "@mysten/dapp-kit";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 
 interface StoreResult {
   blobId: string;
@@ -42,6 +43,7 @@ interface RemoveSecretParams {
 export function useVaultCrypto() {
   const { ensureSession, clearSession, isInitializing } = useSealSession();
   const suiClient = useSuiClient();
+  const workspaceId = useWorkspaceStore((s) => s.activeWorkspace?.id);
 
   /**
    * Encrypt data with Seal and store the encrypted blob via BFF -> Walrus.
@@ -102,11 +104,16 @@ export function useVaultCrypto() {
       }
       const encryptedBytes = new Uint8Array(await response.arrayBuffer());
 
+      if (!workspaceId) {
+        throw new Error("No active workspace — cannot build seal_approve tx");
+      }
+
       // Build the seal_approve PTB for key server verification
       // The ID extracted from the encrypted object is used by the key servers
       const txBytes = await buildSealApproveTx(
         CRM_VAULT_PACKAGE_ID,
         policyId,
+        workspaceId,
         suiClient,
         [policyId],
       );
@@ -115,7 +122,7 @@ export function useVaultCrypto() {
       const decrypted = await sealDecrypt(sealClient, encryptedBytes, sessionKey, txBytes);
       return decrypted;
     },
-    [ensureSession, suiClient],
+    [ensureSession, suiClient, workspaceId],
   );
 
   /**

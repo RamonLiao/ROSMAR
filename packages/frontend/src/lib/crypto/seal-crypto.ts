@@ -123,6 +123,7 @@ export async function sealDecrypt(
 export async function buildSealApproveTx(
   vaultPackageId: string,
   policyObjectId: string,
+  workspaceObjectId: string,
   suiClient: SealCompatibleClient,
   encryptedObjectIds: string[],
 ): Promise<Uint8Array> {
@@ -131,7 +132,12 @@ export async function buildSealApproveTx(
   for (const id of encryptedObjectIds) {
     tx.moveCall({
       target: `${vaultPackageId}::policy::seal_approve`,
-      arguments: [tx.pure.vector("u8", Array.from(new TextEncoder().encode(id))), tx.object(policyObjectId)],
+      arguments: [
+        tx.pure.vector("u8", Array.from(new TextEncoder().encode(id))),
+        tx.object(policyObjectId),
+        tx.object(workspaceObjectId),
+        tx.object("0x6"), // SUI system Clock
+      ],
     });
   }
 
