@@ -5,6 +5,7 @@ mod consumer;
 mod db;
 mod enricher;
 mod handlers;
+mod retry;
 mod router;
 mod webhook;
 mod writer;
