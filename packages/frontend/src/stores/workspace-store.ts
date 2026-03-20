@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware';
 interface Workspace {
   id: string;
   name: string;
+  suiObjectId?: string | null;
 }
 
 interface Member {

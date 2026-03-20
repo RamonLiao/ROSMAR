@@ -119,19 +119,28 @@ export async function sealDecrypt(
 /**
  * Build the `seal_approve` PTB that the key servers verify.
  * Returns raw txBytes (onlyTransactionKind: true).
+ *
+ * @param innerIds - The `id` values parsed from Seal EncryptedObject blobs
+ *                   (i.e. `EncryptedObject.parse(bytes).id`).
  */
 export async function buildSealApproveTx(
   vaultPackageId: string,
   policyObjectId: string,
+  workspaceObjectId: string,
   suiClient: SealCompatibleClient,
-  encryptedObjectIds: string[],
+  innerIds: string[],
 ): Promise<Uint8Array> {
   const tx = new Transaction();
 
-  for (const id of encryptedObjectIds) {
+  for (const id of innerIds) {
     tx.moveCall({
       target: `${vaultPackageId}::policy::seal_approve`,
-      arguments: [tx.pure.vector("u8", Array.from(new TextEncoder().encode(id))), tx.object(policyObjectId)],
+      arguments: [
+        tx.pure.vector("u8", Array.from(new TextEncoder().encode(id))),
+        tx.object(policyObjectId),
+        tx.object(workspaceObjectId),
+        tx.object("0x6"), // SUI system Clock
+      ],
     });
   }
 
