@@ -27,6 +27,7 @@ export const SEAL_THRESHOLD = 2;
 /** Session key time-to-live in minutes */
 export const SEAL_SESSION_TTL_MIN = 30;
 
-/** CRM Vault Move package (set via env or hardcode after publish) */
+/** CRM Vault Move package (testnet) */
 export const CRM_VAULT_PACKAGE_ID =
-  process.env.NEXT_PUBLIC_CRM_VAULT_PACKAGE_ID ?? "0x0";
+  process.env.NEXT_PUBLIC_CRM_VAULT_PACKAGE_ID ??
+  "0xfa439f01db88a3b16040ad746eb65ebf9ade7de3247084f98725a7f94eb0249a";
