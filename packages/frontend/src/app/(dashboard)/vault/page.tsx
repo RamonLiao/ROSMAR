@@ -31,9 +31,11 @@ export default function VaultPage() {
       ruleType: data.policy.ruleType,
       allowedAddresses: data.policy.allowedAddresses,
       minRoleLevel: data.policy.minRoleLevel,
-      expiresAtMs: data.expiresAt
-        ? String(new Date(data.expiresAt).getTime())
-        : '0',
+      expiresAtMs: data.policy.expiresAtMs
+        ? String(data.policy.expiresAtMs)
+        : data.expiresAt
+          ? String(new Date(data.expiresAt).getTime())
+          : '0',
     });
 
     // 2. Encrypt with Seal and store via BFF → Walrus
