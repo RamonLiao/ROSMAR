@@ -6,6 +6,7 @@ import { useWorkspaceStore } from '@/stores/workspace-store';
 export interface Workspace {
   id: string;
   name: string;
+  suiObjectId?: string | null;
   role_level: number;
   permissions: number;
 }
@@ -34,6 +35,7 @@ export function useWorkspaces() {
       const mapped = query.data.workspaces.map((w) => ({
         id: w.id,
         name: w.name,
+        suiObjectId: w.suiObjectId,
       }));
       setWorkspaces(mapped);
 

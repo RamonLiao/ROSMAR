@@ -70,6 +70,7 @@ export class WorkspaceService {
       workspaces: members.map((m) => ({
         id: m.workspace.id,
         name: m.workspace.name,
+        suiObjectId: m.workspace.suiObjectId,
         role_level: m.roleLevel,
         permissions: m.permissions,
       })),
