@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +45,18 @@ export function VaultItemCard({ item, onDecrypt, onDelete }: VaultItemCardProps)
       setIsDecrypting(false);
     }
   };
+
+  // Auto-clear decrypted value after 30 seconds
+  useEffect(() => {
+    if (!showValue) return;
+
+    const timer = setTimeout(() => {
+      setShowValue(false);
+      setDecryptedValue(null);
+    }, 30_000);
+
+    return () => clearTimeout(timer);
+  }, [showValue]);
 
   const isExpired =
     item.expiresAt && new Date(item.expiresAt) < new Date();
