@@ -1,3 +1,4 @@
+use crate::retry::RetryManager;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -86,6 +87,55 @@ impl WebhookDispatcher {
             );
         }
 
+        Ok(())
+    }
+
+    /// Dispatch an IndexerEvent with retry and dead-letter on exhaustion
+    pub async fn dispatch_with_retry(
+        &self,
+        event: &IndexerEvent,
+        retry: &RetryManager,
+        pool: &sqlx::PgPool,
+        source: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let event_clone = event.clone();
+        let result = retry
+            .execute(|| {
+                let e = event_clone.clone();
+                let url = format!("{}/webhooks/indexer-event", self.webhook_url);
+                let client = self.client.clone();
+                async move {
+                    let response = client
+                        .post(&url)
+                        .json(&e)
+                        .timeout(std::time::Duration::from_secs(10))
+                        .send()
+                        .await
+                        .map_err(|e| format!("HTTP error: {}", e))?;
+                    if response.status().is_success() {
+                        Ok(())
+                    } else {
+                        Err(format!("HTTP {}", response.status()))
+                    }
+                }
+            })
+            .await;
+
+        if let Err(e) = result {
+            tracing::error!("Webhook exhausted retries for {}: {}", event.event_type, e);
+            crate::db::insert_dead_letter(
+                pool,
+                &event.event_type,
+                &event.data,
+                &e,
+                source,
+                retry.max_retries() as i32,
+            )
+            .await
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
+                format!("Dead-letter insert failed: {}", e).into()
+            })?;
+        }
         Ok(())
     }
 }
