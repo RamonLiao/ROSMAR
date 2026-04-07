@@ -33,6 +33,8 @@ export class AiGenerateContentAction {
     const result = await this.llmClient.generate(config.workspaceId, {
       system,
       prompt: config.prompt,
+      userId: 'system',
+      agentType: 'content',
     });
 
     this.logger.log(

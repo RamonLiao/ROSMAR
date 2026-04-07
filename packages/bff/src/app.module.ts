@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -30,6 +31,7 @@ import { SocialModule } from './social/social.module';
 import { BroadcastModule } from './broadcast/broadcast.module';
 import { QuestModule } from './quest/quest.module';
 import { GdprModule } from './gdpr/gdpr.module';
+import { CryptoModule } from './common/crypto/crypto.module';
 import { CacheModule } from './common/cache/cache.module';
 import { HealthModule } from './common/health/health.module';
 import { LoggingModule } from './common/logging/logging.module';
@@ -39,10 +41,12 @@ import { ThrottleConfig } from './common/throttle/throttle.config';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     EventEmitterModule.forRoot(),
     ThrottleConfig,
     BullQueueModule,
     PrismaModule,
+    CryptoModule,
     CacheModule,
     HealthModule,
     LoggingModule,

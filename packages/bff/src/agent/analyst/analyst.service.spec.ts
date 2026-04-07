@@ -1,18 +1,15 @@
 import { Test } from '@nestjs/testing';
 import { AnalystService } from './analyst.service';
 import { LlmClientService } from '../llm-client.service';
-import { UsageTrackingService } from '../usage-tracking.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 describe('AnalystService', () => {
   let service: AnalystService;
   let llmClient: { generate: jest.Mock };
-  let usageTracking: { trackUsage: jest.Mock };
   let prisma: Record<string, any>;
 
   beforeEach(async () => {
     llmClient = { generate: jest.fn() };
-    usageTracking = { trackUsage: jest.fn().mockResolvedValue(undefined) };
     prisma = {
       profile: {
         findMany: jest.fn().mockResolvedValue([
@@ -52,7 +49,6 @@ describe('AnalystService', () => {
       providers: [
         AnalystService,
         { provide: LlmClientService, useValue: llmClient },
-        { provide: UsageTrackingService, useValue: usageTracking },
         { provide: PrismaService, useValue: prisma },
       ],
     }).compile();
@@ -109,7 +105,7 @@ describe('AnalystService', () => {
     );
   });
 
-  it('should track usage via UsageTrackingService after query', async () => {
+  it('should pass userId and agentType to LlmClientService for auto-tracking', async () => {
     llmClient.generate.mockResolvedValue({
       toolCalls: [],
       toolResults: [],
@@ -124,14 +120,13 @@ describe('AnalystService', () => {
       query: 'How many profiles?',
     });
 
-    expect(usageTracking.trackUsage).toHaveBeenCalledWith({
-      workspaceId: 'ws-1',
-      userId: 'user-1',
-      agentType: 'analyst',
-      model: 'claude-sonnet-4-20250514',
-      promptTokens: 300,
-      completionTokens: 100,
-    });
+    expect(llmClient.generate).toHaveBeenCalledWith(
+      'ws-1',
+      expect.objectContaining({
+        userId: 'user-1',
+        agentType: 'analyst',
+      }),
+    );
   });
 
   it('should execute query_profiles tool against Prisma', async () => {

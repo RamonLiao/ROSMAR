@@ -1,7 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { LlmClientService } from '../llm-client.service';
-import { UsageTrackingService } from '../usage-tracking.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 // Mock @mysten/sui ESM modules to avoid SyntaxError
@@ -14,8 +13,7 @@ import { WorkflowEngine } from '../../campaign/workflow/workflow.engine';
 
 describe('ActionService', () => {
   let service: ActionService;
-  let llmClient: { generate: jest.Mock; resolveConfig: jest.Mock };
-  let usageTracking: { trackUsage: jest.Mock };
+  let llmClient: { generate: jest.Mock };
   let workflowEngine: { startWorkflow: jest.Mock };
   let prisma: {
     segment: { findFirst: jest.Mock };
@@ -26,9 +24,7 @@ describe('ActionService', () => {
   beforeEach(async () => {
     llmClient = {
       generate: jest.fn(),
-      resolveConfig: jest.fn().mockResolvedValue({ provider: 'openai', model: 'gpt-4o-mini' }),
     };
-    usageTracking = { trackUsage: jest.fn().mockResolvedValue(undefined) };
     workflowEngine = { startWorkflow: jest.fn().mockResolvedValue(undefined) };
     prisma = {
       segment: {
@@ -49,7 +45,6 @@ describe('ActionService', () => {
       providers: [
         ActionService,
         { provide: LlmClientService, useValue: llmClient },
-        { provide: UsageTrackingService, useValue: usageTracking },
         { provide: WorkflowEngine, useValue: workflowEngine },
         { provide: PrismaService, useValue: prisma },
       ],
@@ -85,7 +80,7 @@ describe('ActionService', () => {
       expect(plan.createdAt).toBeInstanceOf(Date);
     });
 
-    it('should track usage for plan generation', async () => {
+    it('should pass userId and agentType to LlmClientService for auto-tracking', async () => {
       llmClient.generate.mockResolvedValue({
         text: JSON.stringify({
           targetSegment: 'All users',
@@ -101,11 +96,11 @@ describe('ActionService', () => {
         instruction: 'Do something',
       });
 
-      expect(usageTracking.trackUsage).toHaveBeenCalledWith(
+      expect(llmClient.generate).toHaveBeenCalledWith(
+        'ws-1',
         expect.objectContaining({
+          userId: 'user-1',
           agentType: 'action',
-          promptTokens: 150,
-          completionTokens: 80,
         }),
       );
     });

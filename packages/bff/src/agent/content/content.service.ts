@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { LlmClientService } from '../llm-client.service';
-import { UsageTrackingService } from '../usage-tracking.service';
 
 export type ContentChannel = 'telegram' | 'discord' | 'email' | 'x';
 
@@ -30,17 +29,12 @@ const CHANNEL_RULES: Record<ContentChannel, string> = {
 
 @Injectable()
 export class ContentService {
-  constructor(
-    private readonly llmClient: LlmClientService,
-    private readonly usageTracking: UsageTrackingService,
-  ) {}
+  constructor(private readonly llmClient: LlmClientService) {}
 
   async generateContent(
     params: GenerateContentParams,
   ): Promise<GenerateContentResult> {
     const { workspaceId, userId, segmentDescription, channel, tone } = params;
-
-    const config = await this.llmClient.resolveConfig(workspaceId);
 
     const system = [
       'You are a marketing copywriter for a Web3 CRM platform.',
@@ -55,19 +49,9 @@ export class ContentService {
     const result = await this.llmClient.generate(workspaceId, {
       system,
       prompt,
+      userId,
+      agentType: 'content',
     });
-
-    // Track usage (fire-and-forget)
-    this.usageTracking
-      .trackUsage({
-        workspaceId,
-        userId,
-        agentType: 'content',
-        model: config.provider,
-        promptTokens: result.usage.inputTokens ?? 0,
-        completionTokens: result.usage.outputTokens ?? 0,
-      })
-      .catch(() => {});
 
     return this.parseResponse(result.text, channel);
   }

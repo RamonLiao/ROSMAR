@@ -3,6 +3,7 @@ import { IsString, IsNotEmpty } from 'class-validator';
 import { ActionService } from './action.service';
 import { SessionGuard } from '../../auth/guards/session.guard';
 import { RbacGuard, RequirePermissions, WRITE } from '../../auth/guards/rbac.guard';
+import { AiRateLimitGuard } from '../guards/ai-rate-limit.guard';
 import { User } from '../../auth/decorators/user.decorator';
 import type { UserPayload } from '../../auth/auth.service';
 
@@ -19,7 +20,7 @@ export class ExecuteActionDto {
 }
 
 @Controller('agents/action')
-@UseGuards(SessionGuard, RbacGuard)
+@UseGuards(SessionGuard, RbacGuard, AiRateLimitGuard)
 export class ActionController {
   constructor(private readonly actionService: ActionService) {}
 

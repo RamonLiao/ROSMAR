@@ -3,6 +3,7 @@ import { IsString, IsIn, IsNotEmpty } from 'class-validator';
 import { ContentService, type ContentChannel } from './content.service';
 import { SessionGuard } from '../../auth/guards/session.guard';
 import { RbacGuard, RequirePermissions, WRITE } from '../../auth/guards/rbac.guard';
+import { AiRateLimitGuard } from '../guards/ai-rate-limit.guard';
 import { User } from '../../auth/decorators/user.decorator';
 import type { UserPayload } from '../../auth/auth.service';
 
@@ -21,7 +22,7 @@ export class GenerateContentDto {
 }
 
 @Controller('agents/content')
-@UseGuards(SessionGuard, RbacGuard)
+@UseGuards(SessionGuard, RbacGuard, AiRateLimitGuard)
 export class ContentController {
   constructor(private readonly contentService: ContentService) {}
 

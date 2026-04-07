@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { tool, type ToolSet } from 'ai';
 import { LlmClientService } from '../llm-client.service';
-import { UsageTrackingService } from '../usage-tracking.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /** Only these Prisma models can be queried by the analyst agent */
@@ -51,7 +50,6 @@ export class AnalystService {
 
   constructor(
     private readonly llmClient: LlmClientService,
-    private readonly usageTracking: UsageTrackingService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -64,18 +62,8 @@ export class AnalystService {
       system: SYSTEM_PROMPT,
       prompt: query,
       tools,
-    });
-
-    // Track usage — ai SDK v6 uses inputTokens/outputTokens
-    const model = result.response?.modelId ?? 'unknown';
-    const usage: any = result.usage ?? {};
-    await this.usageTracking.trackUsage({
-      workspaceId,
       userId,
       agentType: 'analyst',
-      model,
-      promptTokens: usage.inputTokens ?? usage.promptTokens ?? 0,
-      completionTokens: usage.outputTokens ?? usage.completionTokens ?? 0,
     });
 
     // Extract data from tool results

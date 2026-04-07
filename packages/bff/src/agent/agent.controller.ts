@@ -12,6 +12,7 @@ import {
   IsBoolean,
 } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
+import { EncryptionService } from '../common/crypto/encryption.service';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { RbacGuard, WRITE } from '../auth/guards/rbac.guard';
 import { RequirePermissions } from '../auth/decorators/permissions';
@@ -39,7 +40,10 @@ export class UpdateAiConfigDto {
 @Controller('agent')
 @UseGuards(SessionGuard, RbacGuard)
 export class AgentController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly encryption: EncryptionService,
+  ) {}
 
   @Get('config')
   async getConfig(@CurrentUser() user: UserPayload) {
@@ -74,7 +78,9 @@ export class AgentController {
   ) {
     const data: Record<string, any> = {};
     if (dto.provider !== undefined) data.provider = dto.provider;
-    if (dto.apiKey !== undefined) data.apiKeyEncrypted = dto.apiKey; // TODO: Seal encrypt
+    if (dto.apiKey !== undefined) {
+      data.apiKeyEncrypted = this.encryption.encrypt(dto.apiKey);
+    }
     if (dto.monthlyQuotaUsd !== undefined)
       data.monthlyQuotaUsd = dto.monthlyQuotaUsd;
     if (dto.isEnabled !== undefined) data.isEnabled = dto.isEnabled;

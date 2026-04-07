@@ -5,7 +5,6 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { LlmClientService } from '../llm-client.service';
-import { UsageTrackingService } from '../usage-tracking.service';
 import { WorkflowEngine, type WorkflowStep } from '../../campaign/workflow/workflow.engine';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -37,15 +36,12 @@ export class ActionService {
 
   constructor(
     private readonly llmClient: LlmClientService,
-    private readonly usageTracking: UsageTrackingService,
     private readonly workflowEngine: WorkflowEngine,
     private readonly prisma: PrismaService,
   ) {}
 
   async planAction(params: PlanActionParams): Promise<ActionPlan> {
     const { workspaceId, userId, instruction } = params;
-    const config = await this.llmClient.resolveConfig(workspaceId);
-
     const system = [
       'You are an AI campaign planner for a Web3 CRM.',
       'Convert the user instruction into a structured JSON action plan.',
@@ -57,19 +53,9 @@ export class ActionService {
     const result = await this.llmClient.generate(workspaceId, {
       system,
       prompt: instruction,
+      userId,
+      agentType: 'action',
     });
-
-    // Track usage
-    this.usageTracking
-      .trackUsage({
-        workspaceId,
-        userId,
-        agentType: 'action',
-        model: config.provider,
-        promptTokens: result.usage.inputTokens ?? 0,
-        completionTokens: result.usage.outputTokens ?? 0,
-      })
-      .catch(() => {});
 
     const parsed = this.parseJson(result.text);
     const planId = randomUUID();

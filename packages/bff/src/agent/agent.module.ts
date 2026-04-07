@@ -1,6 +1,9 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { LlmClientService } from './llm-client.service';
 import { UsageTrackingService } from './usage-tracking.service';
+import { PromptTemplateService } from './prompt-template.service';
+import { QuotaResetJob } from './quota-reset.job';
+import { AiRateLimitGuard } from './guards/ai-rate-limit.guard';
 import { AgentController } from './agent.controller';
 import { AnalystService } from './analyst/analyst.service';
 import { AnalystController } from './analyst/analyst.controller';
@@ -15,15 +18,30 @@ import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [forwardRef(() => CampaignModule), AuthModule],
-  controllers: [AgentController, AnalystController, ContentController, ActionController, YieldOptimizerController],
+  controllers: [
+    AgentController,
+    AnalystController,
+    ContentController,
+    ActionController,
+    YieldOptimizerController,
+  ],
   providers: [
     LlmClientService,
     UsageTrackingService,
+    PromptTemplateService,
+    QuotaResetJob,
+    AiRateLimitGuard,
     AnalystService,
     ContentService,
     ActionService,
     YieldOptimizerService,
   ],
-  exports: [LlmClientService, UsageTrackingService, AnalystService, YieldOptimizerService],
+  exports: [
+    LlmClientService,
+    UsageTrackingService,
+    PromptTemplateService,
+    AnalystService,
+    YieldOptimizerService,
+  ],
 })
 export class AgentModule {}

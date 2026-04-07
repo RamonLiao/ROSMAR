@@ -1,7 +1,17 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
-import { generateText, streamText, stepCountIs, type LanguageModel, type GenerateTextResult, type StreamTextResult, type StopCondition } from 'ai';
+import { UsageTrackingService } from './usage-tracking.service';
+import { EncryptionService } from '../common/crypto/encryption.service';
+import {
+  generateText,
+  streamText,
+  stepCountIs,
+  type LanguageModel,
+  type GenerateTextResult,
+  type StreamTextResult,
+  type StopCondition,
+} from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 
@@ -11,11 +21,24 @@ export interface LlmConfig {
   model: LanguageModel;
 }
 
+export interface LlmCallParams {
+  system?: string;
+  prompt: string;
+  tools?: any;
+  maxSteps?: number;
+  userId: string;
+  agentType: string;
+}
+
 @Injectable()
 export class LlmClientService {
+  private readonly logger = new Logger(LlmClientService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly usageTracking: UsageTrackingService,
+    private readonly encryption: EncryptionService,
   ) {}
 
   async resolveConfig(workspaceId: string): Promise<LlmConfig> {
@@ -33,9 +56,9 @@ export class LlmClientService {
     }
 
     const provider = config?.provider ?? 'anthropic';
-    const apiKey =
-      config?.apiKeyEncrypted ?? // TODO: Seal decrypt in production
-      this.getPlatformKey(provider);
+    const apiKey = config?.apiKeyEncrypted
+      ? this.encryption.decrypt(config.apiKeyEncrypted)
+      : this.getPlatformKey(provider);
 
     return {
       provider,
@@ -66,28 +89,66 @@ export class LlmClientService {
 
   async generate(
     workspaceId: string,
-    params: { system?: string; prompt: string; tools?: any; maxSteps?: number },
+    params: LlmCallParams,
   ): Promise<GenerateTextResult<any, any>> {
     const config = await this.resolveConfig(workspaceId);
-    return generateText({
+    const result = await generateText({
       model: config.model,
       system: params.system,
       prompt: params.prompt,
       tools: params.tools,
       ...(params.maxSteps ? { stopWhen: stepCountIs(params.maxSteps) } : {}),
     });
+
+    // Fire-and-forget usage tracking
+    this.trackFromResult(workspaceId, params, result).catch((err) =>
+      this.logger.warn('Usage tracking failed', err),
+    );
+
+    return result;
   }
 
   async stream(
     workspaceId: string,
-    params: { system?: string; prompt: string; tools?: any },
+    params: LlmCallParams,
   ): Promise<StreamTextResult<any, any>> {
     const config = await this.resolveConfig(workspaceId);
-    return streamText({
+    const result = streamText({
       model: config.model,
       system: params.system,
       prompt: params.prompt,
       tools: params.tools,
+    });
+
+    // Track usage after stream completes
+    result.usage.then((usage) =>
+      this.usageTracking
+        .trackUsage({
+          workspaceId,
+          userId: params.userId,
+          agentType: params.agentType,
+          model: (config.model as any).modelId ?? 'unknown',
+          promptTokens: usage.inputTokens ?? 0,
+          completionTokens: usage.outputTokens ?? 0,
+        })
+        .catch((err) => this.logger.warn('Usage tracking failed', err)),
+    );
+
+    return result;
+  }
+
+  private async trackFromResult(
+    workspaceId: string,
+    params: LlmCallParams,
+    result: GenerateTextResult<any, any>,
+  ): Promise<void> {
+    await this.usageTracking.trackUsage({
+      workspaceId,
+      userId: params.userId,
+      agentType: params.agentType,
+      model: result.response?.modelId ?? 'unknown',
+      promptTokens: (result.usage as any)?.inputTokens ?? (result.usage as any)?.promptTokens ?? 0,
+      completionTokens: (result.usage as any)?.outputTokens ?? (result.usage as any)?.completionTokens ?? 0,
     });
   }
 }

@@ -1,25 +1,20 @@
 import { Test } from '@nestjs/testing';
 import { ContentService } from './content.service';
 import { LlmClientService } from '../llm-client.service';
-import { UsageTrackingService } from '../usage-tracking.service';
 
 describe('ContentService', () => {
   let service: ContentService;
-  let llmClient: { generate: jest.Mock; resolveConfig: jest.Mock };
-  let usageTracking: { trackUsage: jest.Mock };
+  let llmClient: { generate: jest.Mock };
 
   beforeEach(async () => {
     llmClient = {
       generate: jest.fn(),
-      resolveConfig: jest.fn().mockResolvedValue({ provider: 'openai', model: 'gpt-4o-mini' }),
     };
-    usageTracking = { trackUsage: jest.fn().mockResolvedValue(undefined) };
 
     const module = await Test.createTestingModule({
       providers: [
         ContentService,
         { provide: LlmClientService, useValue: llmClient },
-        { provide: UsageTrackingService, useValue: usageTracking },
       ],
     }).compile();
 
@@ -67,7 +62,7 @@ describe('ContentService', () => {
     expect(result.content).toContain('<p>Hello valued member...</p>');
   });
 
-  it('should track usage after generation', async () => {
+  it('should pass userId and agentType to LlmClientService for auto-tracking', async () => {
     llmClient.generate.mockResolvedValue({
       text: 'Content here',
       usage: { inputTokens: 100, outputTokens: 50 },
@@ -81,14 +76,13 @@ describe('ContentService', () => {
       tone: 'friendly',
     });
 
-    expect(usageTracking.trackUsage).toHaveBeenCalledWith({
-      workspaceId: 'ws-1',
-      userId: 'user-1',
-      agentType: 'content',
-      model: 'openai',
-      promptTokens: 100,
-      completionTokens: 50,
-    });
+    expect(llmClient.generate).toHaveBeenCalledWith(
+      'ws-1',
+      expect.objectContaining({
+        userId: 'user-1',
+        agentType: 'content',
+      }),
+    );
   });
 
   it('should include X/Twitter char limit in system prompt for x channel', async () => {
