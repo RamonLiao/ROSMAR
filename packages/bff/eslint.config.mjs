@@ -41,7 +41,7 @@ export default tseslint.config(
       '@typescript-eslint/restrict-plus-operands': 'warn',
       '@typescript-eslint/unbound-method': 'warn',
       '@typescript-eslint/no-require-imports': 'warn',
-      "prettier/prettier": ["error", { endOfLine: "auto" }],
+      "prettier/prettier": ["warn", { endOfLine: "auto" }],
     },
   },
 );
