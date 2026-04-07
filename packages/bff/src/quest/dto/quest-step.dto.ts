@@ -1,5 +1,4 @@
 import { IsString, IsOptional, IsObject } from 'class-validator';
-import { Allow } from 'class-validator';
 
 export class QuestStepDto {
   @IsString()

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { SuiClientService } from '../blockchain/sui.client';
@@ -62,12 +62,6 @@ export class ProfileService {
     private readonly defiPositionService: DefiPositionService,
     private readonly suinsService: SuinsService,
   ) {
-    // gRPC client for reads (to Rust Core)
-    const coreGrpcUrl = this.configService.get<string>(
-      'CORE_GRPC_URL',
-      'localhost:50051',
-    );
-
     // TODO: Load actual proto service definition
     this.grpcClient = {
       getProfile: () => Promise.resolve({}),
@@ -96,11 +90,12 @@ export class ProfileService {
     const result = await this.suiClient.executeTransaction(tx);
 
     // Parse profile_id from events
-    const profileCreatedEvent = result.events?.find(
-      (e: any) => e.type.includes('::profile::ProfileCreated'),
+    const profileCreatedEvent = result.events?.find((e: any) =>
+      e.type.includes('::profile::ProfileCreated'),
     );
 
-    const profileId = (profileCreatedEvent?.parsedJson as any)?.profile_id ?? randomUUID();
+    const profileId =
+      (profileCreatedEvent?.parsedJson as any)?.profile_id ?? randomUUID();
 
     // Write to Prisma for indexing
     await this.prisma.profile.create({
@@ -160,7 +155,10 @@ export class ProfileService {
     return { profiles, total };
   }
 
-  async getProfileOrganizations(workspaceId: string, profileId: string): Promise<any> {
+  async getProfileOrganizations(
+    workspaceId: string,
+    profileId: string,
+  ): Promise<any> {
     const links = await this.prisma.profileOrganization.findMany({
       where: { profileId, profile: { workspaceId } },
       include: { organization: true },
@@ -213,7 +211,12 @@ export class ProfileService {
 
     const [rows, nftGallery] = await Promise.all([
       this.prisma.$queryRaw<
-        { collection: string | null; event_type: string; cnt: bigint; total_amount: number | null }[]
+        {
+          collection: string | null;
+          event_type: string;
+          cnt: bigint;
+          total_amount: number | null;
+        }[]
       >`
         SELECT
           collection,
@@ -229,7 +232,12 @@ export class ProfileService {
     ]);
 
     const nftTypes = ['MintNFTEvent', 'TransferObject'];
-    const defiTypes = ['SwapEvent', 'AddLiquidityEvent', 'StakeEvent', 'UnstakeEvent'];
+    const defiTypes = [
+      'SwapEvent',
+      'AddLiquidityEvent',
+      'StakeEvent',
+      'UnstakeEvent',
+    ];
 
     return {
       nfts: rows
@@ -307,7 +315,12 @@ export class ProfileService {
     return allNfts;
   }
 
-  async getTimeline(workspaceId: string, profileId: string, limit = 20, offset = 0) {
+  async getTimeline(
+    workspaceId: string,
+    profileId: string,
+    limit = 20,
+    offset = 0,
+  ) {
     await this.prisma.profile.findFirstOrThrow({
       where: { id: profileId, workspaceId },
       select: { id: true },
@@ -361,7 +374,11 @@ export class ProfileService {
 
   // ── Wallet CRUD ──────────────────────────────────────────────
 
-  async addWallet(workspaceId: string, profileId: string, dto: CreateWalletDto) {
+  async addWallet(
+    workspaceId: string,
+    profileId: string,
+    dto: CreateWalletDto,
+  ) {
     // Verify profile exists and belongs to workspace
     await this.prisma.profile.findFirstOrThrow({
       where: { id: profileId, workspaceId },
@@ -477,7 +494,14 @@ export class ProfileService {
     if (suiWallets.length === 0) return [];
 
     const allNfts: NftWithTraits[] = [];
-    const skipFields = new Set(['id', 'name', 'description', 'url', 'image_url', 'img_url']);
+    const skipFields = new Set([
+      'id',
+      'name',
+      'description',
+      'url',
+      'image_url',
+      'img_url',
+    ]);
 
     for (const wallet of suiWallets) {
       try {
@@ -490,7 +514,8 @@ export class ProfileService {
 
         for (const item of response.data) {
           const obj = item.data;
-          if (!obj?.content || (obj.content as any).dataType !== 'moveObject') continue;
+          if (!obj?.content || (obj.content as any).dataType !== 'moveObject')
+            continue;
 
           const fields = (obj.content as any).fields ?? {};
           const display = (obj as any).display?.data ?? {};
@@ -516,7 +541,8 @@ export class ProfileService {
             type,
             collection,
             name: display.name ?? fields.name ?? 'Unnamed',
-            imageUrl: normalizeIpfsUrl(display.image_url ?? fields.image_url) ?? null,
+            imageUrl:
+              normalizeIpfsUrl(display.image_url ?? fields.image_url) ?? null,
             traits,
             rarityScore: null,
           });
@@ -554,7 +580,10 @@ export class ProfileService {
           const freq = traitFreq.get(`${t.name}:${t.value}`) ?? 1;
           totalRarity += 1 / (freq / nfts.length);
         }
-        nft.rarityScore = Math.min(100, Math.round((totalRarity / nft.traits.length) * 10));
+        nft.rarityScore = Math.min(
+          100,
+          Math.round((totalRarity / nft.traits.length) * 10),
+        );
       }
     }
 
@@ -601,7 +630,9 @@ export class ProfileService {
 
   // ── Primary Domain ─────────────────────────────────────────
 
-  async getAvailableDomains(profileId: string): Promise<{ domain: string; chain: string; source: string }[]> {
+  async getAvailableDomains(
+    profileId: string,
+  ): Promise<{ domain: string; chain: string; source: string }[]> {
     const profile = await this.prisma.profile.findUnique({
       where: { id: profileId },
       include: { wallets: true },
@@ -611,7 +642,11 @@ export class ProfileService {
     const domains: { domain: string; chain: string; source: string }[] = [];
 
     if (profile.suinsName) {
-      domains.push({ domain: profile.suinsName, chain: 'sui', source: 'suins' });
+      domains.push({
+        domain: profile.suinsName,
+        chain: 'sui',
+        source: 'suins',
+      });
     }
 
     for (const w of profile.wallets) {

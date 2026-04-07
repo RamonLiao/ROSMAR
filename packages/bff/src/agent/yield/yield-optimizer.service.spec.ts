@@ -1,21 +1,60 @@
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import {
-  YieldOptimizerService,
-  type PoolApy,
-} from './yield-optimizer.service';
+import { YieldOptimizerService, type PoolApy } from './yield-optimizer.service';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
 
-const mockPools: PoolApy[] = [
-  { protocol: 'Cetus', poolName: 'USDC-USDT', tokenPair: 'USDC/USDT', apy: 4.2, tvl: 18_500_000, riskLevel: 'low' },
-  { protocol: 'Cetus', poolName: 'SUI-USDC', tokenPair: 'SUI/USDC', apy: 12.8, tvl: 32_000_000, riskLevel: 'medium' },
-  { protocol: 'Cetus', poolName: 'SUI-CETUS', tokenPair: 'SUI/CETUS', apy: 35.2, tvl: 4_100_000, riskLevel: 'high' },
-  { protocol: 'Scallop', poolName: 'USDC Lending', tokenPair: 'USDC', apy: 5.1, tvl: 62_000_000, riskLevel: 'low' },
-  { protocol: 'NAVI', poolName: 'USDT Supply', tokenPair: 'USDT', apy: 6.3, tvl: 41_000_000, riskLevel: 'low' },
-  { protocol: 'NAVI', poolName: 'SUI Supply', tokenPair: 'SUI', apy: 4.5, tvl: 35_000_000, riskLevel: 'medium' },
+const _mockPools: PoolApy[] = [
+  {
+    protocol: 'Cetus',
+    poolName: 'USDC-USDT',
+    tokenPair: 'USDC/USDT',
+    apy: 4.2,
+    tvl: 18_500_000,
+    riskLevel: 'low',
+  },
+  {
+    protocol: 'Cetus',
+    poolName: 'SUI-USDC',
+    tokenPair: 'SUI/USDC',
+    apy: 12.8,
+    tvl: 32_000_000,
+    riskLevel: 'medium',
+  },
+  {
+    protocol: 'Cetus',
+    poolName: 'SUI-CETUS',
+    tokenPair: 'SUI/CETUS',
+    apy: 35.2,
+    tvl: 4_100_000,
+    riskLevel: 'high',
+  },
+  {
+    protocol: 'Scallop',
+    poolName: 'USDC Lending',
+    tokenPair: 'USDC',
+    apy: 5.1,
+    tvl: 62_000_000,
+    riskLevel: 'low',
+  },
+  {
+    protocol: 'NAVI',
+    poolName: 'USDT Supply',
+    tokenPair: 'USDT',
+    apy: 6.3,
+    tvl: 41_000_000,
+    riskLevel: 'low',
+  },
+  {
+    protocol: 'NAVI',
+    poolName: 'SUI Supply',
+    tokenPair: 'SUI',
+    apy: 4.5,
+    tvl: 35_000_000,
+    riskLevel: 'medium',
+  },
 ];
 
 let fetchCallCount = 0;

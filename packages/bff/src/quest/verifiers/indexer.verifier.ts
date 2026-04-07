@@ -9,7 +9,7 @@ export class IndexerVerifier implements StepVerifier {
   async verify(
     profileId: string,
     step: { actionType: string; actionConfig: Record<string, unknown> },
-    claimData: Record<string, unknown>,
+    _claimData: Record<string, unknown>,
   ): Promise<{ verified: boolean; txDigest?: string }> {
     // Look up matching wallet event from the indexer
     const profile = await this.prisma.profile.findUnique({

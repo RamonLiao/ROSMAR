@@ -1,10 +1,16 @@
 import { Test } from '@nestjs/testing';
 import { LookalikeService } from './lookalike.service';
-import { FeatureExtractionService, ProfileFeatureVector } from './feature-extraction.service';
+import {
+  FeatureExtractionService,
+  ProfileFeatureVector,
+} from './feature-extraction.service';
 import { InternalCandidateSource } from './sources/internal.source';
 import { OnChainCandidateSource } from './sources/on-chain.source';
-import { GraphBasedStrategy, jaccardSimilarity } from './strategies/graph-based.strategy';
-import { KnnCosineStrategy, cosineSimilarity } from './strategies/knn-cosine.strategy';
+import {
+  GraphBasedStrategy,
+  jaccardSimilarity,
+} from './strategies/graph-based.strategy';
+import { cosineSimilarity } from './strategies/knn-cosine.strategy';
 import { PrismaService } from '../../prisma/prisma.service';
 
 describe('Lookalike', () => {
@@ -80,12 +86,22 @@ describe('Lookalike', () => {
         {
           id: 'p1',
           engagementScore: 100,
-          _count: { wallets: 5, deals: 10, workflowExecutions: 3, socialLinks: 2 },
+          _count: {
+            wallets: 5,
+            deals: 10,
+            workflowExecutions: 3,
+            socialLinks: 2,
+          },
         },
         {
           id: 'p2',
           engagementScore: 0,
-          _count: { wallets: 0, deals: 0, workflowExecutions: 0, socialLinks: 0 },
+          _count: {
+            wallets: 0,
+            deals: 0,
+            workflowExecutions: 0,
+            socialLinks: 0,
+          },
         },
       ]);
 
@@ -130,11 +146,17 @@ describe('Lookalike', () => {
       const seedNeighbors = { s1: new Set(['tx:a', 'tx:b', 'tx:c']) };
       const candidateNeighbors = {
         c1: new Set(['tx:a', 'tx:b', 'tx:c']), // perfect jaccard overlap
-        c2: new Set(['tx:x', 'tx:y']),          // no overlap
+        c2: new Set(['tx:x', 'tx:y']), // no overlap
       };
 
       const results = strategy.findSimilarWithGraph(
-        seeds, candidates, seedNeighbors, candidateNeighbors, 2, undefined, 0,
+        seeds,
+        candidates,
+        seedNeighbors,
+        candidateNeighbors,
+        2,
+        undefined,
+        0,
       );
 
       expect(results[0].profileId).toBe('c1');
@@ -156,7 +178,13 @@ describe('Lookalike', () => {
       };
 
       const results = strategy.findSimilarWithGraph(
-        seeds, candidates, seedNeighbors, candidateNeighbors, 1, undefined, 0.5,
+        seeds,
+        candidates,
+        seedNeighbors,
+        candidateNeighbors,
+        1,
+        undefined,
+        0.5,
       );
 
       // 0.5 * 1.0 (cosine) + 0.5 * 0.5 (jaccard) = 0.75
@@ -172,7 +200,11 @@ describe('Lookalike', () => {
       ];
 
       const results = strategy.findSimilarWithGraph(
-        seeds, candidates, { s1: new Set() }, { c1: new Set() }, 1,
+        seeds,
+        candidates,
+        { s1: new Set() },
+        { c1: new Set() },
+        1,
       );
 
       expect(results[0].similarity).toBeCloseTo(1.0);
@@ -188,7 +220,13 @@ describe('Lookalike', () => {
       ];
 
       const results = strategy.findSimilarWithGraph(
-        seeds, candidates, {}, {}, 10, 0.5, 1.0,
+        seeds,
+        candidates,
+        {},
+        {},
+        10,
+        0.5,
+        1.0,
       );
 
       expect(results).toHaveLength(1);
@@ -201,11 +239,9 @@ describe('Lookalike', () => {
     it('returns all workspace profiles excluding seed IDs', async () => {
       const prisma = {
         profile: {
-          findMany: jest.fn().mockResolvedValue([
-            { id: 'p3' },
-            { id: 'p4' },
-            { id: 'p5' },
-          ]),
+          findMany: jest
+            .fn()
+            .mockResolvedValue([{ id: 'p3' }, { id: 'p4' }, { id: 'p5' }]),
         },
       };
 
@@ -258,7 +294,10 @@ describe('Lookalike', () => {
       // Seed tx digests
       prisma.walletEvent.findMany
         .mockResolvedValueOnce([{ txDigest: 'tx-abc' }, { txDigest: 'tx-def' }]) // seed txs
-        .mockResolvedValueOnce([{ address: '0xdiscovered1' }, { address: '0xdiscovered2' }]); // co-occurrence
+        .mockResolvedValueOnce([
+          { address: '0xdiscovered1' },
+          { address: '0xdiscovered2' },
+        ]); // co-occurrence
 
       const module = await Test.createTestingModule({
         providers: [
@@ -330,7 +369,16 @@ describe('Lookalike', () => {
       service = module.get(LookalikeService);
     });
 
-    function mockProfiles(profiles: Array<{ id: string; score: number; wallets: number; deals: number; wf: number; social: number }>) {
+    function mockProfiles(
+      profiles: Array<{
+        id: string;
+        score: number;
+        wallets: number;
+        deals: number;
+        wf: number;
+        social: number;
+      }>,
+    ) {
       prisma.profile.findMany.mockImplementation(({ where }: any) => {
         const ids: string[] = where?.id?.in ?? [];
         const notIn: string[] = where?.id?.notIn ?? [];
@@ -361,7 +409,7 @@ describe('Lookalike', () => {
         { id: 'p2', score: 80, wallets: 3, deals: 7, wf: 2, social: 3 },
         { id: 'p3', score: 85, wallets: 4, deals: 7, wf: 3, social: 2 },
         { id: 'p4', score: 50, wallets: 2, deals: 3, wf: 1, social: 1 },
-        { id: 'p5', score: 5,  wallets: 0, deals: 0, wf: 0, social: 0 },
+        { id: 'p5', score: 5, wallets: 0, deals: 0, wf: 0, social: 0 },
       ];
 
       prisma.segmentMembership.findMany.mockResolvedValue([
@@ -383,10 +431,12 @@ describe('Lookalike', () => {
       const allProfiles = [
         { id: 'p1', score: 90, wallets: 4, deals: 8, wf: 3, social: 2 },
         { id: 'p2', score: 85, wallets: 4, deals: 7, wf: 3, social: 2 },
-        { id: 'p3', score: 5,  wallets: 0, deals: 0, wf: 0, social: 0 },
+        { id: 'p3', score: 5, wallets: 0, deals: 0, wf: 0, social: 0 },
       ];
 
-      prisma.segmentMembership.findMany.mockResolvedValue([{ profileId: 'p1' }]);
+      prisma.segmentMembership.findMany.mockResolvedValue([
+        { profileId: 'p1' },
+      ]);
       mockProfiles(allProfiles);
       prisma.lookalikeResult.create.mockResolvedValue({});
 
@@ -407,7 +457,9 @@ describe('Lookalike', () => {
         { id: 'p2', score: 50, wallets: 2, deals: 3, wf: 1, social: 1 },
       ];
 
-      prisma.segmentMembership.findMany.mockResolvedValue([{ profileId: 'p1' }]);
+      prisma.segmentMembership.findMany.mockResolvedValue([
+        { profileId: 'p1' },
+      ]);
       mockProfiles(allProfiles);
       prisma.profileWallet.findMany.mockResolvedValue([]);
       prisma.walletEvent.findMany.mockResolvedValue([]);
@@ -423,9 +475,21 @@ describe('Lookalike', () => {
     });
 
     it('returns candidateSource in result', async () => {
-      prisma.segmentMembership.findMany.mockResolvedValue([{ profileId: 'p1' }]);
+      prisma.segmentMembership.findMany.mockResolvedValue([
+        { profileId: 'p1' },
+      ]);
       prisma.profile.findMany.mockResolvedValue([
-        { id: 'p1', primaryAddress: '0xp1', engagementScore: 50, _count: { wallets: 1, deals: 1, workflowExecutions: 0, socialLinks: 0 } },
+        {
+          id: 'p1',
+          primaryAddress: '0xp1',
+          engagementScore: 50,
+          _count: {
+            wallets: 1,
+            deals: 1,
+            workflowExecutions: 0,
+            socialLinks: 0,
+          },
+        },
       ]);
       prisma.profileWallet.findMany.mockResolvedValue([]);
       prisma.walletEvent.findMany.mockResolvedValue([]);

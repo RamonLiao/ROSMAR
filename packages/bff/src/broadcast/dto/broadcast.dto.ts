@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray, IsDateString, Allow } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsDateString } from 'class-validator';
 
 export class CreateBroadcastDto {
   @IsString()

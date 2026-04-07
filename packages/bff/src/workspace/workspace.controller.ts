@@ -17,7 +17,6 @@ import { RbacGuard, WRITE, MANAGE } from '../auth/guards/rbac.guard';
 import { RequirePermissions } from '../auth/decorators/permissions';
 import { CurrentUser } from '../auth/decorators/current-user';
 import { IsString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
-import type { EngagementWeights } from '../engagement/engagement.constants';
 import { SetCollectionWatchlistDto } from './dto/collection-watchlist.dto';
 import { SetWhaleThresholdsDto } from './dto/whale-thresholds.dto';
 import { NotificationService } from '../notification/notification.service';
@@ -110,10 +109,7 @@ export class WorkspaceController {
 
   @Post(':id/members')
   @RequirePermissions(MANAGE)
-  async addMember(
-    @Param('id') workspaceId: string,
-    @Body() dto: AddMemberDto,
-  ) {
+  async addMember(@Param('id') workspaceId: string, @Body() dto: AddMemberDto) {
     return this.workspaceService.addMember(
       workspaceId,
       dto.address,
@@ -143,7 +139,9 @@ export class WorkspaceController {
       return { roles: [], guildId: null };
     }
 
-    const roles = await this.discordRoleSyncService.fetchGuildRoles(workspace.discordGuildId);
+    const roles = await this.discordRoleSyncService.fetchGuildRoles(
+      workspace.discordGuildId,
+    );
     return {
       guildId: workspace.discordGuildId,
       roles: roles
@@ -173,7 +171,10 @@ export class WorkspaceController {
     @Param('id') workspaceId: string,
     @Body() dto: SetCollectionWatchlistDto,
   ) {
-    return this.workspaceService.setCollectionWatchlist(workspaceId, dto.collections);
+    return this.workspaceService.setCollectionWatchlist(
+      workspaceId,
+      dto.collections,
+    );
   }
 
   @Get(':id/whale-thresholds')
@@ -187,7 +188,10 @@ export class WorkspaceController {
     @Param('id') workspaceId: string,
     @Body() dto: SetWhaleThresholdsDto,
   ) {
-    return this.workspaceService.setWhaleThresholds(workspaceId, dto.thresholds);
+    return this.workspaceService.setWhaleThresholds(
+      workspaceId,
+      dto.thresholds,
+    );
   }
 
   @Get(':id/whale-alerts')
@@ -207,6 +211,9 @@ export class WorkspaceController {
     @Param('id') workspaceId: string,
     @Query('limit') limit?: string,
   ) {
-    return this.workspaceService.getTopWhales(workspaceId, limit ? parseInt(limit, 10) : 20);
+    return this.workspaceService.getTopWhales(
+      workspaceId,
+      limit ? parseInt(limit, 10) : 20,
+    );
   }
 }

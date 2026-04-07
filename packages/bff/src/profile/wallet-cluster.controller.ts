@@ -1,16 +1,12 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { WalletClusterService } from './wallet-cluster.service';
 import { SessionGuard } from '../auth/guards/session.guard';
-import { RbacGuard, RequirePermissions, WRITE } from '../auth/guards/rbac.guard';
+import {
+  RbacGuard,
+  RequirePermissions,
+  WRITE,
+} from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
-import type { UserPayload } from '../auth/auth.service';
 import { ClaimAddressDto } from './dto/claim-address.dto';
 
 @Controller('profiles/:profileId/wallets')

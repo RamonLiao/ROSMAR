@@ -12,9 +12,12 @@ import {
 } from '@nestjs/common';
 import { CampaignService } from './campaign.service';
 import { SessionGuard } from '../auth/guards/session.guard';
-import { RbacGuard, RequirePermissions, WRITE } from '../auth/guards/rbac.guard';
+import {
+  RbacGuard,
+  RequirePermissions,
+  WRITE,
+} from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
-import type { UserPayload } from '../auth/auth.service';
 import { CreateTriggerDto, UpdateTriggerDto } from './trigger/trigger.dto';
 import { PLAYBOOK_TEMPLATES } from './template/playbook-templates';
 
@@ -49,11 +52,7 @@ export class CampaignController {
     @User() user: import('../auth/auth.service').UserPayload,
     @Body() dto: import('./campaign.controller').CreateCampaignDto,
   ) {
-    return this.campaignService.create(
-      user.workspaceId,
-      user.address,
-      dto,
-    );
+    return this.campaignService.create(user.workspaceId, user.address, dto);
   }
 
   @Get(':id')
@@ -83,12 +82,7 @@ export class CampaignController {
     @Param('id') id: string,
     @Body() dto: import('./campaign.controller').UpdateCampaignDto,
   ) {
-    return this.campaignService.update(
-      user.workspaceId,
-      user.address,
-      id,
-      dto,
-    );
+    return this.campaignService.update(user.workspaceId, user.address, id, dto);
   }
 
   @Post(':id/start')
@@ -141,7 +135,11 @@ export class CampaignController {
     @Param('id') id: string,
     @Body() body: { cron: string; timezone?: string },
   ) {
-    return this.campaignService.createRecurringTrigger(id, body.cron, body.timezone);
+    return this.campaignService.createRecurringTrigger(
+      id,
+      body.cron,
+      body.timezone,
+    );
   }
 
   @Delete(':id/recurring/:triggerId')
@@ -157,10 +155,7 @@ export class CampaignController {
 
   @Post(':id/triggers')
   @RequirePermissions(WRITE)
-  async createTrigger(
-    @Param('id') id: string,
-    @Body() dto: CreateTriggerDto,
-  ) {
+  async createTrigger(@Param('id') id: string, @Body() dto: CreateTriggerDto) {
     return this.campaignService.createTrigger(id, dto);
   }
 

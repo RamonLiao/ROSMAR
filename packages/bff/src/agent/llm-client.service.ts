@@ -10,7 +10,6 @@ import {
   type LanguageModel,
   type GenerateTextResult,
   type StreamTextResult,
-  type StopCondition,
 } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
@@ -147,8 +146,14 @@ export class LlmClientService {
       userId: params.userId,
       agentType: params.agentType,
       model: result.response?.modelId ?? 'unknown',
-      promptTokens: (result.usage as any)?.inputTokens ?? (result.usage as any)?.promptTokens ?? 0,
-      completionTokens: (result.usage as any)?.outputTokens ?? (result.usage as any)?.completionTokens ?? 0,
+      promptTokens:
+        (result.usage as any)?.inputTokens ??
+        (result.usage as any)?.promptTokens ??
+        0,
+      completionTokens:
+        (result.usage as any)?.outputTokens ??
+        (result.usage as any)?.completionTokens ??
+        0,
     });
   }
 }

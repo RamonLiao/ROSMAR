@@ -35,9 +35,7 @@ export class EscrowService {
     dto: CreateEscrowDto,
   ) {
     if (dto.arbiterThreshold > dto.arbitrators.length) {
-      throw new BadRequestException(
-        'Threshold exceeds arbitrator count',
-      );
+      throw new BadRequestException('Threshold exceeds arbitrator count');
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -128,10 +126,9 @@ export class EscrowService {
       txDigest = result.digest;
     }
 
-    const newState =
-      newReleased >= total ? 'COMPLETED' : 'PARTIALLY_RELEASED';
+    const newState = newReleased >= total ? 'COMPLETED' : 'PARTIALLY_RELEASED';
 
-    return this.prisma.escrow.update({
+    const updated = await this.prisma.escrow.update({
       where: { id: escrowId },
       data: {
         releasedAmount: newReleased,
@@ -139,6 +136,8 @@ export class EscrowService {
         version: { increment: 1 },
       },
     });
+
+    return { escrow: updated, txDigest };
   }
 
   async refund(escrowId: string) {

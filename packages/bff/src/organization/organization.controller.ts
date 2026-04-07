@@ -11,9 +11,13 @@ import {
 } from '@nestjs/common';
 import { OrganizationService } from './organization.service';
 import { SessionGuard } from '../auth/guards/session.guard';
-import { RbacGuard, RequirePermissions, WRITE, DELETE } from '../auth/guards/rbac.guard';
+import {
+  RbacGuard,
+  RequirePermissions,
+  WRITE,
+  DELETE,
+} from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
-import { UserPayload } from '../auth/auth.service';
 
 export class CreateOrganizationDto {
   name: string;
@@ -39,11 +43,7 @@ export class OrganizationController {
     @User() user: import('../auth/auth.service').UserPayload,
     @Body() dto: import('./organization.controller').CreateOrganizationDto,
   ) {
-    return this.organizationService.create(
-      user.workspaceId,
-      user.address,
-      dto,
-    );
+    return this.organizationService.create(user.workspaceId, user.address, dto);
   }
 
   @Get(':id')
@@ -104,7 +104,10 @@ export class OrganizationController {
     @User() user: import('../auth/auth.service').UserPayload,
     @Param('id') id: string,
   ) {
-    return this.organizationService.getOrganizationProfiles(user.workspaceId, id);
+    return this.organizationService.getOrganizationProfiles(
+      user.workspaceId,
+      id,
+    );
   }
 
   @Delete(':orgId/profiles/:profileId')
@@ -114,6 +117,10 @@ export class OrganizationController {
     @Param('orgId') orgId: string,
     @Param('profileId') profileId: string,
   ) {
-    return this.organizationService.unlinkProfile(user.workspaceId, orgId, profileId);
+    return this.organizationService.unlinkProfile(
+      user.workspaceId,
+      orgId,
+      profileId,
+    );
   }
 }

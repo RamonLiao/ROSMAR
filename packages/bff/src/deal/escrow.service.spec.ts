@@ -1,10 +1,12 @@
 // Mock ESM blockchain deps before any imports
 jest.mock('@mysten/sui/transactions', () => ({ Transaction: jest.fn() }));
 jest.mock('@mysten/sui/jsonRpc', () => ({ SuiJsonRpcClient: jest.fn() }));
-jest.mock('@mysten/sui/keypairs/ed25519', () => ({ Ed25519Keypair: jest.fn() }));
+jest.mock('@mysten/sui/keypairs/ed25519', () => ({
+  Ed25519Keypair: jest.fn(),
+}));
 
 import { Test } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EscrowService } from './escrow.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -40,7 +42,10 @@ describe('EscrowService', () => {
         EscrowService,
         { provide: PrismaService, useValue: prisma },
         { provide: TxBuilderService, useValue: {} },
-        { provide: SuiClientService, useValue: { executeTransaction: jest.fn() } },
+        {
+          provide: SuiClientService,
+          useValue: { executeTransaction: jest.fn() },
+        },
         {
           provide: ConfigService,
           useValue: {

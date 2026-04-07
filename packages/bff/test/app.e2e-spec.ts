@@ -1,5 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe, UnauthorizedException, ExecutionContext } from '@nestjs/common';
+import {
+  INestApplication,
+  ValidationPipe,
+  UnauthorizedException,
+  ExecutionContext,
+} from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
@@ -8,7 +13,6 @@ import { SessionGuard } from '../src/auth/guards/session.guard';
 import { RbacGuard } from '../src/auth/guards/rbac.guard';
 import { SuiClientService } from '../src/blockchain/sui.client';
 import { TxBuilderService } from '../src/blockchain/tx-builder.service';
-import { JwtService } from '@nestjs/jwt';
 
 // ---------- Mocks ----------
 
@@ -268,7 +272,10 @@ describe('Deals /api/deals', () => {
   });
 
   it('PUT /api/deals/:id/stage — update deal stage', async () => {
-    prisma.deal.update.mockResolvedValue({ ...sampleDeal, stage: 'closed-won' });
+    prisma.deal.update.mockResolvedValue({
+      ...sampleDeal,
+      stage: 'closed-won',
+    });
 
     const res = await request(app.getHttpServer())
       .put('/api/deals/deal-001/stage')
@@ -330,7 +337,10 @@ describe('Profiles /api/profiles', () => {
   });
 
   it('PUT /api/profiles/:id/tags — update tags', async () => {
-    prisma.profile.update.mockResolvedValue({ ...sampleProfile, tags: ['whale', 'vip'] });
+    prisma.profile.update.mockResolvedValue({
+      ...sampleProfile,
+      tags: ['whale', 'vip'],
+    });
 
     const res = await request(app.getHttpServer())
       .put('/api/profiles/profile-001/tags')
@@ -341,7 +351,10 @@ describe('Profiles /api/profiles', () => {
   });
 
   it('DELETE /api/profiles/:id — archive profile', async () => {
-    prisma.profile.update.mockResolvedValue({ ...sampleProfile, isArchived: true });
+    prisma.profile.update.mockResolvedValue({
+      ...sampleProfile,
+      isArchived: true,
+    });
 
     const res = await request(app.getHttpServer())
       .delete('/api/profiles/profile-001')
@@ -400,7 +413,10 @@ describe('Organizations /api/organizations', () => {
   });
 
   it('PUT /api/organizations/:id — update org', async () => {
-    prisma.organization.update.mockResolvedValue({ ...sampleOrg, name: 'Acme Inc' });
+    prisma.organization.update.mockResolvedValue({
+      ...sampleOrg,
+      name: 'Acme Inc',
+    });
 
     const res = await request(app.getHttpServer())
       .put('/api/organizations/org-001')
@@ -446,7 +462,11 @@ describe('Segments /api/segments', () => {
 
     const res = await request(app.getHttpServer())
       .post('/api/segments')
-      .send({ name: 'Whales', description: 'High-value users', rules: { minBalance: 1000 } })
+      .send({
+        name: 'Whales',
+        description: 'High-value users',
+        rules: { minBalance: 1000 },
+      })
       .expect(201);
 
     expect(res.body).toHaveProperty('txDigest', 'dry-run');
@@ -474,7 +494,10 @@ describe('Segments /api/segments', () => {
   });
 
   it('PUT /api/segments/:id — update segment', async () => {
-    prisma.segment.update.mockResolvedValue({ ...sampleSegment, name: 'Super Whales' });
+    prisma.segment.update.mockResolvedValue({
+      ...sampleSegment,
+      name: 'Super Whales',
+    });
 
     const res = await request(app.getHttpServer())
       .put('/api/segments/seg-001')
@@ -540,9 +563,7 @@ describe('Auth guard rejection', () => {
   });
 
   it('GET /api/deals — returns 401 without token', () => {
-    return request(strictApp.getHttpServer())
-      .get('/api/deals')
-      .expect(401);
+    return request(strictApp.getHttpServer()).get('/api/deals').expect(401);
   });
 
   it('POST /api/deals — returns 401 without token', () => {

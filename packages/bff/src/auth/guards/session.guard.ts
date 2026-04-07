@@ -19,8 +19,7 @@ export class SessionGuard implements CanActivate {
 
     // Extract token from httpOnly cookie
     const token =
-      request.cookies?.access_token ||
-      this.extractTokenFromHeader(request);
+      request.cookies?.access_token || this.extractTokenFromHeader(request);
 
     if (!token) {
       throw new UnauthorizedException('No access token provided');
@@ -33,7 +32,7 @@ export class SessionGuard implements CanActivate {
 
       // Attach user to request
       request.user = payload;
-    } catch (error) {
+    } catch (_error) {
       throw new UnauthorizedException('Invalid access token');
     }
 

@@ -13,9 +13,13 @@ import { ProfileService } from './profile.service';
 import { WalletClusterService } from './wallet-cluster.service';
 import { CacheService } from '../common/cache/cache.service';
 import { SessionGuard } from '../auth/guards/session.guard';
-import { RbacGuard, RequirePermissions, WRITE, DELETE } from '../auth/guards/rbac.guard';
+import {
+  RbacGuard,
+  RequirePermissions,
+  WRITE,
+  DELETE,
+} from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
-import { UserPayload } from '../auth/auth.service';
 import { CreateWalletDto } from './dto/wallet.dto';
 import { MergeProfileDto } from './dto/merge-profile.dto';
 
@@ -46,11 +50,7 @@ export class ProfileController {
     @User() user: import('../auth/auth.service').UserPayload,
     @Body() dto: import('./profile.controller').CreateProfileDto,
   ) {
-    return this.profileService.create(
-      user.workspaceId,
-      user.address,
-      dto,
-    );
+    return this.profileService.create(user.workspaceId, user.address, dto);
   }
 
   @Get(':id')
@@ -90,7 +90,12 @@ export class ProfileController {
     @Query('limit') limit = 20,
     @Query('offset') offset = 0,
   ) {
-    return this.profileService.getTimeline(user.workspaceId, id, +limit, +offset);
+    return this.profileService.getTimeline(
+      user.workspaceId,
+      id,
+      +limit,
+      +offset,
+    );
   }
 
   @Get()
@@ -218,9 +223,7 @@ export class ProfileController {
 
   @Post(':id/resolve-avatar')
   @RequirePermissions(WRITE)
-  async resolveAvatar(
-    @Param('id') id: string,
-  ) {
+  async resolveAvatar(@Param('id') id: string) {
     const avatarUrl = await this.profileService.resolveAndUpdateAvatar(id);
     return { avatarUrl };
   }
@@ -230,7 +233,10 @@ export class ProfileController {
     @User() user: import('../auth/auth.service').UserPayload,
     @Param('id') id: string,
   ) {
-    const nfts = await this.profileService.fetchNftWithTraits(user.workspaceId, id);
+    const nfts = await this.profileService.fetchNftWithTraits(
+      user.workspaceId,
+      id,
+    );
     return { nfts };
   }
 

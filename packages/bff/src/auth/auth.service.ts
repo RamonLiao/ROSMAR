@@ -1,4 +1,8 @@
-import { Injectable, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
@@ -52,19 +56,30 @@ export class AuthService {
     )!;
     const network = this.configService.get<string>('SUI_NETWORK', 'testnet');
     this.suiClient = new SuiJsonRpcClient({
-      url: this.configService.get<string>('SUI_RPC_URL', 'https://fullnode.testnet.sui.io:443'),
+      url: this.configService.get<string>(
+        'SUI_RPC_URL',
+        'https://fullnode.testnet.sui.io:443',
+      ),
       network,
     });
     this.rpId = this.configService.get<string>('WEBAUTHN_RP_ID', 'localhost');
-    this.rpName = this.configService.get<string>('WEBAUTHN_RP_NAME', 'ROSMAR CRM');
-    this.rpOrigin = this.configService.get<string>('WEBAUTHN_ORIGIN', 'http://localhost:3000');
+    this.rpName = this.configService.get<string>(
+      'WEBAUTHN_RP_NAME',
+      'ROSMAR CRM',
+    );
+    this.rpOrigin = this.configService.get<string>(
+      'WEBAUTHN_ORIGIN',
+      'http://localhost:3000',
+    );
   }
 
   /**
    * Lookup workspace membership by address. If none exists, auto-provision
    * a new workspace + owner membership.
    */
-  private async resolveOrCreateMembership(address: string): Promise<UserPayload> {
+  private async resolveOrCreateMembership(
+    address: string,
+  ): Promise<UserPayload> {
     return this.prisma.$transaction(async (tx) => {
       const membership = await tx.workspaceMember.findFirst({
         where: { address },
@@ -109,7 +124,11 @@ export class AuthService {
 
   async generateChallenge(): Promise<string> {
     const nonce = randomBytes(32).toString('hex');
-    await this.cacheService.set(`challenge:${nonce}`, (Date.now() + 300_000).toString(), 300); // 5 min TTL
+    await this.cacheService.set(
+      `challenge:${nonce}`,
+      (Date.now() + 300_000).toString(),
+      300,
+    ); // 5 min TTL
     return `Sign this message to authenticate with ROSMAR CRM:\n${nonce}`;
   }
 
@@ -141,12 +160,14 @@ export class AuthService {
     const user = await this.resolveOrCreateMembership(address);
     const result = this.issueTokens(user);
     this.emitWalletConnect(address, undefined, 'wallet');
-    this.auditTrail.log({
-      actor: address,
-      action: 'AUTH_WALLET_LOGIN',
-      resource: 'session',
-      resourceId: user.workspaceId,
-    }).catch(() => {}); // fire-and-forget
+    this.auditTrail
+      .log({
+        actor: address,
+        action: 'AUTH_WALLET_LOGIN',
+        resource: 'session',
+        resourceId: user.workspaceId,
+      })
+      .catch(() => {}); // fire-and-forget
     return result;
   }
 
@@ -155,12 +176,14 @@ export class AuthService {
     const user = await this.resolveOrCreateMembership(address);
     const result = this.issueTokens(user);
     this.emitWalletConnect(address, undefined, 'zklogin');
-    this.auditTrail.log({
-      actor: address,
-      action: 'AUTH_ZK_LOGIN',
-      resource: 'session',
-      resourceId: user.workspaceId,
-    }).catch(() => {}); // fire-and-forget
+    this.auditTrail
+      .log({
+        actor: address,
+        action: 'AUTH_ZK_LOGIN',
+        resource: 'session',
+        resourceId: user.workspaceId,
+      })
+      .catch(() => {}); // fire-and-forget
     return result;
   }
 
@@ -222,7 +245,9 @@ export class AuthService {
     await this.cacheService.evict(`webauthn:${expectedChallenge}`);
 
     if (!verification.verified || !verification.registrationInfo) {
-      throw new UnauthorizedException('Passkey registration verification failed');
+      throw new UnauthorizedException(
+        'Passkey registration verification failed',
+      );
     }
 
     const { credential } = verification.registrationInfo;
@@ -267,14 +292,18 @@ export class AuthService {
 
     // Extract challenge from response clientDataJSON
     const expectedChallenge = response.response?.clientDataJSON
-      ? JSON.parse(Buffer.from(response.response.clientDataJSON, 'base64url').toString()).challenge
+      ? JSON.parse(
+          Buffer.from(response.response.clientDataJSON, 'base64url').toString(),
+        ).challenge
       : undefined;
 
     if (!expectedChallenge) {
       throw new UnauthorizedException('Missing WebAuthn challenge in response');
     }
 
-    const stored = await this.cacheService.get<string>(`webauthn:${expectedChallenge}`);
+    const stored = await this.cacheService.get<string>(
+      `webauthn:${expectedChallenge}`,
+    );
     if (!stored) {
       throw new UnauthorizedException('Invalid or expired WebAuthn challenge');
     }
@@ -313,9 +342,10 @@ export class AuthService {
     try {
       const payload = this.jwtService.verify(refreshToken);
       const user = await this.resolveOrCreateMembership(payload.address);
-      const { accessToken, refreshToken: newRefreshToken } = this.issueTokens(user);
+      const { accessToken, refreshToken: newRefreshToken } =
+        this.issueTokens(user);
       return { accessToken, refreshToken: newRefreshToken, user };
-    } catch (error) {
+    } catch (_error) {
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
@@ -335,9 +365,13 @@ export class AuthService {
       // verifyPersonalMessageSignature handles the intent prefix added by signPersonalMessage
       // client is required for zkLogin signatures (fetches JWK + epoch from chain)
       const messageBytes = new TextEncoder().encode(message);
-      const publicKey = await verifyPersonalMessageSignature(messageBytes, signature, {
-        client: this.suiClient,
-      });
+      const publicKey = await verifyPersonalMessageSignature(
+        messageBytes,
+        signature,
+        {
+          client: this.suiClient,
+        },
+      );
 
       // Confirm the recovered address matches the claimed address
       return publicKey.toSuiAddress() === address;
@@ -351,7 +385,10 @@ export class AuthService {
    * Switch the caller's active workspace. Verifies membership, then
    * re-issues tokens scoped to the target workspace.
    */
-  async switchWorkspace(address: string, workspaceId: string): Promise<AuthResponse> {
+  async switchWorkspace(
+    address: string,
+    workspaceId: string,
+  ): Promise<AuthResponse> {
     const membership = await this.prisma.workspaceMember.findUnique({
       where: { workspaceId_address: { workspaceId, address } },
       include: { workspace: true },
@@ -370,12 +407,14 @@ export class AuthService {
     };
 
     const result = this.issueTokens(user);
-    this.auditTrail.log({
-      actor: address,
-      action: 'AUTH_SWITCH_WORKSPACE',
-      resource: 'workspace',
-      resourceId: workspaceId,
-    }).catch(() => {}); // fire-and-forget
+    this.auditTrail
+      .log({
+        actor: address,
+        action: 'AUTH_SWITCH_WORKSPACE',
+        resource: 'workspace',
+        resourceId: workspaceId,
+      })
+      .catch(() => {}); // fire-and-forget
     return result;
   }
 
@@ -385,7 +424,9 @@ export class AuthService {
    */
   async testLogin(address: string): Promise<AuthResponse> {
     if (process.env.NODE_ENV !== 'test') {
-      throw new ForbiddenException('testLogin is only available in test environment');
+      throw new ForbiddenException(
+        'testLogin is only available in test environment',
+      );
     }
     const user = await this.resolveOrCreateMembership(address);
     return this.issueTokens(user);
@@ -422,8 +463,14 @@ export class AuthService {
     });
   }
 
-  private async deriveZkLoginAddress(jwt: string, salt: string): Promise<string> {
-    const enokiUrl = this.configService.get<string>('ENOKI_API_URL', 'https://api.enoki.mystenlabs.com');
+  private async deriveZkLoginAddress(
+    jwt: string,
+    salt: string,
+  ): Promise<string> {
+    const enokiUrl = this.configService.get<string>(
+      'ENOKI_API_URL',
+      'https://api.enoki.mystenlabs.com',
+    );
     const enokiApiKey = this.configService.get<string>('ENOKI_API_KEY', '');
 
     try {
@@ -431,7 +478,7 @@ export class AuthService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${enokiApiKey}`,
+          Authorization: `Bearer ${enokiApiKey}`,
         },
         body: JSON.stringify({ jwt, salt }),
       });
