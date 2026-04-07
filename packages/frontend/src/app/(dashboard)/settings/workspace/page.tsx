@@ -18,7 +18,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspace, useUpdateWorkspace } from "@/lib/hooks/use-workspaces";
 import { usePasskeyRegisterOptions, usePasskeyRegisterVerify } from "@/lib/hooks/use-passkey";
 import { useAiConfig, useUpdateAiConfig } from "@/lib/hooks/use-ai-settings";
-import { useGasSettings } from "@/lib/hooks/use-gas-settings";
+import { useGasSettings, useUpdateGasSettings } from "@/lib/hooks/use-gas-settings";
 import {
   useCollectionWatchlist,
   useSetCollectionWatchlist,
@@ -340,7 +340,8 @@ export default function WorkspaceSettingsPage() {
   const [description, setDescription] = useState("");
 
   // Gas station settings
-  const { settings: gasSettings, updateSettings: updateGasSettings } = useGasSettings();
+  const { settings: gasSettings, isLoading: gasLoading } = useGasSettings();
+  const updateGasConfig = useUpdateGasSettings();
 
   // Passkey registration
   const passkeyRegOptions = usePasskeyRegisterOptions();
@@ -508,7 +509,7 @@ export default function WorkspaceSettingsPage() {
               id="gas-enabled"
               variant={gasSettings.enabled ? "default" : "outline"}
               size="sm"
-              onClick={() => updateGasSettings({ enabled: !gasSettings.enabled })}
+              onClick={() => updateGasConfig.mutate({ enabled: !gasSettings.enabled })}
             >
               {gasSettings.enabled ? "Enabled" : "Disabled"}
             </Button>
@@ -523,9 +524,12 @@ export default function WorkspaceSettingsPage() {
                 step="0.01"
                 min="0"
                 value={gasSettings.thresholdSui}
-                onChange={(e) =>
-                  updateGasSettings({ thresholdSui: parseFloat(e.target.value) || 0 })
-                }
+                onChange={(e) => {
+                  const sui = parseFloat(e.target.value) || 0;
+                  updateGasConfig.mutate({
+                    thresholdMist: String(Math.round(sui * 1_000_000_000)),
+                  });
+                }}
                 disabled={!gasSettings.enabled}
               />
               <p className="text-xs text-muted-foreground">
@@ -541,7 +545,7 @@ export default function WorkspaceSettingsPage() {
                 min="0"
                 value={gasSettings.dailyLimit}
                 onChange={(e) =>
-                  updateGasSettings({ dailyLimit: parseInt(e.target.value) || 0 })
+                  updateGasConfig.mutate({ dailyLimit: parseInt(e.target.value) || 0 })
                 }
                 disabled={!gasSettings.enabled}
               />

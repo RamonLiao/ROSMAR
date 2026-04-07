@@ -38,6 +38,7 @@ model Workspace {
   lookalikeResults  LookalikeResult[] @relation("WorkspaceLookalikes")
   gdprDeletionLogs  GdprDeletionLog[] @relation("WorkspaceGdprLogs")
   walletBalances    WalletBalance[]
+  gasConfig         WorkspaceGasConfig?
 
   @@map("workspaces")
 }
@@ -754,4 +755,28 @@ model WalletBalance {
   @@index([workspaceId, assetType, collectionName])
   @@index([profileId, assetType])
   @@map("wallet_balances")
+}
+
+model WorkspaceGasConfig {
+  id            String    @id @default(uuid())
+  workspaceId   String    @unique @map("workspace_id")
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+  enabled       Boolean   @default(false)
+  thresholdMist BigInt    @default(100000000) @map("threshold_mist")
+  dailyLimit    Int       @default(5) @map("daily_limit")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("workspace_gas_configs")
+}
+
+model GasSponsorGrant {
+  id          String   @id @default(uuid())
+  workspaceId String   @map("workspace_id")
+  address     String
+  profileId   String?  @map("profile_id")
+  grantedAt   DateTime @default(now()) @map("granted_at")
+
+  @@index([workspaceId, address, grantedAt])
+  @@map("gas_sponsor_grants")
 }

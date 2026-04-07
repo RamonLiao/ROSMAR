@@ -19,7 +19,8 @@ interface WalletConnectedEvent {
 export class GasSponsorListener {
   private readonly logger = new Logger(GasSponsorListener.name);
   private gasSponsorEnabled: boolean;
-  private thresholdMist: bigint;
+  private readonly fallbackThresholdMist: bigint;
+  private readonly fallbackMaxPerDay: number;
 
   constructor(
     private readonly suiClient: SuiClientService,
@@ -29,9 +30,11 @@ export class GasSponsorListener {
   ) {
     this.gasSponsorEnabled =
       this.configService.get<string>('GAS_SPONSOR_ENABLED', 'false') === 'true';
-    // Default: 0.1 SUI = 100_000_000 MIST
-    this.thresholdMist = BigInt(
+    this.fallbackThresholdMist = BigInt(
       this.configService.get<string>('GAS_SPONSOR_THRESHOLD_MIST', '100000000'),
+    );
+    this.fallbackMaxPerDay = Number(
+      this.configService.get<string>('GAS_SPONSOR_MAX_PER_DAY', '5'),
     );
   }
 
@@ -54,50 +57,65 @@ export class GasSponsorListener {
     }
 
     try {
+      // 1. Load per-workspace config (fallback to env vars)
+      const wsConfig = await this.prisma.workspaceGasConfig.findUnique({
+        where: { workspaceId },
+      });
+
+      const enabled = wsConfig?.enabled ?? true; // env-var already checked above
+      if (wsConfig && !enabled) return;
+
+      const thresholdMist = wsConfig?.thresholdMist ?? this.fallbackThresholdMist;
+      const maxPerDay = wsConfig?.dailyLimit ?? this.fallbackMaxPerDay;
+
+      // 2. Check balance
       const balanceResult = await this.suiClient.getClient().getBalance({
         owner: address,
       });
-
       const balance = BigInt(balanceResult.totalBalance);
 
-      if (balance < this.thresholdMist) {
-        this.logger.log(
-          `Low balance detected for ${address}: ${balance} MIST (threshold: ${this.thresholdMist})`,
-        );
+      if (balance >= thresholdMist) return;
 
-        // Rate-limit check (in-memory, resets on restart)
-        const todayKey = `${address}:${new Date().toISOString().slice(0, 10)}`;
-        const grantsToday = GasSponsorListener.grantCountCache.get(todayKey) ?? 0;
-        const maxPerDay = this.configService.get<number>('GAS_SPONSOR_MAX_PER_DAY', 5);
+      this.logger.log(
+        `Low balance detected for ${address}: ${balance} MIST (threshold: ${thresholdMist})`,
+      );
 
-        if (grantsToday >= maxPerDay) {
-          this.logger.warn(
-            `Gas sponsor rate limit reached for ${address} (${grantsToday}/${maxPerDay} today)`,
-          );
-          await this.createNotification(
-            workspaceId,
-            profile_id,
-            address,
-            'gas_sponsor_rate_limited',
-            'Daily gas sponsor limit reached',
-          );
-          return;
-        }
+      // 3. DB-based rate-limit check
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
 
-        // Record the grant
-        GasSponsorListener.grantCountCache.set(todayKey, grantsToday + 1);
-        this.logger.log(
-          `Gas sponsorship pre-approved for ${address} (${grantsToday + 1}/${maxPerDay} today)`,
-        );
-
-        await this.createNotification(
+      const grantsToday = await this.prisma.gasSponsorGrant.count({
+        where: {
           workspaceId,
-          profile_id,
           address,
-          'gas_sponsor_activated',
-          'Gas sponsorship activated for next transaction',
+          grantedAt: { gte: startOfDay },
+        },
+      });
+
+      if (grantsToday >= maxPerDay) {
+        this.logger.warn(
+          `Gas sponsor rate limit reached for ${address} (${grantsToday}/${maxPerDay} today)`,
         );
+        await this.createNotification(
+          workspaceId, profile_id, address,
+          'gas_sponsor_rate_limited', 'Daily gas sponsor limit reached',
+        );
+        return;
       }
+
+      // 4. Record grant in DB
+      await this.prisma.gasSponsorGrant.create({
+        data: { workspaceId, address, profileId: profile_id },
+      });
+
+      this.logger.log(
+        `Gas sponsorship pre-approved for ${address} (${grantsToday + 1}/${maxPerDay} today)`,
+      );
+
+      await this.createNotification(
+        workspaceId, profile_id, address,
+        'gas_sponsor_activated', 'Gas sponsorship activated for next transaction',
+      );
     } catch (error: any) {
       this.logger.error(
         `Failed to check balance for ${address}: ${error.message}`,
@@ -105,9 +123,6 @@ export class GasSponsorListener {
       );
     }
   }
-
-  // TODO: Replace with Prisma GasSponsorGrant model when ready
-  private static grantCountCache = new Map<string, number>();
 
   private async createNotification(
     workspaceId: string,

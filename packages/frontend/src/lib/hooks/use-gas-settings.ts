@@ -1,49 +1,61 @@
-import { useState, useCallback } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api/client";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 
 export interface GasStationSettings {
   enabled: boolean;
-  thresholdSui: number;
+  thresholdMist: string;
   dailyLimit: number;
 }
 
-const STORAGE_KEY = "gas-station-settings";
+export function useGasSettings() {
+  const workspaceId = useWorkspaceStore((s) => s.activeWorkspace?.id);
 
-const DEFAULT_SETTINGS: GasStationSettings = {
-  enabled: false,
-  thresholdSui: 0.1,
-  dailyLimit: 100,
-};
+  const { data, isLoading } = useQuery({
+    queryKey: ["gas-config", workspaceId],
+    queryFn: () =>
+      apiClient.get<GasStationSettings>(
+        `/workspaces/${workspaceId}/gas-config`,
+      ),
+    enabled: !!workspaceId,
+  });
 
-function loadSettings(): GasStationSettings {
-  if (typeof window === "undefined") return DEFAULT_SETTINGS;
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return JSON.parse(stored);
-  } catch {
-    // ignore
-  }
-  return DEFAULT_SETTINGS;
+  const settings: GasStationSettings = data ?? {
+    enabled: false,
+    thresholdMist: "100000000",
+    dailyLimit: 5,
+  };
+
+  // Convert MIST to SUI for display
+  const thresholdSui = Number(settings.thresholdMist) / 1_000_000_000;
+
+  return {
+    settings: {
+      enabled: settings.enabled,
+      thresholdSui,
+      dailyLimit: settings.dailyLimit,
+    },
+    isLoading,
+    workspaceId,
+  };
 }
 
-export function useGasSettings() {
-  const [settings, setSettingsState] =
-    useState<GasStationSettings>(loadSettings);
+export function useUpdateGasSettings() {
+  const queryClient = useQueryClient();
+  const workspaceId = useWorkspaceStore((s) => s.activeWorkspace?.id);
 
-  const updateSettings = useCallback(
-    (partial: Partial<GasStationSettings>) => {
-      setSettingsState((prev) => {
-        const updated = { ...prev, ...partial };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        return updated;
-      });
+  return useMutation({
+    mutationFn: (data: {
+      enabled?: boolean;
+      thresholdMist?: string;
+      dailyLimit?: number;
+    }) =>
+      apiClient.put<GasStationSettings>(
+        `/workspaces/${workspaceId}/gas-config`,
+        data,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["gas-config", workspaceId] });
     },
-    [],
-  );
-
-  const reset = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_SETTINGS));
-    setSettingsState(DEFAULT_SETTINGS);
-  }, []);
-
-  return { settings, updateSettings, reset };
+  });
 }
