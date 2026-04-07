@@ -40,12 +40,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm lint
-
       - name: Generate Prisma client
         working-directory: packages/bff
         run: npx prisma generate
+
+      - name: Lint
+        run: pnpm lint
 
       - name: Run BFF tests
         working-directory: packages/bff
