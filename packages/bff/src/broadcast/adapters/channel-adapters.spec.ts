@@ -3,9 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { TelegramChannelAdapter } from './telegram-channel.adapter';
 import { DiscordChannelAdapter } from './discord-channel.adapter';
 import { XChannelAdapter } from './x-channel.adapter';
+import { EmailChannelAdapter } from './email-channel.adapter';
 import { ChannelAdapterRegistry } from './channel-adapter.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SocialLinkService } from '../../social/social-link.service';
+import { EmailService } from '../../messaging/email.service';
 
 // Mock global fetch
 const mockFetch = jest.fn();
@@ -179,6 +181,54 @@ describe('Channel Adapters', () => {
     });
   });
 
+  describe('EmailChannelAdapter', () => {
+    let mockEmailService: any;
+
+    beforeEach(() => {
+      mockEmailService = {
+        sendMessage: jest
+          .fn()
+          .mockResolvedValue({ messageId: 'em-123', to: 'a@b.com', status: 'sent' }),
+      };
+    });
+
+    it('should send email via EmailService', async () => {
+      const adapter = new EmailChannelAdapter(mockEmailService);
+      const result = await adapter.send('Hello', {
+        profileId: 'p-1',
+        workspaceId: 'ws-1',
+        subject: 'Test Subject',
+      });
+
+      expect(result.messageId).toBe('em-123');
+      expect(mockEmailService.sendMessage).toHaveBeenCalledWith('ws-1', {
+        profileId: 'p-1',
+        subject: 'Test Subject',
+        body: 'Hello',
+      });
+    });
+
+    it('should use default subject when not provided', async () => {
+      const adapter = new EmailChannelAdapter(mockEmailService);
+      await adapter.send('Hello', { profileId: 'p-1', workspaceId: 'ws-1' });
+
+      expect(mockEmailService.sendMessage).toHaveBeenCalledWith(
+        'ws-1',
+        expect.objectContaining({ subject: 'Update from your community' }),
+      );
+    });
+
+    it('should throw if profileId or workspaceId missing', async () => {
+      const adapter = new EmailChannelAdapter(mockEmailService);
+      await expect(adapter.send('Hello', {})).rejects.toThrow(
+        'profileId and workspaceId required for email adapter',
+      );
+      await expect(
+        adapter.send('Hello', { profileId: 'p-1' }),
+      ).rejects.toThrow('profileId and workspaceId required for email adapter');
+    });
+  });
+
   describe('ChannelAdapterRegistry', () => {
     it('should register and retrieve all adapters', async () => {
       const module = await Test.createTestingModule({
@@ -187,9 +237,11 @@ describe('Channel Adapters', () => {
           TelegramChannelAdapter,
           DiscordChannelAdapter,
           XChannelAdapter,
+          EmailChannelAdapter,
           { provide: ConfigService, useValue: createConfigService() },
           { provide: PrismaService, useValue: {} },
           { provide: SocialLinkService, useValue: {} },
+          { provide: EmailService, useValue: {} },
         ],
       }).compile();
 
@@ -198,7 +250,8 @@ describe('Channel Adapters', () => {
       expect(registry.get('telegram')).toBeInstanceOf(TelegramChannelAdapter);
       expect(registry.get('discord')).toBeInstanceOf(DiscordChannelAdapter);
       expect(registry.get('x')).toBeInstanceOf(XChannelAdapter);
-      expect(registry.getAll()).toHaveLength(3);
+      expect(registry.get('email')).toBeInstanceOf(EmailChannelAdapter);
+      expect(registry.getAll()).toHaveLength(4);
     });
 
     it('should return undefined for unknown channel', async () => {
@@ -208,9 +261,11 @@ describe('Channel Adapters', () => {
           TelegramChannelAdapter,
           DiscordChannelAdapter,
           XChannelAdapter,
+          EmailChannelAdapter,
           { provide: ConfigService, useValue: createConfigService() },
           { provide: PrismaService, useValue: {} },
           { provide: SocialLinkService, useValue: {} },
+          { provide: EmailService, useValue: {} },
         ],
       }).compile();
 

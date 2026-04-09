@@ -40,8 +40,16 @@ describe('BroadcastService', () => {
 
   describe('create', () => {
     it('should create a draft broadcast', async () => {
-      const dto = { title: 'Hello', content: 'World', channels: ['telegram', 'discord'] };
-      prisma.broadcast.create.mockResolvedValue({ id: 'b-1', ...dto, status: 'draft' });
+      const dto = {
+        title: 'Hello',
+        content: 'World',
+        channels: ['telegram', 'discord'],
+      };
+      prisma.broadcast.create.mockResolvedValue({
+        id: 'b-1',
+        ...dto,
+        status: 'draft',
+      });
 
       const result = await service.create('ws-1', dto);
 
@@ -62,8 +70,14 @@ describe('BroadcastService', () => {
 
   describe('update', () => {
     it('should update a draft broadcast', async () => {
-      prisma.broadcast.findUnique.mockResolvedValue({ id: 'b-1', status: 'draft' });
-      prisma.broadcast.update.mockResolvedValue({ id: 'b-1', title: 'Updated' });
+      prisma.broadcast.findUnique.mockResolvedValue({
+        id: 'b-1',
+        status: 'draft',
+      });
+      prisma.broadcast.update.mockResolvedValue({
+        id: 'b-1',
+        title: 'Updated',
+      });
 
       const result = await service.update('b-1', { title: 'Updated' });
 
@@ -75,7 +89,10 @@ describe('BroadcastService', () => {
     });
 
     it('should reject updates on non-draft broadcasts', async () => {
-      prisma.broadcast.findUnique.mockResolvedValue({ id: 'b-1', status: 'sent' });
+      prisma.broadcast.findUnique.mockResolvedValue({
+        id: 'b-1',
+        status: 'sent',
+      });
 
       await expect(service.update('b-1', { title: 'Updated' })).rejects.toThrow(
         'Cannot edit a broadcast that is not in draft status',
@@ -89,11 +106,19 @@ describe('BroadcastService', () => {
         id: 'b-1',
         content: 'Hello world',
         channels: ['telegram', 'discord'],
+        workspaceId: 'ws-1',
         status: 'draft',
+        workspace: { name: 'TestWS' },
       });
 
-      const telegramAdapter = { channel: 'telegram', send: jest.fn().mockResolvedValue({ messageId: 'tg-123' }) };
-      const discordAdapter = { channel: 'discord', send: jest.fn().mockResolvedValue({ messageId: 'dc-456' }) };
+      const telegramAdapter = {
+        channel: 'telegram',
+        send: jest.fn().mockResolvedValue({ messageId: 'tg-123' }),
+      };
+      const discordAdapter = {
+        channel: 'discord',
+        send: jest.fn().mockResolvedValue({ messageId: 'dc-456' }),
+      };
 
       registry.get.mockImplementation((ch: string) => {
         if (ch === 'telegram') return telegramAdapter;
@@ -111,8 +136,12 @@ describe('BroadcastService', () => {
         data: { status: 'sending' },
       });
 
-      expect(telegramAdapter.send).toHaveBeenCalledWith('Hello world', {});
-      expect(discordAdapter.send).toHaveBeenCalledWith('Hello world', {});
+      expect(telegramAdapter.send).toHaveBeenCalledWith('Hello world', {
+        workspaceId: 'ws-1',
+      });
+      expect(discordAdapter.send).toHaveBeenCalledWith('Hello world', {
+        workspaceId: 'ws-1',
+      });
 
       expect(prisma.broadcastDelivery.create).toHaveBeenCalledTimes(2);
 
@@ -128,7 +157,9 @@ describe('BroadcastService', () => {
         id: 'b-1',
         content: 'Hello',
         channels: ['telegram'],
+        workspaceId: 'ws-1',
         status: 'draft',
+        workspace: { name: 'TestWS' },
       });
 
       const telegramAdapter = {
@@ -155,8 +186,14 @@ describe('BroadcastService', () => {
 
   describe('schedule', () => {
     it('should set status to scheduled with scheduledAt', async () => {
-      prisma.broadcast.findUnique.mockResolvedValue({ id: 'b-1', status: 'draft' });
-      prisma.broadcast.update.mockResolvedValue({ id: 'b-1', status: 'scheduled' });
+      prisma.broadcast.findUnique.mockResolvedValue({
+        id: 'b-1',
+        status: 'draft',
+      });
+      prisma.broadcast.update.mockResolvedValue({
+        id: 'b-1',
+        status: 'scheduled',
+      });
 
       const date = new Date('2026-04-01T10:00:00Z');
       await service.schedule('b-1', date);
@@ -201,6 +238,110 @@ describe('BroadcastService', () => {
         _count: { status: true },
       });
       expect(result).toHaveLength(3);
+    });
+  });
+
+  describe('renderTemplate', () => {
+    it('should replace profile and workspace variables', () => {
+      const result = service.renderTemplate(
+        'Hello {{profile.name}} from {{workspace.name}}!',
+        { profile: { name: 'Alice' }, workspace: { name: 'ROSMAR' } },
+      );
+      expect(result).toBe('Hello Alice from ROSMAR!');
+    });
+
+    it('should preserve unknown variables', () => {
+      const result = service.renderTemplate(
+        'Hello {{profile.unknownField}}!',
+        { profile: { name: 'Alice' } },
+      );
+      expect(result).toBe('Hello {{profile.unknownField}}!');
+    });
+
+    it('should handle missing context gracefully', () => {
+      const result = service.renderTemplate('Hello {{profile.name}}!', {});
+      expect(result).toBe('Hello {{profile.name}}!');
+    });
+
+    it('should handle null values by preserving placeholder', () => {
+      const result = service.renderTemplate('Hi {{profile.ensName}}!', {
+        profile: { name: 'Bob' },
+      });
+      expect(result).toBe('Hi {{profile.ensName}}!');
+    });
+  });
+
+  describe('send with email channel', () => {
+    it('should send per-recipient email when segmentId exists', async () => {
+      prisma.broadcast.findUnique.mockResolvedValue({
+        id: 'b-1',
+        content: 'Hello {{profile.name}} from {{workspace.name}}!',
+        channels: ['email'],
+        workspaceId: 'ws-1',
+        segmentId: 'seg-1',
+        title: 'Newsletter',
+        status: 'draft',
+        workspace: { name: 'ROSMAR' },
+      });
+
+      (prisma as any).segmentMember = {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            profile: {
+              id: 'p-1',
+              name: 'Alice',
+              primaryAddress: '0xabc',
+              ensName: null,
+              tier: 'gold',
+              email: 'alice@test.com',
+            },
+          },
+          {
+            profile: {
+              id: 'p-2',
+              name: 'Bob',
+              primaryAddress: null,
+              ensName: null,
+              tier: null,
+              email: 'bob@test.com',
+            },
+          },
+          {
+            profile: {
+              id: 'p-3',
+              name: 'NoEmail',
+              primaryAddress: null,
+              ensName: null,
+              tier: null,
+              email: null,
+            },
+          },
+        ]),
+      };
+
+      const emailAdapter = {
+        channel: 'email',
+        send: jest.fn().mockResolvedValue({ messageId: 'em-1' }),
+      };
+      registry.get.mockImplementation((ch: string) =>
+        ch === 'email' ? emailAdapter : undefined,
+      );
+
+      prisma.broadcastDelivery.create.mockResolvedValue({});
+      prisma.broadcast.update.mockResolvedValue({});
+
+      await service.send('b-1');
+
+      // Only 2 emails (p-3 has no email)
+      expect(emailAdapter.send).toHaveBeenCalledTimes(2);
+      expect(emailAdapter.send).toHaveBeenCalledWith(
+        'Hello Alice from ROSMAR!',
+        { profileId: 'p-1', workspaceId: 'ws-1', subject: 'Newsletter' },
+      );
+      expect(emailAdapter.send).toHaveBeenCalledWith(
+        'Hello Bob from ROSMAR!',
+        { profileId: 'p-2', workspaceId: 'ws-1', subject: 'Newsletter' },
+      );
     });
   });
 });

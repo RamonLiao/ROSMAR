@@ -5,10 +5,12 @@ import { ChannelAdapterRegistry } from './adapters/channel-adapter.registry';
 import { TelegramChannelAdapter } from './adapters/telegram-channel.adapter';
 import { DiscordChannelAdapter } from './adapters/discord-channel.adapter';
 import { XChannelAdapter } from './adapters/x-channel.adapter';
+import { EmailChannelAdapter } from './adapters/email-channel.adapter';
 import { AuthModule } from '../auth/auth.module';
+import { MessagingModule } from '../messaging/messaging.module';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, MessagingModule],
   controllers: [BroadcastController],
   providers: [
     BroadcastService,
@@ -16,6 +18,7 @@ import { AuthModule } from '../auth/auth.module';
     TelegramChannelAdapter,
     DiscordChannelAdapter,
     XChannelAdapter,
+    EmailChannelAdapter,
   ],
   exports: [BroadcastService],
 })

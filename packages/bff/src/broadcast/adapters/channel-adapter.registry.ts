@@ -3,6 +3,7 @@ import type { ChannelAdapter } from './channel-adapter.interface';
 import { TelegramChannelAdapter } from './telegram-channel.adapter';
 import { DiscordChannelAdapter } from './discord-channel.adapter';
 import { XChannelAdapter } from './x-channel.adapter';
+import { EmailChannelAdapter } from './email-channel.adapter';
 
 @Injectable()
 export class ChannelAdapterRegistry {
@@ -12,10 +13,12 @@ export class ChannelAdapterRegistry {
     private readonly telegram: TelegramChannelAdapter,
     private readonly discord: DiscordChannelAdapter,
     private readonly x: XChannelAdapter,
+    private readonly email: EmailChannelAdapter,
   ) {
     this.register(telegram);
     this.register(discord);
     this.register(x);
+    this.register(email);
   }
 
   register(adapter: ChannelAdapter) {

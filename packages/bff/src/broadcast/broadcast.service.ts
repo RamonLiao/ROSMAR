@@ -1,7 +1,25 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChannelAdapterRegistry } from './adapters/channel-adapter.registry';
-import type { CreateBroadcastDto, UpdateBroadcastDto } from './dto/broadcast.dto';
+import type {
+  CreateBroadcastDto,
+  UpdateBroadcastDto,
+} from './dto/broadcast.dto';
+
+export interface TemplateContext {
+  profile?: {
+    name?: string;
+    primaryAddress?: string;
+    ensName?: string;
+    tier?: string;
+  };
+  workspace?: { name?: string };
+}
 
 @Injectable()
 export class BroadcastService {
@@ -11,6 +29,13 @@ export class BroadcastService {
     private readonly prisma: PrismaService,
     private readonly registry: ChannelAdapterRegistry,
   ) {}
+
+  renderTemplate(content: string, context: TemplateContext): string {
+    return content.replace(/\{\{(\w+)\.(\w+)\}\}/g, (_match, obj, key) => {
+      const value = (context as any)?.[obj]?.[key];
+      return value != null ? String(value) : _match;
+    });
+  }
 
   async create(workspaceId: string, dto: CreateBroadcastDto) {
     return this.prisma.broadcast.create({
@@ -30,7 +55,9 @@ export class BroadcastService {
     const broadcast = await this.prisma.broadcast.findUnique({ where: { id } });
     if (!broadcast) throw new NotFoundException('Broadcast not found');
     if (broadcast.status !== 'draft') {
-      throw new BadRequestException('Cannot edit a broadcast that is not in draft status');
+      throw new BadRequestException(
+        'Cannot edit a broadcast that is not in draft status',
+      );
     }
 
     return this.prisma.broadcast.update({
@@ -40,7 +67,10 @@ export class BroadcastService {
   }
 
   async send(id: string) {
-    const broadcast = await this.prisma.broadcast.findUnique({ where: { id } });
+    const broadcast = await this.prisma.broadcast.findUnique({
+      where: { id },
+      include: { workspace: { select: { name: true } } },
+    });
     if (!broadcast) throw new NotFoundException('Broadcast not found');
 
     // Set status to sending
@@ -48,6 +78,10 @@ export class BroadcastService {
       where: { id },
       data: { status: 'sending' },
     });
+
+    const workspaceCtx: TemplateContext = {
+      workspace: { name: (broadcast as any).workspace?.name ?? '' },
+    };
 
     const channels = broadcast.channels as string[];
     let allFailed = true;
@@ -67,8 +101,37 @@ export class BroadcastService {
         continue;
       }
 
+      // Email channel: per-recipient with profile context
+      if (channel === 'email' && broadcast.segmentId) {
+        try {
+          const stats = await this.sendEmailPerRecipient(
+            broadcast,
+            workspaceCtx,
+          );
+          if (stats.delivered > 0) allFailed = false;
+        } catch (err: any) {
+          this.logger.error(
+            `Failed email per-recipient send: ${err.message}`,
+          );
+          await this.prisma.broadcastDelivery.create({
+            data: {
+              broadcastId: id,
+              channel,
+              status: 'failed',
+              error: err.message,
+            },
+          });
+        }
+        continue;
+      }
+
+      // Non-email channels: render with workspace context only
+      const rendered = this.renderTemplate(broadcast.content, workspaceCtx);
+
       try {
-        const result = await adapter.send(broadcast.content, {});
+        const result = await adapter.send(rendered, {
+          workspaceId: broadcast.workspaceId,
+        });
         await this.prisma.broadcastDelivery.create({
           data: {
             broadcastId: id,
@@ -100,6 +163,81 @@ export class BroadcastService {
         sentAt: new Date(),
       },
     });
+  }
+
+  private async sendEmailPerRecipient(
+    broadcast: any,
+    workspaceCtx: TemplateContext,
+  ): Promise<{ total: number; delivered: number; failed: number }> {
+    const members = await this.prisma.segmentMember.findMany({
+      where: { segmentId: broadcast.segmentId },
+      include: {
+        profile: {
+          select: {
+            id: true,
+            name: true,
+            primaryAddress: true,
+            ensName: true,
+            tier: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    const emailAdapter = this.registry.get('email')!;
+    let delivered = 0;
+    let failed = 0;
+
+    for (const member of members) {
+      const profile = member.profile;
+      if (!profile?.email) continue;
+
+      const context: TemplateContext = {
+        ...workspaceCtx,
+        profile: {
+          name: profile.name ?? undefined,
+          primaryAddress: profile.primaryAddress ?? undefined,
+          ensName: profile.ensName ?? undefined,
+          tier: profile.tier ?? undefined,
+        },
+      };
+
+      const rendered = this.renderTemplate(broadcast.content, context);
+
+      try {
+        const result = await emailAdapter.send(rendered, {
+          profileId: profile.id,
+          workspaceId: broadcast.workspaceId,
+          subject: broadcast.title,
+        });
+        await this.prisma.broadcastDelivery.create({
+          data: {
+            broadcastId: broadcast.id,
+            channel: 'email',
+            status: 'delivered',
+            platformMessageId: result.messageId,
+            deliveredAt: new Date(),
+          },
+        });
+        delivered++;
+      } catch (err: any) {
+        this.logger.error(
+          `Email to profile ${profile.id} failed: ${err.message}`,
+        );
+        await this.prisma.broadcastDelivery.create({
+          data: {
+            broadcastId: broadcast.id,
+            channel: 'email',
+            status: 'failed',
+            error: err.message,
+          },
+        });
+        failed++;
+      }
+    }
+
+    return { total: members.length, delivered, failed };
   }
 
   async schedule(id: string, scheduledAt: Date) {
