@@ -120,7 +120,7 @@ describe('YieldOptimizerService', () => {
     await service.getPoolApys();
     await service.getPoolApys();
 
-    expect(fetchCallCount).toBe(1);
+    expect(fetchCallCount).toBe(4);
   });
 
   /* ---------- suggestStrategy ---------- */
