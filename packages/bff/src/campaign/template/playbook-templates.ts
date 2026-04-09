@@ -78,4 +78,52 @@ export const PLAYBOOK_TEMPLATES: PlaybookTemplate[] = [
       },
     ],
   },
+  {
+    id: 're-engagement',
+    name: 'Re-engagement Campaign',
+    description:
+      'Win back users who left a segment with email and Telegram outreach.',
+    triggerType: 'segment_exited',
+    steps: [
+      {
+        type: 'send_email',
+        config: {
+          subject: 'We miss you!',
+          content:
+            "Come back and check out what's new in our community.",
+        },
+      },
+      {
+        type: 'send_telegram',
+        config: {
+          content:
+            "Hey! We noticed you've been away. Come check out what's new!",
+        },
+        delay: 86400000,
+      },
+    ],
+  },
+  {
+    id: 'social-announcement',
+    name: 'Cross-Platform Announcement',
+    description:
+      'Announce updates across X, Discord, and Telegram simultaneously.',
+    triggerType: 'segment_entered',
+    steps: [
+      {
+        type: 'send_x',
+        config: { content: 'Big news from our community! Check it out.' },
+      },
+      {
+        type: 'send_discord',
+        config: {
+          content: 'Big news! Check the announcement channel for details.',
+        },
+      },
+      {
+        type: 'send_telegram',
+        config: { content: 'Big news! Check it out.' },
+      },
+    ],
+  },
 ];
