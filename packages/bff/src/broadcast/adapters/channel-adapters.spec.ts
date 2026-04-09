@@ -4,6 +4,8 @@ import { TelegramChannelAdapter } from './telegram-channel.adapter';
 import { DiscordChannelAdapter } from './discord-channel.adapter';
 import { XChannelAdapter } from './x-channel.adapter';
 import { ChannelAdapterRegistry } from './channel-adapter.registry';
+import { PrismaService } from '../../prisma/prisma.service';
+import { SocialLinkService } from '../../social/social-link.service';
 
 // Mock global fetch
 const mockFetch = jest.fn();
@@ -47,13 +49,21 @@ describe('Channel Adapters', () => {
     it('should throw if TELEGRAM_BOT_TOKEN is missing', async () => {
       delete config.TELEGRAM_BOT_TOKEN;
       const adapter = new TelegramChannelAdapter(createConfigService());
-      await expect(adapter.send('Hello', {})).rejects.toThrow('TELEGRAM_BOT_TOKEN not configured');
+      await expect(adapter.send('Hello', {})).rejects.toThrow(
+        'TELEGRAM_BOT_TOKEN not configured',
+      );
     });
 
     it('should throw on API error', async () => {
-      mockFetch.mockResolvedValue({ ok: false, status: 400, text: async () => 'Bad Request' });
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        text: async () => 'Bad Request',
+      });
       const adapter = new TelegramChannelAdapter(createConfigService());
-      await expect(adapter.send('Hello', {})).rejects.toThrow('Telegram API error: 400');
+      await expect(adapter.send('Hello', {})).rejects.toThrow(
+        'Telegram API error: 400',
+      );
     });
   });
 
@@ -80,34 +90,92 @@ describe('Channel Adapters', () => {
     it('should throw if DISCORD_BOT_TOKEN is missing', async () => {
       delete config.DISCORD_BOT_TOKEN;
       const adapter = new DiscordChannelAdapter(createConfigService());
-      await expect(adapter.send('Hello', {})).rejects.toThrow('DISCORD_BOT_TOKEN not configured');
+      await expect(adapter.send('Hello', {})).rejects.toThrow(
+        'DISCORD_BOT_TOKEN not configured',
+      );
     });
   });
 
   describe('XChannelAdapter', () => {
-    it('should post tweet via X API v2', async () => {
+    let mockPrisma: any;
+    let mockSocialLinkService: any;
+
+    beforeEach(() => {
+      mockPrisma = {
+        workspace: {
+          findUnique: jest.fn().mockResolvedValue({ id: 'ws-1', ownerId: 'owner-1' }),
+        },
+        socialLink: {
+          findUnique: jest.fn().mockResolvedValue({ oauthTokenEncrypted: 'enc-token' }),
+        },
+      };
+      mockSocialLinkService = {
+        decryptToken: jest.fn().mockReturnValue('decrypted-oauth-token'),
+      };
+    });
+
+    it('should post tweet using decrypted OAuth token', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => ({ data: { id: 'tweet-123' } }),
       });
 
-      const adapter = new XChannelAdapter(createConfigService());
-      const result = await adapter.send('Hello X', {});
+      const adapter = new XChannelAdapter(
+        createConfigService(),
+        mockPrisma,
+        mockSocialLinkService,
+      );
+      const result = await adapter.send('Hello X', { workspaceId: 'ws-1' });
 
       expect(result.messageId).toBe('tweet-123');
+      expect(mockPrisma.workspace.findUnique).toHaveBeenCalledWith({
+        where: { id: 'ws-1' },
+      });
+      expect(mockPrisma.socialLink.findUnique).toHaveBeenCalledWith({
+        where: {
+          profileId_platform: { profileId: 'owner-1', platform: 'x' },
+        },
+      });
+      expect(mockSocialLinkService.decryptToken).toHaveBeenCalledWith('enc-token');
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.x.com/2/tweets',
         expect.objectContaining({
           method: 'POST',
-          headers: expect.objectContaining({ Authorization: 'Bearer x-token' }),
+          headers: expect.objectContaining({
+            Authorization: 'Bearer decrypted-oauth-token',
+          }),
         }),
       );
     });
 
-    it('should throw if X_BEARER_TOKEN is missing', async () => {
-      delete config.X_BEARER_TOKEN;
-      const adapter = new XChannelAdapter(createConfigService());
-      await expect(adapter.send('Hello', {})).rejects.toThrow('X_BEARER_TOKEN not configured');
+    it('should truncate content over 280 chars', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: { id: 'tweet-456' } }),
+      });
+
+      const longContent = 'A'.repeat(300);
+      const adapter = new XChannelAdapter(
+        createConfigService(),
+        mockPrisma,
+        mockSocialLinkService,
+      );
+      await adapter.send(longContent, { workspaceId: 'ws-1' });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.text).toHaveLength(280);
+      expect(body.text.endsWith('...')).toBe(true);
+    });
+
+    it('should throw if no workspaceId', async () => {
+      const adapter = new XChannelAdapter(
+        createConfigService(),
+        mockPrisma,
+        mockSocialLinkService,
+      );
+      await expect(adapter.send('Hello', {})).rejects.toThrow(
+        'workspaceId is required for X channel',
+      );
     });
   });
 
@@ -120,6 +188,8 @@ describe('Channel Adapters', () => {
           DiscordChannelAdapter,
           XChannelAdapter,
           { provide: ConfigService, useValue: createConfigService() },
+          { provide: PrismaService, useValue: {} },
+          { provide: SocialLinkService, useValue: {} },
         ],
       }).compile();
 
@@ -139,6 +209,8 @@ describe('Channel Adapters', () => {
           DiscordChannelAdapter,
           XChannelAdapter,
           { provide: ConfigService, useValue: createConfigService() },
+          { provide: PrismaService, useValue: {} },
+          { provide: SocialLinkService, useValue: {} },
         ],
       }).compile();
 
