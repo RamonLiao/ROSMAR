@@ -1,12 +1,20 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { DiscordOAuthAdapter } from './adapters/discord-oauth.adapter';
-import { TelegramOAuthAdapter, TelegramLoginData } from './adapters/telegram-oauth.adapter';
+import {
+  TelegramOAuthAdapter,
+  TelegramLoginData,
+} from './adapters/telegram-oauth.adapter';
 import { XOAuthAdapter } from './adapters/x-oauth.adapter';
 import { GoogleZkLoginAdapter } from './adapters/google-zklogin.adapter';
 import { AppleZkLoginAdapter } from './adapters/apple-zklogin.adapter';
 import * as crypto from 'crypto';
+import { CacheService } from '../common/cache/cache.service';
 
 export type SocialPlatform = 'discord' | 'telegram' | 'x' | 'apple' | 'google';
 
@@ -19,8 +27,6 @@ interface OAuthState {
 @Injectable()
 export class SocialLinkService {
   private readonly encryptionKey: Buffer;
-  // In-memory state store; production would use Redis
-  private stateStore = new Map<string, OAuthState>();
 
   constructor(
     private prisma: PrismaService,
@@ -30,16 +36,23 @@ export class SocialLinkService {
     private xAdapter: XOAuthAdapter,
     private googleAdapter: GoogleZkLoginAdapter,
     private appleAdapter: AppleZkLoginAdapter,
+    private readonly cacheService: CacheService,
   ) {
-    const keyHex = this.config.get<string>('SOCIAL_ENCRYPTION_KEY', '0'.repeat(64));
+    const keyHex = this.config.get<string>(
+      'SOCIAL_ENCRYPTION_KEY',
+      '0'.repeat(64),
+    );
     this.encryptionKey = Buffer.from(keyHex, 'hex');
   }
 
-  getAuthUrl(platform: SocialPlatform, profileId: string): { url: string; state: string } {
+  async getAuthUrl(
+    platform: SocialPlatform,
+    profileId: string,
+  ): Promise<{ url: string; state: string }> {
     const state = crypto.randomBytes(16).toString('hex');
 
     if (platform === 'discord') {
-      this.stateStore.set(state, { profileId, platform });
+      await this.cacheService.set(`oauth-state:${state}`, { profileId, platform }, 600);
       return { url: this.discordAdapter.getAuthUrl(state), state };
     }
 
@@ -49,19 +62,21 @@ export class SocialLinkService {
         .createHash('sha256')
         .update(codeVerifier)
         .digest('base64url');
-      this.stateStore.set(state, { profileId, platform, codeVerifier });
+      await this.cacheService.set(`oauth-state:${state}`, { profileId, platform, codeVerifier }, 600);
       return { url: this.xAdapter.getAuthUrl(state, codeChallenge), state };
     }
 
-    throw new BadRequestException(`OAuth not supported for platform: ${platform}`);
+    throw new BadRequestException(
+      `OAuth not supported for platform: ${platform}`,
+    );
   }
 
   async handleCallback(platform: SocialPlatform, code: string, state: string) {
-    const stateData = this.stateStore.get(state);
+    const stateData = await this.cacheService.get<OAuthState>(`oauth-state:${state}`);
     if (!stateData || stateData.platform !== platform) {
       throw new BadRequestException('Invalid or expired state');
     }
-    this.stateStore.delete(state);
+    await this.cacheService.evict(`oauth-state:${state}`);
 
     let platformUserId: string;
     let platformUsername: string | null = null;
@@ -73,12 +88,17 @@ export class SocialLinkService {
       platformUserId = user.id;
       platformUsername = user.username;
     } else if (platform === 'x') {
-      accessToken = await this.xAdapter.exchangeCode(code, stateData.codeVerifier!);
+      accessToken = await this.xAdapter.exchangeCode(
+        code,
+        stateData.codeVerifier!,
+      );
       const user = await this.xAdapter.getUserInfo(accessToken);
       platformUserId = user.id;
       platformUsername = user.username;
     } else {
-      throw new BadRequestException(`Callback not supported for platform: ${platform}`);
+      throw new BadRequestException(
+        `Callback not supported for platform: ${platform}`,
+      );
     }
 
     const encrypted = this.encryptToken(accessToken);
@@ -256,7 +276,10 @@ export class SocialLinkService {
   encryptToken(token: string): string {
     const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv('aes-256-gcm', this.encryptionKey, iv);
-    const encrypted = Buffer.concat([cipher.update(token, 'utf8'), cipher.final()]);
+    const encrypted = Buffer.concat([
+      cipher.update(token, 'utf8'),
+      cipher.final(),
+    ]);
     const authTag = cipher.getAuthTag();
     // Format: iv:authTag:encrypted (all base64)
     return `${iv.toString('base64')}:${authTag.toString('base64')}:${encrypted.toString('base64')}`;
@@ -267,8 +290,15 @@ export class SocialLinkService {
     const iv = Buffer.from(ivB64, 'base64');
     const authTag = Buffer.from(tagB64, 'base64');
     const encrypted = Buffer.from(dataB64, 'base64');
-    const decipher = crypto.createDecipheriv('aes-256-gcm', this.encryptionKey, iv);
+    const decipher = crypto.createDecipheriv(
+      'aes-256-gcm',
+      this.encryptionKey,
+      iv,
+    );
     decipher.setAuthTag(authTag);
-    return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+    return Buffer.concat([
+      decipher.update(encrypted),
+      decipher.final(),
+    ]).toString('utf8');
   }
 }
