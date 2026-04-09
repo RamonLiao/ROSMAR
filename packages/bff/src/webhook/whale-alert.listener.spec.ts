@@ -1,6 +1,8 @@
 import { Test } from '@nestjs/testing';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { WhaleAlertListener } from './whale-alert.listener';
 import { NotificationService } from '../notification/notification.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 describe('WhaleAlertListener', () => {
   let listener: WhaleAlertListener;
@@ -13,6 +15,14 @@ describe('WhaleAlertListener', () => {
       providers: [
         WhaleAlertListener,
         { provide: NotificationService, useValue: notificationService },
+        {
+          provide: PrismaService,
+          useValue: {
+            profile: { findUnique: jest.fn().mockResolvedValue({ workspaceId: 'ws1' }) },
+            workspace: { findUnique: jest.fn().mockResolvedValue({ whaleThresholds: [] }) },
+          },
+        },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
       ],
     }).compile();
 

@@ -40,7 +40,7 @@ P3 Gap Completion — COMPLETE ✅
 None
 
 ## Notes
-- Pre-existing test failures (5 suites/8 tests): escrow.service.spec, whale-alert.listener.spec, profile-assets.spec, gdpr.service.spec, deal-document.service.spec
-- Pre-existing TS errors (5): profile.service.ts (3x NotFoundException), escrow.service.spec (2x state)
-- Prisma migration NOT yet run (`prisma migrate dev --name p3_gaps_relations`) — schema updated but no migration file generated
+- Pre-existing test failures: FIXED ✅ (2026-04-09) — 51 suites / 359 tests all passing
+- Pre-existing TS errors: FIXED ✅ (2026-04-09) — 0 errors
+- Prisma migrations: all 14 applied, schema in sync ✅ (verified 2026-04-09)
 - 完整部署資訊見 `tasks/notes.md`

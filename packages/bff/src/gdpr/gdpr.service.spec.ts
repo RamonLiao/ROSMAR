@@ -41,6 +41,7 @@ describe('GdprService', () => {
         deleteMany: jest.fn(),
       },
       vaultSecret: {
+        findMany: jest.fn().mockResolvedValue([]),
         deleteMany: jest.fn(),
       },
       message: {
@@ -50,6 +51,7 @@ describe('GdprService', () => {
         deleteMany: jest.fn(),
       },
       dealDocument: {
+        findMany: jest.fn().mockResolvedValue([]),
         deleteMany: jest.fn(),
       },
       $transaction: jest.fn((cb) => cb(prisma)),
@@ -77,7 +79,12 @@ describe('GdprService', () => {
     prisma.profile.update.mockResolvedValue({});
     prisma.gdprDeletionLog.create.mockResolvedValue({});
 
-    await gdprService.initiateDeletion('ws1', 'p1', 'admin@example.com', 'CONSENT_WITHDRAWN');
+    await gdprService.initiateDeletion(
+      'ws1',
+      'p1',
+      'admin@example.com',
+      'CONSENT_WITHDRAWN',
+    );
 
     expect(prisma.$transaction).toHaveBeenCalled();
     expect(prisma.profile.update).toHaveBeenCalledWith({
@@ -100,7 +107,8 @@ describe('GdprService', () => {
     });
 
     // Verify 7-day grace period
-    const scheduledAt = prisma.gdprDeletionLog.create.mock.calls[0][0].data.scheduledAt as Date;
+    const scheduledAt = prisma.gdprDeletionLog.create.mock.calls[0][0].data
+      .scheduledAt as Date;
     const diff = scheduledAt.getTime() - Date.now();
     expect(diff).toBeGreaterThan(6 * 24 * 60 * 60 * 1000);
     expect(diff).toBeLessThanOrEqual(7 * 24 * 60 * 60 * 1000);
@@ -136,8 +144,12 @@ describe('GdprService', () => {
       gdprScheduledAt: pastDate,
     });
 
-    await expect(gdprService.cancelDeletion('p1')).rejects.toThrow(BadRequestException);
-    await expect(gdprService.cancelDeletion('p1')).rejects.toThrow('Grace period expired');
+    await expect(gdprService.cancelDeletion('p1')).rejects.toThrow(
+      BadRequestException,
+    );
+    await expect(gdprService.cancelDeletion('p1')).rejects.toThrow(
+      'Grace period expired',
+    );
   });
 
   it('getStatus — returns current gdprStatus from profile', async () => {
@@ -226,14 +238,26 @@ describe('GdprService', () => {
       gdprStatus: 'COMPLETED',
     });
 
-    await expect(exportService.export('p1')).rejects.toThrow(BadRequestException);
-    await expect(exportService.export('p1')).rejects.toThrow('PII already deleted');
+    await expect(exportService.export('p1')).rejects.toThrow(
+      BadRequestException,
+    );
+    await expect(exportService.export('p1')).rejects.toThrow(
+      'PII already deleted',
+    );
   });
 
   it('GdprCleanupJob run — finds eligible profiles and executes deletion', async () => {
     const eligible = [
-      { id: 'p1', gdprStatus: 'PENDING_DELETION', gdprScheduledAt: new Date(Date.now() - 1000) },
-      { id: 'p2', gdprStatus: 'PENDING_DELETION', gdprScheduledAt: new Date(Date.now() - 2000) },
+      {
+        id: 'p1',
+        gdprStatus: 'PENDING_DELETION',
+        gdprScheduledAt: new Date(Date.now() - 1000),
+      },
+      {
+        id: 'p2',
+        gdprStatus: 'PENDING_DELETION',
+        gdprScheduledAt: new Date(Date.now() - 2000),
+      },
     ];
     prisma.profile.findMany.mockResolvedValue(eligible);
     prisma.profile.update.mockResolvedValue({});

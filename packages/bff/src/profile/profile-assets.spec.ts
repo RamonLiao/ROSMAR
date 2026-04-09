@@ -27,6 +27,16 @@ jest.mock('../blockchain/balance-aggregator.service', () => ({
     getNetWorth: jest.fn(),
   })),
 }));
+jest.mock('../blockchain/defi-position.service', () => ({
+  DefiPositionService: jest.fn().mockImplementation(() => ({
+    getPositions: jest.fn().mockResolvedValue([]),
+  })),
+}));
+jest.mock('../blockchain/suins.service', () => ({
+  SuinsService: jest.fn().mockImplementation(() => ({
+    resolve: jest.fn().mockResolvedValue(null),
+  })),
+}));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { SuiClientService } = require('../blockchain/sui.client');
@@ -34,10 +44,22 @@ const { SuiClientService } = require('../blockchain/sui.client');
 const { TxBuilderService } = require('../blockchain/tx-builder.service');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { EvmResolverService } = require('../blockchain/evm-resolver.service');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { SolanaResolverService } = require('../blockchain/solana-resolver.service');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { BalanceAggregatorService } = require('../blockchain/balance-aggregator.service');
+
+const {
+  SolanaResolverService,
+} = require('../blockchain/solana-resolver.service');
+
+const {
+  BalanceAggregatorService,
+} = require('../blockchain/balance-aggregator.service');
+
+const {
+  DefiPositionService,
+} = require('../blockchain/defi-position.service');
+
+const {
+  SuinsService,
+} = require('../blockchain/suins.service');
 
 describe('ProfileService - Assets & Timeline', () => {
   let service: ProfileService;
@@ -64,9 +86,26 @@ describe('ProfileService - Assets & Timeline', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: SuiClientService, useValue: {} },
         { provide: TxBuilderService, useValue: {} },
-        { provide: EvmResolverService, useValue: { resolveEns: jest.fn(), lookupAddress: jest.fn() } },
-        { provide: SolanaResolverService, useValue: { resolveSns: jest.fn(), lookupAddress: jest.fn() } },
-        { provide: BalanceAggregatorService, useValue: { getNetWorth: jest.fn() } },
+        {
+          provide: EvmResolverService,
+          useValue: { resolveEns: jest.fn(), lookupAddress: jest.fn() },
+        },
+        {
+          provide: SolanaResolverService,
+          useValue: { resolveSns: jest.fn(), lookupAddress: jest.fn() },
+        },
+        {
+          provide: BalanceAggregatorService,
+          useValue: { getNetWorth: jest.fn() },
+        },
+        {
+          provide: DefiPositionService,
+          useValue: { getPositions: jest.fn().mockResolvedValue([]) },
+        },
+        {
+          provide: SuinsService,
+          useValue: { resolve: jest.fn().mockResolvedValue(null) },
+        },
         { provide: ConfigService, useValue: { get: () => '' } },
       ],
     }).compile();
@@ -76,8 +115,18 @@ describe('ProfileService - Assets & Timeline', () => {
 
   it('getAssets returns NFT and token aggregations', async () => {
     prisma.$queryRaw.mockResolvedValue([
-      { collection: 'SuiFrens', event_type: 'MintNFTEvent', cnt: 3n, total_amount: null },
-      { collection: null, event_type: 'StakeEvent', cnt: 5n, total_amount: 10000 },
+      {
+        collection: 'SuiFrens',
+        event_type: 'MintNFTEvent',
+        cnt: 3n,
+        total_amount: null,
+      },
+      {
+        collection: null,
+        event_type: 'StakeEvent',
+        cnt: 5n,
+        total_amount: 10000,
+      },
     ]);
 
     const assets = await service.getAssets('ws-1', 'profile-1');

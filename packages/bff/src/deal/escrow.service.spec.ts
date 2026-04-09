@@ -128,7 +128,7 @@ describe('EscrowService', () => {
 
     const result = await service.release('esc-1', 500);
 
-    expect(result.state).toBe('PARTIALLY_RELEASED');
+    expect(result.escrow.state).toBe('PARTIALLY_RELEASED');
     expect(prisma.escrow.update).toHaveBeenCalledWith({
       where: { id: 'esc-1' },
       data: {
@@ -156,7 +156,7 @@ describe('EscrowService', () => {
 
     const result = await service.release('esc-1', 500);
 
-    expect(result.state).toBe('COMPLETED');
+    expect(result.escrow.state).toBe('COMPLETED');
     expect(prisma.escrow.update).toHaveBeenCalledWith({
       where: { id: 'esc-1' },
       data: {

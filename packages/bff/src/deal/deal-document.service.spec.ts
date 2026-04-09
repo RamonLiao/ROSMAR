@@ -1,8 +1,16 @@
+// Mock ESM blockchain deps before any imports
+jest.mock('../vault/vault-policy.service', () => ({
+  VaultPolicyService: jest.fn().mockImplementation(() => ({})),
+}));
+
 import { Test } from '@nestjs/testing';
 import { DealDocumentService } from './deal-document.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalrusClient } from '../vault/walrus.client';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { VaultPolicyService } = require('../vault/vault-policy.service');
 
 describe('DealDocumentService', () => {
   let service: DealDocumentService;
@@ -33,6 +41,7 @@ describe('DealDocumentService', () => {
         DealDocumentService,
         { provide: PrismaService, useValue: prisma },
         { provide: WalrusClient, useValue: walrusClient },
+        { provide: VaultPolicyService, useValue: {} },
       ],
     }).compile();
 
@@ -103,8 +112,8 @@ describe('DealDocumentService', () => {
   it('should reject delete on version mismatch', async () => {
     prisma.dealDocument.deleteMany.mockResolvedValue({ count: 0 });
 
-    await expect(
-      service.deleteDocument('ws1', 'doc1', 99),
-    ).rejects.toThrow(NotFoundException);
+    await expect(service.deleteDocument('ws1', 'doc1', 99)).rejects.toThrow(
+      NotFoundException,
+    );
   });
 });
