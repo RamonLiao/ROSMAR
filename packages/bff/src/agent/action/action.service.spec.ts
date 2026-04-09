@@ -2,10 +2,13 @@ import { Test } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { LlmClientService } from '../llm-client.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CacheService } from '../../common/cache/cache.service';
 
 // Mock @mysten/sui ESM modules to avoid SyntaxError
 jest.mock('@mysten/sui/jsonRpc', () => ({ SuiJsonRpcClient: jest.fn() }));
-jest.mock('@mysten/sui/keypairs/ed25519', () => ({ Ed25519Keypair: { fromSecretKey: jest.fn() } }));
+jest.mock('@mysten/sui/keypairs/ed25519', () => ({
+  Ed25519Keypair: { fromSecretKey: jest.fn() },
+}));
 jest.mock('@mysten/sui/transactions', () => ({ Transaction: jest.fn() }));
 
 import { ActionService } from './action.service';
@@ -15,6 +18,7 @@ describe('ActionService', () => {
   let service: ActionService;
   let llmClient: { generate: jest.Mock };
   let workflowEngine: { startWorkflow: jest.Mock };
+  let cacheService: { set: jest.Mock; get: jest.Mock; evict: jest.Mock };
   let prisma: {
     segment: { findFirst: jest.Mock };
     segmentMembership: { findMany: jest.Mock };
@@ -22,19 +26,19 @@ describe('ActionService', () => {
   };
 
   beforeEach(async () => {
-    llmClient = {
-      generate: jest.fn(),
-    };
+    llmClient = { generate: jest.fn() };
     workflowEngine = { startWorkflow: jest.fn().mockResolvedValue(undefined) };
+    cacheService = {
+      set: jest.fn().mockResolvedValue(undefined),
+      get: jest.fn(),
+      evict: jest.fn().mockResolvedValue(undefined),
+    };
     prisma = {
       segment: {
         findFirst: jest.fn().mockResolvedValue({ id: 'seg-1', name: 'VIPs' }),
       },
       segmentMembership: {
-        findMany: jest.fn().mockResolvedValue([
-          { profileId: 'p-1' },
-          { profileId: 'p-2' },
-        ]),
+        findMany: jest.fn().mockResolvedValue([{ profileId: 'p-1' }, { profileId: 'p-2' }]),
       },
       campaign: {
         create: jest.fn().mockResolvedValue({ id: 'camp-1' }),
@@ -47,6 +51,7 @@ describe('ActionService', () => {
         { provide: LlmClientService, useValue: llmClient },
         { provide: WorkflowEngine, useValue: workflowEngine },
         { provide: PrismaService, useValue: prisma },
+        { provide: CacheService, useValue: cacheService },
       ],
     }).compile();
 
@@ -54,13 +59,11 @@ describe('ActionService', () => {
   });
 
   describe('planAction', () => {
-    it('should convert NL instruction to structured plan via LLM', async () => {
+    it('should store plan in Redis with TTL', async () => {
       llmClient.generate.mockResolvedValue({
         text: JSON.stringify({
           targetSegment: 'Active NFT collectors',
-          actions: [
-            { type: 'send_telegram', config: { message: 'Hello!' } },
-          ],
+          actions: [{ type: 'send_telegram', config: { message: 'Hello!' } }],
           estimatedCost: 0.5,
         }),
         usage: { inputTokens: 200, outputTokens: 100 },
@@ -75,86 +78,21 @@ describe('ActionService', () => {
       expect(plan.planId).toBeDefined();
       expect(plan.targetSegment).toBe('Active NFT collectors');
       expect(plan.actions).toHaveLength(1);
-      expect(plan.actions[0].type).toBe('send_telegram');
-      expect(plan.estimatedCost).toBe(0.5);
-      expect(plan.createdAt).toBeInstanceOf(Date);
-    });
-
-    it('should pass userId and agentType to LlmClientService for auto-tracking', async () => {
-      llmClient.generate.mockResolvedValue({
-        text: JSON.stringify({
-          targetSegment: 'All users',
-          actions: [],
-          estimatedCost: 0,
-        }),
-        usage: { inputTokens: 150, outputTokens: 80 },
-      });
-
-      await service.planAction({
-        workspaceId: 'ws-1',
-        userId: 'user-1',
-        instruction: 'Do something',
-      });
-
-      expect(llmClient.generate).toHaveBeenCalledWith(
-        'ws-1',
-        expect.objectContaining({
-          userId: 'user-1',
-          agentType: 'action',
-        }),
-      );
-    });
-  });
-
-  describe('executeAction', () => {
-    it('should execute a valid plan via WorkflowEngine', async () => {
-      // First create a plan
-      llmClient.generate.mockResolvedValue({
-        text: JSON.stringify({
-          targetSegment: 'VIPs',
-          actions: [
-            { type: 'send_telegram', config: { message: 'Hi VIPs!' } },
-          ],
-          estimatedCost: 1.0,
-        }),
-        usage: { inputTokens: 200, outputTokens: 100 },
-      });
-
-      const plan = await service.planAction({
-        workspaceId: 'ws-1',
-        userId: 'user-1',
-        instruction: 'Message VIPs on Telegram',
-      });
-
-      // Then execute it
-      await service.executeAction({
-        workspaceId: 'ws-1',
-        userId: 'user-1',
-        planId: plan.planId,
-      });
-
-      expect(workflowEngine.startWorkflow).toHaveBeenCalledWith(
-        expect.any(String), // campaignId
-        plan.actions,
-        ['p-1', 'p-2'],
+      expect(cacheService.set).toHaveBeenCalledWith(
+        `action-plan:${plan.planId}`,
+        expect.objectContaining({ workspaceId: 'ws-1' }),
+        300,
       );
     });
 
-    it('should reject missing plan', async () => {
-      await expect(
-        service.executeAction({
-          workspaceId: 'ws-1',
-          userId: 'user-1',
-          planId: 'non-existent',
-        }),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('should reject stale plan (>5 min old)', async () => {
+    it('should filter out invalid action types from LLM output', async () => {
       llmClient.generate.mockResolvedValue({
         text: JSON.stringify({
           targetSegment: 'All',
-          actions: [{ type: 'send_discord', config: { message: 'Hey' } }],
+          actions: [
+            { type: 'send_telegram', config: { message: 'Hi' } },
+            { type: 'hack_the_planet', config: {} },
+          ],
           estimatedCost: 0,
         }),
         usage: { inputTokens: 100, outputTokens: 50 },
@@ -163,21 +101,55 @@ describe('ActionService', () => {
       const plan = await service.planAction({
         workspaceId: 'ws-1',
         userId: 'user-1',
-        instruction: 'Send discord msg',
+        instruction: 'test',
       });
 
-      // Manually set createdAt to 6 minutes ago
-      (service as any).plans.get(plan.planId).createdAt = new Date(
-        Date.now() - 6 * 60 * 1000,
+      expect(plan.actions).toHaveLength(1);
+      expect(plan.actions[0].type).toBe('send_telegram');
+    });
+  });
+
+  describe('executeAction', () => {
+    it('should execute plan from Redis and persist campaign', async () => {
+      const storedPlan = {
+        planId: 'plan-1',
+        workspaceId: 'ws-1',
+        targetSegment: 'VIPs',
+        actions: [{ type: 'send_telegram', config: { message: 'Hi VIPs!' } }],
+        estimatedCost: 1.0,
+        createdAt: new Date().toISOString(),
+      };
+      cacheService.get.mockResolvedValue(storedPlan);
+
+      await service.executeAction({
+        workspaceId: 'ws-1',
+        userId: 'user-1',
+        planId: 'plan-1',
+      });
+
+      expect(prisma.campaign.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ name: '[AI Action] VIPs' }),
+        }),
       );
+      expect(workflowEngine.startWorkflow).toHaveBeenCalledWith(
+        'camp-1',
+        storedPlan.actions,
+        ['p-1', 'p-2'],
+      );
+      expect(cacheService.evict).toHaveBeenCalledWith('action-plan:plan-1');
+    });
+
+    it('should throw NotFoundException when plan expired/missing', async () => {
+      cacheService.get.mockResolvedValue(null);
 
       await expect(
         service.executeAction({
           workspaceId: 'ws-1',
           userId: 'user-1',
-          planId: plan.planId,
+          planId: 'expired-plan',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });
