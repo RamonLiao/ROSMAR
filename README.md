@@ -11,56 +11,48 @@ ROSMAR is an enterprise-grade Customer Relationship Management (CRM) platform pu
 The following diagram illustrates how ROSMAR seamlessly integrates off-chain application layers with on-chain data and privacy protocols:
 
 ```mermaid
-graph TD
-    classDef default fill:#f9f9f9,stroke:#333,stroke-width:2px;
-    classDef client fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
-    classDef backend fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
-    classDef blockchain fill:#e8f5e9,stroke:#388e3c,stroke-width:2px;
-    classDef privacy fill:#f3e5f5,stroke:#8e24aa,stroke-width:2px;
+flowchart TB
+    classDef client fill:#E1F5FE,stroke:#0288D1,stroke-width:2px,color:#000;
+    classDef backend fill:#FFF3E0,stroke:#F57C00,stroke-width:2px,color:#000;
+    classDef data fill:#E8F5E9,stroke:#388E3C,stroke-width:2px,color:#000;
+    classDef onchain fill:#F3E5F5,stroke:#8E24AA,stroke-width:2px,color:#000;
 
-    User((👤 Web3 User / Team)):::client
+    %% Nodes
+    User((👤 Web3 User)):::client
 
-    subgraph AppLayer [🖥️ Application & Agent Layer]
-        Frontend[Next.js + Tailwind UI]:::client
-        Backend[NestJS API + Prisma]:::backend
-        Agents[🤖 AI Agents]:::backend
-        
-        Frontend <--> Backend
-        Backend <--> Agents
-    end
+    Frontend[🖥️ Next.js + Tailwind GUI]:::client
+    ZkLogin[🔑 ZkLogin / Passkey]:::onchain
+    
+    Backend[⚙️ NestJS API + Prisma]:::backend
+    Agents[🤖 AI Agents]:::backend
+    
+    Timescale[(🗄️ TimescaleDB & Redis)]:::data
+    Indexer[🔍 Rust Sui Indexer]:::data
 
-    subgraph DataLayer [🗄️ Fast Data & Indexing]
-        Timescale[(TimescaleDB)]:::backend
-        Redis[(Redis Cache)]:::backend
-        Indexer[Rust Sui Indexer]:::backend
-        
-        Backend <--> Timescale
-        Backend <--> Redis
-        Indexer --> Timescale
-    end
+    Sui[⛓️ Sui Network]:::onchain
+    Contracts[📜 Smart Contracts]:::onchain
+    
+    Seal[🔐 Seal Protocol]:::onchain
+    Walrus[🗃️ Walrus Storage]:::onchain
 
-    subgraph PrivacyStorage [🔐 Privacy & Decentralised Vault]
-        Seal[Seal Protocol - Encryption & ACL]:::privacy
-        Walrus[Walrus Protocol - Storage]:::privacy
-        
-        Backend <--> Seal
-        Seal --> Walrus
-    end
-
-    subgraph BlockchainLayer [⛓️ Blockchain Layer]
-        Sui[Sui Network]:::blockchain
-        ZkLogin[ZkLogin / Passkey]:::blockchain
-        Contracts[Smart Contracts: Escrow, Policies]:::blockchain
-        SuiNS[SuiNS Domains]:::blockchain
-        
-        Indexer -->|Real-time Events| Sui
-        Contracts --> Sui
-    end
-
+    %% Relationships
     User -->|Auth| ZkLogin
-    ZkLogin --> Frontend
-    Frontend -->|Tx Signatures| Sui
-    Backend -->|Automated Txs| Contracts
+    User -->|Interact| Frontend
+    ZkLogin -.->|Verify| Frontend
+
+    Frontend <-->|API| Backend
+    Backend <-->|Trigger| Agents
+
+    Backend <-->|Query / Cache| Timescale
+    Indexer -->|Sync Events| Timescale
+
+    Frontend -->|Sign User Txs| Sui
+    Backend -->|Execute Auto Txs| Contracts
+    Contracts -->|Deploy / Call| Sui
+    Indexer -.->|Listen| Sui
+
+    Backend -->|Encrypt / Access Control| Seal
+    Seal -->|Store Blob| Walrus
 ```
 
 ---
