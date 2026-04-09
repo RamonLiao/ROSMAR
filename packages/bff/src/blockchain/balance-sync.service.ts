@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SuiClientService } from './sui.client';
 import { Prisma } from '@prisma/client';
 import Moralis from 'moralis';
+import { KNOWN_DECIMALS } from './price-oracle.service';
 
 interface BalanceRow {
   profileId: string;
@@ -23,6 +24,7 @@ export class BalanceSyncService {
   private readonly logger = new Logger(BalanceSyncService.name);
   private readonly batchSize: number;
   private readonly batchDelayMs: number;
+  private coinDecimalsCache = new Map<string, number | null>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -30,11 +32,16 @@ export class BalanceSyncService {
     private readonly config: ConfigService,
   ) {
     this.batchSize = this.config.get<number>('BALANCE_SYNC_BATCH_SIZE', 50);
-    this.batchDelayMs = this.config.get<number>('BALANCE_SYNC_BATCH_DELAY_MS', 1000);
+    this.batchDelayMs = this.config.get<number>(
+      'BALANCE_SYNC_BATCH_DELAY_MS',
+      1000,
+    );
   }
 
   /** Sync all wallet balances for a workspace */
-  async syncWorkspace(workspaceId: string): Promise<{ synced: number; errors: number }> {
+  async syncWorkspace(
+    workspaceId: string,
+  ): Promise<{ synced: number; errors: number }> {
     const wallets = await this.prisma.profileWallet.findMany({
       where: { profile: { workspaceId, isArchived: false } },
       include: { profile: { select: { id: true, workspaceId: true } } },
@@ -52,7 +59,14 @@ export class BalanceSyncService {
       const batch = wallets.slice(i, i + this.batchSize);
 
       const results = await Promise.allSettled(
-        batch.map(w => this.syncWallet(w.profile.id, w.profile.workspaceId, w.chain, w.address)),
+        batch.map((w) =>
+          this.syncWallet(
+            w.profile.id,
+            w.profile.workspaceId,
+            w.chain,
+            w.address,
+          ),
+        ),
       );
 
       for (const r of results) {
@@ -68,7 +82,9 @@ export class BalanceSyncService {
       }
     }
 
-    this.logger.log(`Workspace ${workspaceId}: synced ${synced} balances, ${errors} errors`);
+    this.logger.log(
+      `Workspace ${workspaceId}: synced ${synced} balances, ${errors} errors`,
+    );
     return { synced, errors };
   }
 
@@ -83,16 +99,28 @@ export class BalanceSyncService {
 
     switch (chain) {
       case 'sui':
-        rows.push(...(await this.fetchSuiBalances(profileId, workspaceId, address)));
-        rows.push(...(await this.fetchSuiNfts(profileId, workspaceId, address)));
+        rows.push(
+          ...(await this.fetchSuiBalances(profileId, workspaceId, address)),
+        );
+        rows.push(
+          ...(await this.fetchSuiNfts(profileId, workspaceId, address)),
+        );
         break;
       case 'evm':
-        rows.push(...(await this.fetchEvmBalances(profileId, workspaceId, address)));
-        rows.push(...(await this.fetchEvmNfts(profileId, workspaceId, address)));
+        rows.push(
+          ...(await this.fetchEvmBalances(profileId, workspaceId, address)),
+        );
+        rows.push(
+          ...(await this.fetchEvmNfts(profileId, workspaceId, address)),
+        );
         break;
       case 'solana':
-        rows.push(...(await this.fetchSolanaBalances(profileId, workspaceId, address)));
-        rows.push(...(await this.fetchSolanaNfts(profileId, workspaceId, address)));
+        rows.push(
+          ...(await this.fetchSolanaBalances(profileId, workspaceId, address)),
+        );
+        rows.push(
+          ...(await this.fetchSolanaNfts(profileId, workspaceId, address)),
+        );
         break;
       default:
         this.logger.debug(`Skipping unsupported chain: ${chain}`);
@@ -103,7 +131,7 @@ export class BalanceSyncService {
 
     // Upsert all balance rows in a transaction
     await this.prisma.$transaction(
-      rows.map(r =>
+      rows.map((r) =>
         this.prisma.walletBalance.upsert({
           where: {
             profileId_chain_address_contractAddress: {
@@ -131,16 +159,54 @@ export class BalanceSyncService {
     return rows.length;
   }
 
+  // ─── Coin Decimals ────────────────────────────────
+
+  private async getCoinDecimals(coinType: string): Promise<number | null> {
+    if (this.coinDecimalsCache.has(coinType)) {
+      return this.coinDecimalsCache.get(coinType)!;
+    }
+
+    if (KNOWN_DECIMALS[coinType] !== undefined) {
+      this.coinDecimalsCache.set(coinType, KNOWN_DECIMALS[coinType]);
+      return KNOWN_DECIMALS[coinType];
+    }
+
+    try {
+      const meta = await this.suiClient
+        .getClient()
+        .getCoinMetadata({ coinType });
+      const decimals = meta?.decimals ?? null;
+      this.coinDecimalsCache.set(coinType, decimals);
+      return decimals;
+    } catch (err) {
+      this.logger.warn(`Failed to fetch CoinMetadata for ${coinType}: ${err}`);
+      this.coinDecimalsCache.set(coinType, null);
+      return null;
+    }
+  }
+
   // ─── SUI ──────────────────────────────────────────
 
-  private async fetchSuiBalances(profileId: string, workspaceId: string, address: string): Promise<BalanceRow[]> {
+  private async fetchSuiBalances(
+    profileId: string,
+    workspaceId: string,
+    address: string,
+  ): Promise<BalanceRow[]> {
     const client = this.suiClient.getClient();
     const balances = await client.getAllBalances({ owner: address });
-    return balances.map((b: any) => {
+    const rows: BalanceRow[] = [];
+
+    for (const b of balances) {
       const coinType = b.coinType as string;
       const symbol = coinType.split('::').pop() || coinType;
-      const decimals = symbol === 'SUI' ? 9 : 9; // TODO: fetch from CoinMetadata RPC
-      return {
+      const decimals = await this.getCoinDecimals(coinType);
+
+      if (decimals === null) {
+        this.logger.debug(`Skipping ${coinType}: no decimals metadata`);
+        continue;
+      }
+
+      rows.push({
         profileId,
         workspaceId,
         chain: 'sui',
@@ -151,11 +217,17 @@ export class BalanceSyncService {
         tokenSymbol: symbol,
         rawBalance: new Prisma.Decimal(b.totalBalance),
         decimals,
-      };
-    });
+      });
+    }
+
+    return rows;
   }
 
-  private async fetchSuiNfts(profileId: string, workspaceId: string, address: string): Promise<BalanceRow[]> {
+  private async fetchSuiNfts(
+    profileId: string,
+    workspaceId: string,
+    address: string,
+  ): Promise<BalanceRow[]> {
     const rows: BalanceRow[] = [];
     let cursor: string | undefined;
     const collectionCounts = new Map<string, { name: string; count: number }>();
@@ -206,12 +278,18 @@ export class BalanceSyncService {
 
   // ─── EVM ──────────────────────────────────────────
 
-  private async fetchEvmBalances(profileId: string, workspaceId: string, address: string): Promise<BalanceRow[]> {
+  private async fetchEvmBalances(
+    profileId: string,
+    workspaceId: string,
+    address: string,
+  ): Promise<BalanceRow[]> {
     try {
-      const response = await Moralis.EvmApi.wallets.getWalletTokenBalancesPrice({
-        address,
-        chain: '0x1',
-      });
+      const response = await Moralis.EvmApi.wallets.getWalletTokenBalancesPrice(
+        {
+          address,
+          chain: '0x1',
+        },
+      );
 
       return response.result.map((t: any) => ({
         profileId,
@@ -231,7 +309,11 @@ export class BalanceSyncService {
     }
   }
 
-  private async fetchEvmNfts(profileId: string, workspaceId: string, address: string): Promise<BalanceRow[]> {
+  private async fetchEvmNfts(
+    profileId: string,
+    workspaceId: string,
+    address: string,
+  ): Promise<BalanceRow[]> {
     try {
       const response = await Moralis.EvmApi.nft.getWalletNFTs({
         address,
@@ -243,21 +325,26 @@ export class BalanceSyncService {
         const addr = (nft as any).tokenAddress ?? 'unknown';
         const name = (nft as any).name ?? addr;
         const existing = collections.get(addr);
-        collections.set(addr, { name: existing?.name ?? name, count: (existing?.count ?? 0) + 1 });
+        collections.set(addr, {
+          name: existing?.name ?? name,
+          count: (existing?.count ?? 0) + 1,
+        });
       }
 
-      return Array.from(collections.entries()).map(([contractAddress, { name, count }]) => ({
-        profileId,
-        workspaceId,
-        chain: 'evm',
-        address,
-        assetType: 'nft' as const,
-        contractAddress,
-        collectionName: name,
-        tokenSymbol: null,
-        rawBalance: new Prisma.Decimal(count),
-        decimals: 0,
-      }));
+      return Array.from(collections.entries()).map(
+        ([contractAddress, { name, count }]) => ({
+          profileId,
+          workspaceId,
+          chain: 'evm',
+          address,
+          assetType: 'nft' as const,
+          contractAddress,
+          collectionName: name,
+          tokenSymbol: null,
+          rawBalance: new Prisma.Decimal(count),
+          decimals: 0,
+        }),
+      );
     } catch (err) {
       this.logger.warn(`EVM NFT fetch failed for ${address}: ${err}`);
       return [];
@@ -266,7 +353,11 @@ export class BalanceSyncService {
 
   // ─── Solana ───────────────────────────────────────
 
-  private async fetchSolanaBalances(profileId: string, workspaceId: string, address: string): Promise<BalanceRow[]> {
+  private async fetchSolanaBalances(
+    profileId: string,
+    workspaceId: string,
+    address: string,
+  ): Promise<BalanceRow[]> {
     try {
       const response = await Moralis.SolApi.account.getPortfolio({
         address,
@@ -313,7 +404,11 @@ export class BalanceSyncService {
     }
   }
 
-  private async fetchSolanaNfts(profileId: string, workspaceId: string, address: string): Promise<BalanceRow[]> {
+  private async fetchSolanaNfts(
+    profileId: string,
+    workspaceId: string,
+    address: string,
+  ): Promise<BalanceRow[]> {
     try {
       const response = await (Moralis.SolApi as any).nft?.getNFTs?.({
         address,
@@ -327,21 +422,26 @@ export class BalanceSyncService {
         const mint = nft.mint ?? 'unknown';
         const name = nft.name ?? mint;
         const existing = collections.get(mint);
-        collections.set(mint, { name: existing?.name ?? name, count: (existing?.count ?? 0) + 1 });
+        collections.set(mint, {
+          name: existing?.name ?? name,
+          count: (existing?.count ?? 0) + 1,
+        });
       }
 
-      return Array.from(collections.entries()).map(([contractAddress, { name, count }]) => ({
-        profileId,
-        workspaceId,
-        chain: 'solana',
-        address,
-        assetType: 'nft' as const,
-        contractAddress,
-        collectionName: name,
-        tokenSymbol: null,
-        rawBalance: new Prisma.Decimal(count),
-        decimals: 0,
-      }));
+      return Array.from(collections.entries()).map(
+        ([contractAddress, { name, count }]) => ({
+          profileId,
+          workspaceId,
+          chain: 'solana',
+          address,
+          assetType: 'nft' as const,
+          contractAddress,
+          collectionName: name,
+          tokenSymbol: null,
+          rawBalance: new Prisma.Decimal(count),
+          decimals: 0,
+        }),
+      );
     } catch (err) {
       this.logger.warn(`Solana NFT fetch failed for ${address}: ${err}`);
       return [];
@@ -349,6 +449,6 @@ export class BalanceSyncService {
   }
 
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
