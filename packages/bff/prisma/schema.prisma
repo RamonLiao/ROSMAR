@@ -39,6 +39,7 @@ model Workspace {
   gdprDeletionLogs  GdprDeletionLog[] @relation("WorkspaceGdprLogs")
   walletBalances    WalletBalance[]
   gasConfig         WorkspaceGasConfig?
+  aiConfig          WorkspaceAiConfig?
 
   @@map("workspaces")
 }
@@ -149,6 +150,7 @@ model Segment {
   campaigns        Campaign[]
   lookalikeSeed    LookalikeResult[] @relation("LookalikeSeed")
   lookalikeResult  LookalikeResult[] @relation("LookalikeResult")
+  broadcasts       Broadcast[]
 
   @@map("segments")
 }
@@ -449,6 +451,8 @@ model WorkspaceAiConfig {
   quotaResetAt      DateTime @map("quota_reset_at")
   isEnabled         Boolean  @default(true) @map("is_enabled")
 
+  workspace         Workspace @relation(fields: [workspaceId], references: [id])
+
   @@map("workspace_ai_configs")
 }
 
@@ -515,6 +519,7 @@ model Broadcast {
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
   workspace  Workspace          @relation(fields: [workspaceId], references: [id])
+  segment    Segment?           @relation(fields: [segmentId], references: [id])
   deliveries BroadcastDelivery[]
 
   @@index([workspaceId, status])
@@ -663,6 +668,7 @@ model QuestStepCompletion {
   profileId   String   @map("profile_id")
   txDigest    String?  @map("tx_digest")
   verifiedBy  String   @map("verified_by")
+  status      String   @default("VERIFIED")
   completedAt DateTime @default(now()) @map("completed_at")
 
   step        QuestStep @relation(fields: [stepId], references: [id])
