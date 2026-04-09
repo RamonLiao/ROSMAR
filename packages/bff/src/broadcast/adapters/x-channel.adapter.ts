@@ -31,10 +31,22 @@ export class XChannelAdapter implements ChannelAdapter {
       throw new Error(`Workspace ${workspaceId} not found`);
     }
 
+    // Find owner profile by workspace's ownerAddress
+    const ownerProfile = await this.prisma.profile.findFirst({
+      where: {
+        workspaceId,
+        primaryAddress: workspace.ownerAddress,
+      },
+      select: { id: true },
+    });
+    if (!ownerProfile) {
+      throw new Error('No owner profile found for workspace');
+    }
+
     const socialLink = await this.prisma.socialLink.findUnique({
       where: {
         profileId_platform: {
-          profileId: workspace.ownerId,
+          profileId: ownerProfile.id,
           platform: 'x',
         },
       },

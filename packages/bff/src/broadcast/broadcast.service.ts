@@ -169,15 +169,15 @@ export class BroadcastService {
     broadcast: any,
     workspaceCtx: TemplateContext,
   ): Promise<{ total: number; delivered: number; failed: number }> {
-    const members = await this.prisma.segmentMember.findMany({
+    const members = await this.prisma.segmentMembership.findMany({
       where: { segmentId: broadcast.segmentId },
       include: {
         profile: {
           select: {
             id: true,
-            name: true,
             primaryAddress: true,
-            ensName: true,
+            suinsName: true,
+            primaryDomain: true,
             tier: true,
             email: true,
           },
@@ -196,10 +196,9 @@ export class BroadcastService {
       const context: TemplateContext = {
         ...workspaceCtx,
         profile: {
-          name: profile.name ?? undefined,
+          name: profile.suinsName ?? profile.primaryDomain ?? undefined,
           primaryAddress: profile.primaryAddress ?? undefined,
-          ensName: profile.ensName ?? undefined,
-          tier: profile.tier ?? undefined,
+          tier: profile.tier != null ? String(profile.tier) : undefined,
         },
       };
 

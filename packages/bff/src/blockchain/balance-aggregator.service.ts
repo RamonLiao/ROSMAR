@@ -64,22 +64,24 @@ export class BalanceAggregatorService implements OnModuleInit {
         owner: address,
       });
 
-      const tokens: TokenBalance[] = balances.map((b: any) => {
-        const coinType = b.coinType as string;
-        const symbol = coinType.split('::').pop() || coinType;
-        const usdPrice = this.priceOracle.getTokenPrice(coinType) ?? 0;
-        const decimals = KNOWN_DECIMALS[coinType] ?? 9;
-        const usdValue =
-          (parseFloat(b.totalBalance) / 10 ** decimals) * usdPrice;
-        return {
-          symbol,
-          name: symbol,
-          balance: b.totalBalance,
-          decimals,
-          usdPrice,
-          usdValue,
-        };
-      });
+      const tokens: TokenBalance[] = await Promise.all(
+        balances.map(async (b: any) => {
+          const coinType = b.coinType as string;
+          const symbol = coinType.split('::').pop() || coinType;
+          const usdPrice = (await this.priceOracle.getTokenPrice(coinType)) ?? 0;
+          const decimals = KNOWN_DECIMALS[coinType] ?? 9;
+          const usdValue =
+            (parseFloat(b.totalBalance) / 10 ** decimals) * usdPrice;
+          return {
+            symbol,
+            name: symbol,
+            balance: b.totalBalance,
+            decimals,
+            usdPrice,
+            usdValue,
+          };
+        }),
+      );
 
       const balanceUsd = tokens.reduce((sum, t) => sum + t.usdValue, 0);
 

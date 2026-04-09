@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
@@ -50,6 +51,8 @@ const VALID_ACTION_TYPES = new Set([
 
 @Injectable()
 export class ActionService {
+  private readonly logger = new Logger(ActionService.name);
+
   constructor(
     private readonly llmClient: LlmClientService,
     private readonly workflowEngine: WorkflowEngine,
@@ -128,13 +131,19 @@ export class ActionService {
       profileIds = memberships.map((m) => m.profileId);
     }
 
+    if (!segmentId) {
+      this.logger.warn('No segment found for action plan, skipping campaign creation');
+      return;
+    }
+
     const campaign = await this.prisma.campaign.create({
       data: {
+        id: randomUUID(),
         workspaceId: stored.workspaceId,
         name: `[AI Action] ${stored.targetSegment}`,
-        segmentId: segmentId ?? undefined,
+        segmentId,
         status: 'active',
-        steps: stored.actions as any,
+        workflowSteps: stored.actions as any,
       },
     });
 

@@ -16,9 +16,9 @@ export class SocialLinkController {
 
   // --- Discord ---
   @Get('discord/auth-url')
-  getDiscordAuthUrl(@Query('profileId') profileId: string) {
+  async getDiscordAuthUrl(@Query('profileId') profileId: string) {
     if (!profileId) throw new BadRequestException('profileId required');
-    const { url } = this.socialLinkService.getAuthUrl('discord', profileId);
+    const { url } = await this.socialLinkService.getAuthUrl('discord', profileId);
     return { url };
   }
 
@@ -27,16 +27,21 @@ export class SocialLinkController {
     @Query('code') code: string,
     @Query('state') state: string,
   ) {
-    if (!code || !state) throw new BadRequestException('code and state required');
-    const link = await this.socialLinkService.handleCallback('discord', code, state);
+    if (!code || !state)
+      throw new BadRequestException('code and state required');
+    const link = await this.socialLinkService.handleCallback(
+      'discord',
+      code,
+      state,
+    );
     return { success: true, link };
   }
 
   // --- X (Twitter) ---
   @Get('x/auth-url')
-  getXAuthUrl(@Query('profileId') profileId: string) {
+  async getXAuthUrl(@Query('profileId') profileId: string) {
     if (!profileId) throw new BadRequestException('profileId required');
-    const { url } = this.socialLinkService.getAuthUrl('x', profileId);
+    const { url } = await this.socialLinkService.getAuthUrl('x', profileId);
     return { url };
   }
 
@@ -45,7 +50,8 @@ export class SocialLinkController {
     @Query('code') code: string,
     @Query('state') state: string,
   ) {
-    if (!code || !state) throw new BadRequestException('code and state required');
+    if (!code || !state)
+      throw new BadRequestException('code and state required');
     const link = await this.socialLinkService.handleCallback('x', code, state);
     return { success: true, link };
   }
@@ -57,7 +63,10 @@ export class SocialLinkController {
     @Body() data: Record<string, unknown>,
   ) {
     if (!profileId) throw new BadRequestException('profileId required');
-    const link = await this.socialLinkService.handleTelegramVerify(profileId, data as any);
+    const link = await this.socialLinkService.handleTelegramVerify(
+      profileId,
+      data as any,
+    );
     return { success: true, link };
   }
 
@@ -68,7 +77,10 @@ export class SocialLinkController {
     @Body() body: Record<string, unknown>,
   ) {
     if (!body.jwt) throw new BadRequestException('jwt required');
-    const link = await this.socialLinkService.linkGoogle(profileId, body.jwt as string);
+    const link = await this.socialLinkService.linkGoogle(
+      profileId,
+      body.jwt as string,
+    );
     return { success: true, link };
   }
 
@@ -78,9 +90,14 @@ export class SocialLinkController {
     @Param('profileId') profileId: string,
     @Body() body: Record<string, unknown>,
   ) {
-    const jwtOrAddress = (body.jwt as string) ?? (body.zkLoginAddress as string);
-    if (!jwtOrAddress) throw new BadRequestException('jwt or zkLoginAddress required');
-    const link = await this.socialLinkService.linkApple(profileId, jwtOrAddress);
+    const jwtOrAddress =
+      (body.jwt as string) ?? (body.zkLoginAddress as string);
+    if (!jwtOrAddress)
+      throw new BadRequestException('jwt or zkLoginAddress required');
+    const link = await this.socialLinkService.linkApple(
+      profileId,
+      jwtOrAddress,
+    );
     return { success: true, link };
   }
 

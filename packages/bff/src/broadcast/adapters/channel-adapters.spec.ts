@@ -105,7 +105,10 @@ describe('Channel Adapters', () => {
     beforeEach(() => {
       mockPrisma = {
         workspace: {
-          findUnique: jest.fn().mockResolvedValue({ id: 'ws-1', ownerId: 'owner-1' }),
+          findUnique: jest.fn().mockResolvedValue({ id: 'ws-1', ownerAddress: '0xowner' }),
+        },
+        profile: {
+          findFirst: jest.fn().mockResolvedValue({ id: 'owner-profile-1' }),
         },
         socialLink: {
           findUnique: jest.fn().mockResolvedValue({ oauthTokenEncrypted: 'enc-token' }),
@@ -135,7 +138,7 @@ describe('Channel Adapters', () => {
       });
       expect(mockPrisma.socialLink.findUnique).toHaveBeenCalledWith({
         where: {
-          profileId_platform: { profileId: 'owner-1', platform: 'x' },
+          profileId_platform: { profileId: 'owner-profile-1', platform: 'x' },
         },
       });
       expect(mockSocialLinkService.decryptToken).toHaveBeenCalledWith('enc-token');
