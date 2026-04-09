@@ -2,8 +2,15 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SuiClientService } from './sui.client';
 import { PrismaService } from '../prisma/prisma.service';
-import { PriceOracleService } from './price-oracle.service';
+import { PriceOracleService, KNOWN_DECIMALS } from './price-oracle.service';
 import Moralis from 'moralis';
+
+const EVM_CHAIN_MAP: Record<string, string> = {
+  ETH: '0x1',
+  POLYGON: '0x89',
+  ARBITRUM: '0xa4b1',
+  BASE: '0x2105',
+};
 
 export interface TokenBalance {
   symbol: string;
@@ -57,21 +64,18 @@ export class BalanceAggregatorService implements OnModuleInit {
         owner: address,
       });
 
-      const suiUsdPrice = await this.priceOracle.getSuiUsdPrice();
-
       const tokens: TokenBalance[] = balances.map((b: any) => {
         const coinType = b.coinType as string;
         const symbol = coinType.split('::').pop() || coinType;
-        const isSui = coinType === '0x2::sui::SUI';
-        const usdPrice = isSui ? suiUsdPrice : 0;
-        const usdValue = isSui
-          ? (parseFloat(b.totalBalance) / 1e9) * usdPrice
-          : 0;
+        const usdPrice = this.priceOracle.getTokenPrice(coinType) ?? 0;
+        const decimals = KNOWN_DECIMALS[coinType] ?? 9;
+        const usdValue =
+          (parseFloat(b.totalBalance) / 10 ** decimals) * usdPrice;
         return {
           symbol,
           name: symbol,
           balance: b.totalBalance,
-          decimals: 9,
+          decimals,
           usdPrice,
           usdValue,
         };
@@ -87,13 +91,18 @@ export class BalanceAggregatorService implements OnModuleInit {
   }
 
   /** Get all token balances for an EVM address via Moralis */
-  async getEvmBalance(address: string): Promise<ChainBalance> {
+  async getEvmBalance(
+    address: string,
+    chain = 'ETH',
+  ): Promise<ChainBalance> {
+    const chainLabel = `evm:${chain}`;
     try {
-      const response =
-        await Moralis.EvmApi.wallets.getWalletTokenBalancesPrice({
+      const response = await Moralis.EvmApi.wallets.getWalletTokenBalancesPrice(
+        {
           address,
-          chain: '0x1', // Ethereum mainnet
-        });
+          chain: EVM_CHAIN_MAP[chain] ?? '0x1',
+        },
+      );
 
       const tokens: TokenBalance[] = response.result.map((t: any) => ({
         symbol: t.symbol,
@@ -106,21 +115,20 @@ export class BalanceAggregatorService implements OnModuleInit {
 
       const balanceUsd = tokens.reduce((sum, t) => sum + t.usdValue, 0);
 
-      return { chain: 'evm', address, balanceUsd, tokens };
+      return { chain: chainLabel, address, balanceUsd, tokens };
     } catch (err) {
       this.logger.warn(`Failed to get EVM balance for ${address}: ${err}`);
-      return { chain: 'evm', address, balanceUsd: 0, tokens: [] };
+      return { chain: chainLabel, address, balanceUsd: 0, tokens: [] };
     }
   }
 
   /** Get all token balances for a Solana address via Moralis */
   async getSolanaBalance(address: string): Promise<ChainBalance> {
     try {
-      const response =
-        await Moralis.SolApi.account.getPortfolio({
-          address,
-          network: 'mainnet',
-        });
+      const response = await Moralis.SolApi.account.getPortfolio({
+        address,
+        network: 'mainnet',
+      });
 
       const solUsdPrice = await this.priceOracle.getSolUsdPrice();
 
@@ -163,9 +171,7 @@ export class BalanceAggregatorService implements OnModuleInit {
 
       return { chain: 'solana', address, balanceUsd, tokens };
     } catch (err) {
-      this.logger.warn(
-        `Failed to get Solana balance for ${address}: ${err}`,
-      );
+      this.logger.warn(`Failed to get Solana balance for ${address}: ${err}`);
       return { chain: 'solana', address, balanceUsd: 0, tokens: [] };
     }
   }
@@ -181,21 +187,17 @@ export class BalanceAggregatorService implements OnModuleInit {
     }
 
     const balancePromises = wallets.map((w) => {
-      switch (w.chain) {
-        case 'sui':
-          return this.getSuiBalance(w.address);
-        case 'evm':
-          return this.getEvmBalance(w.address);
-        case 'solana':
-          return this.getSolanaBalance(w.address);
-        default:
-          return Promise.resolve<ChainBalance>({
-            chain: w.chain,
-            address: w.address,
-            balanceUsd: 0,
-            tokens: [],
-          });
-      }
+      const chain = w.chain.toUpperCase();
+      if (chain === 'SUI') return this.getSuiBalance(w.address);
+      if (chain === 'SOLANA') return this.getSolanaBalance(w.address);
+      if (EVM_CHAIN_MAP[chain])
+        return this.getEvmBalance(w.address, chain);
+      return Promise.resolve<ChainBalance>({
+        chain: w.chain,
+        address: w.address,
+        balanceUsd: 0,
+        tokens: [],
+      });
     });
 
     const breakdown = await Promise.all(balancePromises);

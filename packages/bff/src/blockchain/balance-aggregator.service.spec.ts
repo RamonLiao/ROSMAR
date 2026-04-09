@@ -88,6 +88,7 @@ describe('BalanceAggregatorService', () => {
           useValue: {
             getSuiUsdPrice: jest.fn().mockResolvedValue(0),
             getSolUsdPrice: jest.fn().mockResolvedValue(0),
+            getTokenPrice: jest.fn().mockReturnValue(0),
           },
         },
       ],
@@ -98,9 +99,11 @@ describe('BalanceAggregatorService', () => {
 
   describe('getSuiBalance', () => {
     it('should return SUI balance', async () => {
-      suiClient.getClient().getAllBalances.mockResolvedValue([
-        { coinType: '0x2::sui::SUI', totalBalance: '2000000000' },
-      ]);
+      suiClient
+        .getClient()
+        .getAllBalances.mockResolvedValue([
+          { coinType: '0x2::sui::SUI', totalBalance: '2000000000' },
+        ]);
 
       const result = await service.getSuiBalance('0xabc123');
       expect(result.chain).toBe('sui');
@@ -122,7 +125,9 @@ describe('BalanceAggregatorService', () => {
     });
 
     it('should handle errors gracefully', async () => {
-      suiClient.getClient().getAllBalances.mockRejectedValue(new Error('RPC error'));
+      suiClient
+        .getClient()
+        .getAllBalances.mockRejectedValue(new Error('RPC error'));
       const result = await service.getSuiBalance('0xbad');
       expect(result.tokens).toEqual([]);
       expect(result.balanceUsd).toBe(0);
@@ -155,7 +160,7 @@ describe('BalanceAggregatorService', () => {
       });
 
       const result = await service.getEvmBalance('0xevmaddr');
-      expect(result.chain).toBe('evm');
+      expect(result.chain).toBe('evm:ETH');
       expect(result.tokens).toHaveLength(2);
       expect(result.tokens[0]).toEqual(
         expect.objectContaining({ symbol: 'ETH', usdValue: 3500 }),
@@ -171,6 +176,7 @@ describe('BalanceAggregatorService', () => {
         new Error('API error'),
       );
       const result = await service.getEvmBalance('0xbadaddr');
+      expect(result.chain).toBe('evm:ETH');
       expect(result.tokens).toEqual([]);
       expect(result.balanceUsd).toBe(0);
     });
@@ -230,12 +236,14 @@ describe('BalanceAggregatorService', () => {
     it('should aggregate balances across all wallets for a profile', async () => {
       prisma.profileWallet.findMany.mockResolvedValue([
         { id: 'w1', profileId: 'p1', chain: 'sui', address: '0xsui1' },
-        { id: 'w2', profileId: 'p1', chain: 'evm', address: '0xevm1' },
+        { id: 'w2', profileId: 'p1', chain: 'ETH', address: '0xevm1' },
       ]);
 
-      suiClient.getClient().getAllBalances.mockResolvedValue([
-        { coinType: '0x2::sui::SUI', totalBalance: '1000000000' },
-      ]);
+      suiClient
+        .getClient()
+        .getAllBalances.mockResolvedValue([
+          { coinType: '0x2::sui::SUI', totalBalance: '1000000000' },
+        ]);
 
       mockMoralis.EvmApi.wallets.getWalletTokenBalancesPrice.mockResolvedValue({
         result: [
@@ -254,7 +262,7 @@ describe('BalanceAggregatorService', () => {
       const result = await service.getNetWorth('p1');
       expect(result.breakdown).toHaveLength(2);
       expect(result.breakdown[0].chain).toBe('sui');
-      expect(result.breakdown[1].chain).toBe('evm');
+      expect(result.breakdown[1].chain).toBe('evm:ETH');
       expect(result.totalUsd).toBe(1750); // SUI has 0 usdValue, EVM has 1750
     });
 
