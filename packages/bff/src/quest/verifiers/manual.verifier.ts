@@ -7,8 +7,8 @@ export class ManualVerifier implements StepVerifier {
     _profileId: string,
     _step: { actionType: string; actionConfig: Record<string, unknown> },
     _claimData: Record<string, unknown>,
-  ): Promise<{ verified: boolean; txDigest?: string }> {
+  ): Promise<{ verified: boolean; txDigest?: string; pendingApproval?: boolean }> {
     // Manual verification always returns pending — admin must approve
-    return { verified: false };
+    return { verified: false, pendingApproval: true };
   }
 }

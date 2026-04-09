@@ -70,7 +70,10 @@ export class QuestService {
     return quest;
   }
 
-  async updateQuest(questId: string, data: { name?: string; description?: string; isActive?: boolean }) {
+  async updateQuest(
+    questId: string,
+    data: { name?: string; description?: string; isActive?: boolean },
+  ) {
     return this.prisma.quest.update({
       where: { id: questId },
       data,
@@ -125,5 +128,60 @@ export class QuestService {
     this.eventEmitter.emit('quest.completed', { questId, profileId });
 
     return completion;
+  }
+
+  async listPendingSubmissions(questId: string, stepId: string) {
+    return this.prisma.questStepCompletion.findMany({
+      where: {
+        stepId,
+        step: { questId },
+        verifiedBy: 'MANUAL',
+      },
+      include: {
+        step: { select: { title: true, questId: true } },
+      },
+      orderBy: { completedAt: 'desc' },
+    });
+  }
+
+  async approveSubmission(completionId: string, approved: boolean) {
+    const completion = await this.prisma.questStepCompletion.findUnique({
+      where: { id: completionId },
+      include: { step: { select: { questId: true } } },
+    });
+
+    if (!completion) {
+      throw new NotFoundException(`Submission ${completionId} not found`);
+    }
+
+    if (!approved) {
+      await this.prisma.questStepCompletion.delete({
+        where: { id: completionId },
+      });
+      return { status: 'rejected' };
+    }
+
+    const questId = completion.step.questId;
+    const profileId = completion.profileId;
+
+    const quest = await this.prisma.quest.findUnique({
+      where: { id: questId },
+      include: { steps: true },
+    });
+
+    if (!quest) throw new NotFoundException(`Quest ${questId} not found`);
+
+    const completedSteps = await this.prisma.questStepCompletion.findMany({
+      where: {
+        profileId,
+        step: { questId },
+      },
+    });
+
+    if (completedSteps.length >= quest.steps.length) {
+      await this.completeQuest(questId, profileId);
+    }
+
+    return { status: 'approved' };
   }
 }

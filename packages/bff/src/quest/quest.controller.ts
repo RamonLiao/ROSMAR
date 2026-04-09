@@ -1,5 +1,16 @@
-import { Controller, Get, Post, Put, Param, Body, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Patch,
+  Param,
+  Body,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { SessionGuard } from '../auth/guards/session.guard';
+import { RbacGuard, RequirePermissions, MANAGE } from '../auth/guards/rbac.guard';
 import { QuestService } from './quest.service';
 import { QuestVerificationService } from './quest-verification.service';
 import { CreateQuestDto } from './dto/create-quest.dto';
@@ -48,6 +59,26 @@ export class QuestController {
       dto.profileId,
       dto.claimData,
     );
+  }
+
+  @Get(':id/steps/:stepId/submissions')
+  @UseGuards(SessionGuard, RbacGuard)
+  @RequirePermissions(MANAGE)
+  async listSubmissions(
+    @Param('id') questId: string,
+    @Param('stepId') stepId: string,
+  ) {
+    return this.questService.listPendingSubmissions(questId, stepId);
+  }
+
+  @Patch(':id/steps/:stepId/submissions/:completionId')
+  @UseGuards(SessionGuard, RbacGuard)
+  @RequirePermissions(MANAGE)
+  async reviewSubmission(
+    @Param('completionId') completionId: string,
+    @Body() body: { approved: boolean },
+  ) {
+    return this.questService.approveSubmission(completionId, body.approved);
   }
 
   @Get(':id/progress/:profileId')

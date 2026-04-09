@@ -3,5 +3,5 @@ export interface StepVerifier {
     profileId: string,
     step: { actionType: string; actionConfig: Record<string, unknown> },
     claimData: Record<string, unknown>,
-  ): Promise<{ verified: boolean; txDigest?: string }>;
+  ): Promise<{ verified: boolean; txDigest?: string; pendingApproval?: boolean }>;
 }
