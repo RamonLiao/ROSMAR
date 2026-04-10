@@ -20,7 +20,9 @@
   **Engagement group:**
   - [ ] "Segments" (Filter icon) -> navigates to `/segments`
   - [ ] "Campaigns" (Megaphone icon) -> navigates to `/campaigns`
+  - [ ] "Broadcasts" (Radio icon) -> navigates to `/broadcasts`
   - [ ] "Tickets" (Ticket icon) -> navigates to `/tickets`
+  - [ ] "Whales" (Fish icon) -> navigates to `/whales`
 
   **Tools group:**
   - [ ] "Vault" (Vault icon) -> navigates to `/vault`

@@ -109,3 +109,25 @@
 
 - [ ] **12.3.6** Cancel wizard at step 2 (before execute)
   - Verify: Dialog closes, no action executed
+
+---
+
+## 12.4 Yield Optimizer Agent (Stub)
+
+> Note: Yield Optimizer is not fully implemented. This section verifies the endpoint exists and responds gracefully.
+
+### Steps
+
+- [ ] **12.4.1** Call the Yield Optimizer endpoint via API:
+  ```
+  curl -X POST http://localhost:3001/api/agent/yield-optimizer \
+    -H "Cookie: access_token=..." \
+    -H "Content-Type: application/json" \
+    -d '{"instruction": "Optimize yield for VIP profiles"}'
+  ```
+  - Verify: Returns a structured response (not 500 crash)
+  - Verify: Response indicates "not implemented" or returns a stub/placeholder result
+
+- [ ] **12.4.2** If a UI trigger exists (e.g. button on Campaign/Analytics page):
+  - Verify: Button is visible or hidden appropriately
+  - Verify: Clicking does not crash the page

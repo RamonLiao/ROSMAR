@@ -83,7 +83,7 @@
 
 ## 14.5 Fund Escrow
 
-> Note: On-chain fund TX is currently a stub — Prisma-only update.
+> Note: On-chain fund TX uses `crm_escrow` Move contract. With `SUI_DRY_RUN=true`, returns mock digest. With `SUI_DRY_RUN=false`, executes real on-chain TX via `TxBuilderService`.
 
 ### Steps
 
