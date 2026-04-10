@@ -23,7 +23,9 @@ describe('AuthService.testLogin — env guard', () => {
       // Fallback: define the guard inline so the test still validates intent
       testLogin = async function (this: any, _address: string) {
         if (process.env.NODE_ENV !== 'test') {
-          throw new ForbiddenException('testLogin is only available in test environment');
+          throw new ForbiddenException(
+            'testLogin is only available in test environment',
+          );
         }
         throw new Error('resolveOrCreateMembership not available in test stub');
       };
@@ -37,21 +39,30 @@ describe('AuthService.testLogin — env guard', () => {
   it('throws ForbiddenException when NODE_ENV is "development"', async () => {
     process.env.NODE_ENV = 'development';
     await expect(
-      testLogin.call({}, '0x0000000000000000000000000000000000000000000000000000000000000001'),
+      testLogin.call(
+        {},
+        '0x0000000000000000000000000000000000000000000000000000000000000001',
+      ),
     ).rejects.toThrow(ForbiddenException);
   });
 
   it('throws ForbiddenException when NODE_ENV is "production"', async () => {
     process.env.NODE_ENV = 'production';
     await expect(
-      testLogin.call({}, '0x0000000000000000000000000000000000000000000000000000000000000001'),
+      testLogin.call(
+        {},
+        '0x0000000000000000000000000000000000000000000000000000000000000001',
+      ),
     ).rejects.toThrow(ForbiddenException);
   });
 
   it('throws ForbiddenException when NODE_ENV is undefined', async () => {
     delete process.env.NODE_ENV;
     await expect(
-      testLogin.call({}, '0x0000000000000000000000000000000000000000000000000000000000000001'),
+      testLogin.call(
+        {},
+        '0x0000000000000000000000000000000000000000000000000000000000000001',
+      ),
     ).rejects.toThrow(ForbiddenException);
   });
 });

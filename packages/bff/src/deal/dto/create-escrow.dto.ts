@@ -11,7 +11,9 @@ import {
 
 export class CreateEscrowDto {
   @IsString()
-  @Matches(/^0x[0-9a-fA-F]{64}$/, { message: 'payee must be a valid SUI address' })
+  @Matches(/^0x[0-9a-fA-F]{64}$/, {
+    message: 'payee must be a valid SUI address',
+  })
   payee: string;
 
   @IsNumber()
@@ -21,7 +23,10 @@ export class CreateEscrowDto {
   @IsArray()
   @ArrayMinSize(1)
   @IsString({ each: true })
-  @Matches(/^0x[0-9a-fA-F]{64}$/, { each: true, message: 'each arbitrator must be a valid SUI address' })
+  @Matches(/^0x[0-9a-fA-F]{64}$/, {
+    each: true,
+    message: 'each arbitrator must be a valid SUI address',
+  })
   arbitrators: string[];
 
   @IsNumber()

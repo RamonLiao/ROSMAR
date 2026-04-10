@@ -31,13 +31,15 @@ export class MessagingService {
         throw new Error(`Unknown messaging channel: ${channel}`);
     }
 
-    this.notificationService.create({
-      workspaceId,
-      userId: dto.profileId ?? 'system',
-      type: 'message_sent',
-      title: `Message sent via ${channel}`,
-      metadata: { channel, messageId: result?.messageId },
-    }).catch(() => {});
+    this.notificationService
+      .create({
+        workspaceId,
+        userId: dto.profileId ?? 'system',
+        type: 'message_sent',
+        title: `Message sent via ${channel}`,
+        metadata: { channel, messageId: result?.messageId },
+      })
+      .catch(() => {});
 
     return result;
   }

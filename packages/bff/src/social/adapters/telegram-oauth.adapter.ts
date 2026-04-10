@@ -22,7 +22,10 @@ export class TelegramOAuthAdapter {
   private readonly botToken: string;
 
   constructor(private config: ConfigService) {
-    this.botToken = this.config.get<string>('TELEGRAM_BOT_TOKEN', 'test-bot-token');
+    this.botToken = this.config.get<string>(
+      'TELEGRAM_BOT_TOKEN',
+      'test-bot-token',
+    );
   }
 
   /**
@@ -45,8 +48,14 @@ export class TelegramOAuthAdapter {
       .join('\n');
 
     // Secret key = SHA256(bot_token)
-    const secretKey = crypto.createHash('sha256').update(this.botToken).digest();
-    const hmac = crypto.createHmac('sha256', secretKey).update(checkString).digest('hex');
+    const secretKey = crypto
+      .createHash('sha256')
+      .update(this.botToken)
+      .digest();
+    const hmac = crypto
+      .createHmac('sha256', secretKey)
+      .update(checkString)
+      .digest('hex');
 
     return hmac === hash;
   }

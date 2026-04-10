@@ -19,10 +19,7 @@ export class AnalystController {
   constructor(private readonly analystService: AnalystService) {}
 
   @Post('query')
-  async query(
-    @CurrentUser() user: UserPayload,
-    @Body() dto: AnalystQueryDto,
-  ) {
+  async query(@CurrentUser() user: UserPayload, @Body() dto: AnalystQueryDto) {
     return this.analystService.query({
       workspaceId: user.workspaceId,
       userId: user.address,

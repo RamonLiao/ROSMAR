@@ -18,7 +18,10 @@ export class AiGenerateContentAction {
     private readonly llmClient: LlmClientService,
   ) {}
 
-  async execute(profileId: string, config: AiGenerateContentConfig): Promise<void> {
+  async execute(
+    profileId: string,
+    config: AiGenerateContentConfig,
+  ): Promise<void> {
     const channel = config.channel ?? 'telegram';
     const tone = config.tone ?? 'professional';
 

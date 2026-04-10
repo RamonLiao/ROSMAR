@@ -29,13 +29,15 @@ export class BalanceSyncJob extends WorkerHost {
       const workspaces = await this.prisma.workspace.findMany({
         select: { id: true },
       });
-      workspaceIds = workspaces.map(w => w.id);
+      workspaceIds = workspaces.map((w) => w.id);
     }
 
     for (const wsId of workspaceIds) {
       try {
         const result = await this.balanceSyncService.syncWorkspace(wsId);
-        this.logger.log(`Workspace ${wsId}: ${result.synced} synced, ${result.errors} errors`);
+        this.logger.log(
+          `Workspace ${wsId}: ${result.synced} synced, ${result.errors} errors`,
+        );
       } catch (err) {
         this.logger.error(`Balance sync failed for workspace ${wsId}: ${err}`);
       }

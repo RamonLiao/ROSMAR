@@ -1,7 +1,10 @@
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
-import { TelegramOAuthAdapter, TelegramLoginData } from './telegram-oauth.adapter';
+import {
+  TelegramOAuthAdapter,
+  TelegramLoginData,
+} from './telegram-oauth.adapter';
 import { XOAuthAdapter } from './x-oauth.adapter';
 import { AppleZkLoginAdapter } from './apple-zklogin.adapter';
 
@@ -44,7 +47,10 @@ describe('TelegramOAuthAdapter', () => {
       .map(([k, v]) => `${k}=${v}`)
       .join('\n');
     const secretKey = crypto.createHash('sha256').update(botToken).digest();
-    const hash = crypto.createHmac('sha256', secretKey).update(checkString).digest('hex');
+    const hash = crypto
+      .createHmac('sha256', secretKey)
+      .update(checkString)
+      .digest('hex');
 
     expect(adapter.verifyLoginWidget({ ...data, hash })).toBe(true);
   });
@@ -71,7 +77,10 @@ describe('TelegramOAuthAdapter', () => {
       .map(([k, v]) => `${k}=${v}`)
       .join('\n');
     const secretKey = crypto.createHash('sha256').update(botToken).digest();
-    const hash = crypto.createHmac('sha256', secretKey).update(checkString).digest('hex');
+    const hash = crypto
+      .createHmac('sha256', secretKey)
+      .update(checkString)
+      .digest('hex');
 
     expect(adapter.verifyLoginWidget({ ...data, hash })).toBe(false);
   });
@@ -144,7 +153,9 @@ describe('XOAuthAdapter', () => {
       ok: false,
       text: async () => 'invalid_grant',
     });
-    await expect(adapter.exchangeCode('bad', 'bad')).rejects.toThrow('X token exchange failed');
+    await expect(adapter.exchangeCode('bad', 'bad')).rejects.toThrow(
+      'X token exchange failed',
+    );
   });
 
   it('should fetch user info', async () => {

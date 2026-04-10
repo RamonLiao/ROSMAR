@@ -8,7 +8,7 @@ export function Cacheable(keyPrefix: string, ttlSeconds: number) {
   ) {
     const originalMethod = descriptor.value;
     descriptor.value = async function (...args: any[]) {
-      const cacheService: CacheService = (this as any).cacheService;
+      const cacheService: CacheService = this.cacheService;
       if (!cacheService) return originalMethod.apply(this, args);
       const key = `${keyPrefix}:${JSON.stringify(args)}`;
       const cached = await cacheService.get(key);

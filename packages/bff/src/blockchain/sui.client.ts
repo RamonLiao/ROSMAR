@@ -27,7 +27,8 @@ export class SuiClientService {
       );
     }
 
-    this.isDryRun = this.configService.get<string>('SUI_DRY_RUN', 'false') === 'true';
+    this.isDryRun =
+      this.configService.get<string>('SUI_DRY_RUN', 'false') === 'true';
   }
 
   getClient(): SuiJsonRpcClient {

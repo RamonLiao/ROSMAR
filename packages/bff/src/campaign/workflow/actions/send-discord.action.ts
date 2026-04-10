@@ -39,7 +39,9 @@ export class SendDiscordAction {
     });
 
     if (!response.ok) {
-      throw new Error(`Discord webhook failed: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `Discord webhook failed: ${response.status} ${response.statusText}`,
+      );
     }
 
     this.logger.log(`Discord message sent to profile ${profileId}`);

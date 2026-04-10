@@ -21,8 +21,7 @@ const CHANNEL_RULES: Record<ContentChannel, string> = {
     'Format: Telegram message. Use markdown formatting. Max 4096 characters. Emoji usage is encouraged. Keep paragraphs short for mobile readability.',
   discord:
     'Format: Discord message. Use markdown formatting. Embed-friendly structure. Can use rich formatting (bold, italic, code blocks, bullet lists). Keep under 2000 chars.',
-  x:
-    'Format: X/Twitter post. STRICT max 280 characters including hashtags. Suggest 1-3 relevant hashtags. Be concise and punchy.',
+  x: 'Format: X/Twitter post. STRICT max 280 characters including hashtags. Suggest 1-3 relevant hashtags. Be concise and punchy.',
   email:
     'Format: Email. Output MUST start with "SUBJECT: <subject line>" followed by "---" on the next line, then the HTML body. Use proper HTML tags (<p>, <h2>, <ul>, etc.).',
 };
@@ -64,8 +63,7 @@ export class ContentService {
       const subjectMatch = text.match(/^SUBJECT:\s*(.+)/m);
       const subject = subjectMatch?.[1]?.trim();
       const bodyStart = text.indexOf('---');
-      const content =
-        bodyStart >= 0 ? text.slice(bodyStart + 3).trim() : text;
+      const content = bodyStart >= 0 ? text.slice(bodyStart + 3).trim() : text;
       return { content, subject };
     }
 

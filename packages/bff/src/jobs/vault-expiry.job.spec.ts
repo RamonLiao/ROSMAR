@@ -1,7 +1,9 @@
 // Mock ESM blockchain deps before any imports
 jest.mock('@mysten/sui/transactions', () => ({ Transaction: jest.fn() }));
 jest.mock('@mysten/sui/jsonRpc', () => ({ SuiJsonRpcClient: jest.fn() }));
-jest.mock('@mysten/sui/keypairs/ed25519', () => ({ Ed25519Keypair: jest.fn() }));
+jest.mock('@mysten/sui/keypairs/ed25519', () => ({
+  Ed25519Keypair: jest.fn(),
+}));
 
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
@@ -22,14 +24,28 @@ describe('VaultExpiryJob', () => {
     prisma = {
       vaultSecret: {
         findMany: jest.fn().mockResolvedValue([
-          { id: 'v1', suiObjectId: '0xabc', workspaceId: 'ws1', profileId: 'p1', key: 'secret-1' },
-          { id: 'v2', suiObjectId: null, workspaceId: 'ws1', profileId: 'p2', key: 'secret-2' },
+          {
+            id: 'v1',
+            suiObjectId: '0xabc',
+            workspaceId: 'ws1',
+            profileId: 'p1',
+            key: 'secret-1',
+          },
+          {
+            id: 'v2',
+            suiObjectId: null,
+            workspaceId: 'ws1',
+            profileId: 'p2',
+            key: 'secret-2',
+          },
         ]),
         delete: jest.fn().mockResolvedValue({}),
       },
     };
     txBuilder = { buildEnforceVaultExpiryTx: jest.fn().mockReturnValue({}) };
-    suiClient = { executeTransaction: jest.fn().mockResolvedValue({ digest: 'abc' }) };
+    suiClient = {
+      executeTransaction: jest.fn().mockResolvedValue({ digest: 'abc' }),
+    };
     notificationService = { create: jest.fn().mockResolvedValue({}) };
 
     const module = await Test.createTestingModule({
@@ -38,10 +54,15 @@ describe('VaultExpiryJob', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: TxBuilderService, useValue: txBuilder },
         { provide: SuiClientService, useValue: suiClient },
-        { provide: ConfigService, useValue: { get: jest.fn((key: string, def?: string) => {
-          if (key === 'SUI_DRY_RUN') return 'false';
-          return def;
-        }) } },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string, def?: string) => {
+              if (key === 'SUI_DRY_RUN') return 'false';
+              return def;
+            }),
+          },
+        },
         { provide: NotificationService, useValue: notificationService },
       ],
     }).compile();
@@ -77,10 +98,15 @@ describe('VaultExpiryJob', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: TxBuilderService, useValue: txBuilder },
         { provide: SuiClientService, useValue: suiClient },
-        { provide: ConfigService, useValue: { get: jest.fn((key: string, def?: string) => {
-          if (key === 'SUI_DRY_RUN') return 'true';
-          return def;
-        }) } },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string, def?: string) => {
+              if (key === 'SUI_DRY_RUN') return 'true';
+              return def;
+            }),
+          },
+        },
         { provide: NotificationService, useValue: notificationService },
       ],
     }).compile();

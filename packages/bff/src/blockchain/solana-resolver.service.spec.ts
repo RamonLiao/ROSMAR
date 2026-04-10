@@ -51,7 +51,9 @@ describe('SolanaResolverService', () => {
 
   describe('resolveSns', () => {
     it('should resolve .sol name to address', async () => {
-      const mockPubkey = { toBase58: () => 'SoLANAaDdReSS111111111111111111111111111111' };
+      const mockPubkey = {
+        toBase58: () => 'SoLANAaDdReSS111111111111111111111111111111',
+      };
       (bonfida.resolve as jest.Mock).mockResolvedValue(mockPubkey);
       const result = await service.resolveSns('bonfida.sol');
       expect(result).toBe('SoLANAaDdReSS111111111111111111111111111111');
@@ -61,17 +63,24 @@ describe('SolanaResolverService', () => {
       const mockPubkey = { toBase58: () => 'addr123' };
       (bonfida.resolve as jest.Mock).mockResolvedValue(mockPubkey);
       await service.resolveSns('bonfida.sol');
-      expect(bonfida.resolve).toHaveBeenCalledWith(expect.anything(), 'bonfida');
+      expect(bonfida.resolve).toHaveBeenCalledWith(
+        expect.anything(),
+        'bonfida',
+      );
     });
 
     it('should return null for unregistered SNS name', async () => {
-      (bonfida.resolve as jest.Mock).mockRejectedValue(new Error('Name not found'));
+      (bonfida.resolve as jest.Mock).mockRejectedValue(
+        new Error('Name not found'),
+      );
       const result = await service.resolveSns('nonexistent12345.sol');
       expect(result).toBeNull();
     });
 
     it('should return null on connection error', async () => {
-      (bonfida.resolve as jest.Mock).mockRejectedValue(new Error('connection timeout'));
+      (bonfida.resolve as jest.Mock).mockRejectedValue(
+        new Error('connection timeout'),
+      );
       const result = await service.resolveSns('broken.sol');
       expect(result).toBeNull();
     });
@@ -80,13 +89,19 @@ describe('SolanaResolverService', () => {
   describe('lookupAddress', () => {
     it('should reverse-lookup address to .sol name', async () => {
       (bonfida.performReverseLookup as jest.Mock).mockResolvedValue('bonfida');
-      const result = await service.lookupAddress('SoLANAaDdReSS111111111111111111111111111111');
+      const result = await service.lookupAddress(
+        'SoLANAaDdReSS111111111111111111111111111111',
+      );
       expect(result).toBe('bonfida.sol');
     });
 
     it('should return null for address without reverse record', async () => {
-      (bonfida.performReverseLookup as jest.Mock).mockRejectedValue(new Error('not found'));
-      const result = await service.lookupAddress('NoReverseSolAddr1111111111111111111111111111');
+      (bonfida.performReverseLookup as jest.Mock).mockRejectedValue(
+        new Error('not found'),
+      );
+      const result = await service.lookupAddress(
+        'NoReverseSolAddr1111111111111111111111111111',
+      );
       expect(result).toBeNull();
     });
   });

@@ -85,8 +85,8 @@ describe('WorkspaceService — engagement weights', () => {
       nftCount: 0.5,
     };
 
-    await expect(
-      service.setEngagementWeights('ws-1', bad),
-    ).rejects.toThrow(BadRequestException);
+    await expect(service.setEngagementWeights('ws-1', bad)).rejects.toThrow(
+      BadRequestException,
+    );
   });
 });

@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FeatureExtractionService } from './feature-extraction.service';
-import { KnnCosineStrategy, ScoredProfile } from './strategies/knn-cosine.strategy';
+import {
+  KnnCosineStrategy,
+  ScoredProfile,
+} from './strategies/knn-cosine.strategy';
 import { GraphBasedStrategy } from './strategies/graph-based.strategy';
 import { InternalCandidateSource } from './sources/internal.source';
 import { OnChainCandidateSource } from './sources/on-chain.source';
@@ -59,17 +62,23 @@ export class LookalikeService {
     const seedVectors = await this.featureExtraction.extractFeatures(seedIds);
 
     // 3. Get candidate profiles
-    const source = candidateMode === 'on-chain-discovery'
-      ? this.onChainSource
-      : this.internalSource;
+    const source =
+      candidateMode === 'on-chain-discovery'
+        ? this.onChainSource
+        : this.internalSource;
     const candidateIds = await source.getCandidates(workspaceId, seedIds);
 
     // 4. Extract features for candidates
     // For discovered wallets (on-chain), create zero vectors as placeholders
-    const realProfileIds = candidateIds.filter((id) => !id.startsWith('discovered:'));
-    const discoveredAddrs = candidateIds.filter((id) => id.startsWith('discovered:'));
+    const realProfileIds = candidateIds.filter(
+      (id) => !id.startsWith('discovered:'),
+    );
+    const discoveredAddrs = candidateIds.filter((id) =>
+      id.startsWith('discovered:'),
+    );
 
-    const candidateVectors = await this.featureExtraction.extractFeatures(realProfileIds);
+    const candidateVectors =
+      await this.featureExtraction.extractFeatures(realProfileIds);
 
     // Add zero-vector placeholders for discovered addresses
     const dims = seedVectors[0]?.vector.length ?? 6;
@@ -87,13 +96,16 @@ export class LookalikeService {
     if (algorithm === 'graph-based') {
       // Build neighbor maps for graph-based scoring
       const allProfileIds = [...seedIds, ...realProfileIds];
-      const neighborMap = await this.graphStrategy.buildNeighborMap(allProfileIds);
+      const neighborMap =
+        await this.graphStrategy.buildNeighborMap(allProfileIds);
 
       // Split into seed and candidate neighbor maps
       const seedNeighbors: Record<string, Set<string>> = {};
       const candidateNeighbors: Record<string, Set<string>> = {};
-      for (const id of seedIds) seedNeighbors[id] = neighborMap[id] ?? new Set();
-      for (const id of realProfileIds) candidateNeighbors[id] = neighborMap[id] ?? new Set();
+      for (const id of seedIds)
+        seedNeighbors[id] = neighborMap[id] ?? new Set();
+      for (const id of realProfileIds)
+        candidateNeighbors[id] = neighborMap[id] ?? new Set();
       // Discovered addresses have no neighbor data yet
       for (const addr of discoveredAddrs) candidateNeighbors[addr] = new Set();
 

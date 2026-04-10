@@ -1,7 +1,9 @@
 // Mock ESM blockchain deps before any imports
 jest.mock('@mysten/sui/transactions', () => ({ Transaction: jest.fn() }));
 jest.mock('@mysten/sui/jsonRpc', () => ({ SuiJsonRpcClient: jest.fn() }));
-jest.mock('@mysten/sui/keypairs/ed25519', () => ({ Ed25519Keypair: jest.fn() }));
+jest.mock('@mysten/sui/keypairs/ed25519', () => ({
+  Ed25519Keypair: jest.fn(),
+}));
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { DealEventListener } from './deal-event.listener';
@@ -34,10 +36,8 @@ describe('DealEventListener', () => {
     }).compile();
 
     listener = module.get(DealEventListener);
-    escrowService = module.get(EscrowService) as jest.Mocked<EscrowService>;
-    notificationService = module.get(
-      NotificationService,
-    ) as jest.Mocked<NotificationService>;
+    escrowService = module.get(EscrowService);
+    notificationService = module.get(NotificationService);
   });
 
   const basePayload = {
@@ -105,6 +105,8 @@ describe('DealEventListener', () => {
     } as any);
     escrowService.release.mockRejectedValue(new Error('chain error'));
 
-    await expect(listener.handleStageChange(basePayload)).resolves.not.toThrow();
+    await expect(
+      listener.handleStageChange(basePayload),
+    ).resolves.not.toThrow();
   });
 });

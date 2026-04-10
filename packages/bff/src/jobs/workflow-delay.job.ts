@@ -19,7 +19,13 @@ export class WorkflowDelayJob extends WorkerHost {
 
   async process(job: Job<WorkflowDelayJobData>): Promise<void> {
     const { campaignId, profileId, workflowSteps } = job.data;
-    this.logger.log(`Resuming workflow for campaign=${campaignId} profile=${profileId}`);
-    await this.workflowEngine.executeNextStep(campaignId, profileId, workflowSteps);
+    this.logger.log(
+      `Resuming workflow for campaign=${campaignId} profile=${profileId}`,
+    );
+    await this.workflowEngine.executeNextStep(
+      campaignId,
+      profileId,
+      workflowSteps,
+    );
   }
 }

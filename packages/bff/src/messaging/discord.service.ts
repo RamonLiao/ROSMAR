@@ -30,7 +30,7 @@ export class DiscordService {
       throw new Error('No Discord webhook URL linked to profile');
     }
 
-    let externalId = `dc_mock_${Date.now()}`;
+    const externalId = `dc_mock_${Date.now()}`;
     let status = 'sent';
 
     try {

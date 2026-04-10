@@ -104,7 +104,13 @@ export class AuditLogInterceptor implements NestInterceptor {
 
     // Try to extract from response (for POST operations)
     if (response && typeof response === 'object') {
-      return response.id || response.profileId || response.organizationId || response.dealId || null;
+      return (
+        response.id ||
+        response.profileId ||
+        response.organizationId ||
+        response.dealId ||
+        null
+      );
     }
 
     return null;

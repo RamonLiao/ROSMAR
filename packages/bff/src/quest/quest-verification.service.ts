@@ -41,7 +41,9 @@ export class QuestVerificationService {
 
     const step = quest.steps.find((s) => s.id === stepId);
     if (!step) {
-      throw new NotFoundException(`Step ${stepId} not found in quest ${questId}`);
+      throw new NotFoundException(
+        `Step ${stepId} not found in quest ${questId}`,
+      );
     }
 
     // Check if already completed
@@ -56,12 +58,17 @@ export class QuestVerificationService {
     // Run verifier
     const verifier = this.verifiers.get(step.verificationMethod);
     if (!verifier) {
-      throw new Error(`Unknown verification method: ${step.verificationMethod}`);
+      throw new Error(
+        `Unknown verification method: ${step.verificationMethod}`,
+      );
     }
 
     const result = await verifier.verify(
       profileId,
-      { actionType: step.actionType, actionConfig: step.actionConfig as Record<string, unknown> },
+      {
+        actionType: step.actionType,
+        actionConfig: step.actionConfig as Record<string, unknown>,
+      },
       claimData,
     );
 

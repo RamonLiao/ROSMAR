@@ -1,7 +1,9 @@
 // Mock ESM blockchain deps before any imports
 jest.mock('@mysten/sui/transactions', () => ({ Transaction: jest.fn() }));
 jest.mock('@mysten/sui/jsonRpc', () => ({ SuiJsonRpcClient: jest.fn() }));
-jest.mock('@mysten/sui/keypairs/ed25519', () => ({ Ed25519Keypair: jest.fn() }));
+jest.mock('@mysten/sui/keypairs/ed25519', () => ({
+  Ed25519Keypair: jest.fn(),
+}));
 
 import { Test } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
@@ -30,7 +32,10 @@ describe('DealService — stage state machine (T11)', () => {
       providers: [
         DealService,
         { provide: PrismaService, useValue: prisma },
-        { provide: SuiClientService, useValue: { executeTransaction: jest.fn() } },
+        {
+          provide: SuiClientService,
+          useValue: { executeTransaction: jest.fn() },
+        },
         {
           provide: TxBuilderService,
           useValue: { buildUpdateDealTx: jest.fn() },

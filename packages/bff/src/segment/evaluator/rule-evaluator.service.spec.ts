@@ -1,9 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Prisma } from '@prisma/client';
-import {
-  RuleEvaluatorService,
-  SegmentRules,
-} from './rule-evaluator.service';
+import { RuleEvaluatorService, SegmentRules } from './rule-evaluator.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 describe('RuleEvaluatorService', () => {
@@ -70,9 +67,7 @@ describe('RuleEvaluatorService', () => {
 
   it('engagement_score gte', async () => {
     const where = await callAndGetWhere({
-      conditions: [
-        { field: 'engagement_score', operator: 'gte', value: 50 },
-      ],
+      conditions: [{ field: 'engagement_score', operator: 'gte', value: 50 }],
       logic: 'AND',
     });
     expect(where.AND).toEqual([{ engagementScore: { gte: 50 } }]);
@@ -85,21 +80,15 @@ describe('RuleEvaluatorService', () => {
       ],
       logic: 'AND',
     });
-    expect(where.AND).toEqual([
-      { createdAt: { gte: new Date('2024-01-01') } },
-    ]);
+    expect(where.AND).toEqual([{ createdAt: { gte: new Date('2024-01-01') } }]);
   });
 
   it('wallet_chain equals', async () => {
     const where = await callAndGetWhere({
-      conditions: [
-        { field: 'wallet_chain', operator: 'equals', value: 'sui' },
-      ],
+      conditions: [{ field: 'wallet_chain', operator: 'equals', value: 'sui' }],
       logic: 'AND',
     });
-    expect(where.AND).toEqual([
-      { wallets: { some: { chain: 'sui' } } },
-    ]);
+    expect(where.AND).toEqual([{ wallets: { some: { chain: 'sui' } } }]);
   });
 
   it('OR logic', async () => {

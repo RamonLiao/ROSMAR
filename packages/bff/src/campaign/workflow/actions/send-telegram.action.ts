@@ -55,6 +55,8 @@ export class SendTelegramAction {
       throw new Error(`Telegram API error: ${result.description}`);
     }
 
-    this.logger.log(`Telegram message sent to ${chatId} (msg_id: ${result.result?.message_id})`);
+    this.logger.log(
+      `Telegram message sent to ${chatId} (msg_id: ${result.result?.message_id})`,
+    );
   }
 }

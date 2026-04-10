@@ -6,7 +6,9 @@ import { AuthService } from './auth.service';
 export class TestAuthController {
   constructor(private readonly authService: AuthService) {
     if (process.env.NODE_ENV !== 'test') {
-      throw new Error('TestAuthController must not be loaded outside test environment');
+      throw new Error(
+        'TestAuthController must not be loaded outside test environment',
+      );
     }
   }
 

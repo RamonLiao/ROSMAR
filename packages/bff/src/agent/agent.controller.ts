@@ -1,16 +1,5 @@
-import {
-  Controller,
-  Get,
-  Put,
-  Body,
-  UseGuards,
-} from '@nestjs/common';
-import {
-  IsString,
-  IsOptional,
-  IsNumber,
-  IsBoolean,
-} from 'class-validator';
+import { Controller, Get, Put, Body, UseGuards } from '@nestjs/common';
+import { IsString, IsOptional, IsNumber, IsBoolean } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
 import { EncryptionService } from '../common/crypto/encryption.service';
 import { SessionGuard } from '../auth/guards/session.guard';

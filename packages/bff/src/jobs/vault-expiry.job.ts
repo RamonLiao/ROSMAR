@@ -31,7 +31,13 @@ export class VaultExpiryJob extends WorkerHost {
   private async archiveExpired(): Promise<void> {
     const expired = await this.prisma.vaultSecret.findMany({
       where: { expiresAt: { not: null, lte: new Date() } },
-      select: { id: true, suiObjectId: true, workspaceId: true, profileId: true, key: true },
+      select: {
+        id: true,
+        suiObjectId: true,
+        workspaceId: true,
+        profileId: true,
+        key: true,
+      },
       take: 50,
     });
 
@@ -41,7 +47,9 @@ export class VaultExpiryJob extends WorkerHost {
       try {
         // On-chain expiry enforcement
         if (secret.suiObjectId && !this.isDryRun) {
-          const tx = this.txBuilder.buildEnforceVaultExpiryTx(secret.suiObjectId);
+          const tx = this.txBuilder.buildEnforceVaultExpiryTx(
+            secret.suiObjectId,
+          );
           await this.suiClient.executeTransaction(tx);
         }
 

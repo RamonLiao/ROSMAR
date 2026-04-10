@@ -13,7 +13,10 @@ export class XOAuthAdapter {
 
   constructor(private config: ConfigService) {
     this.clientId = this.config.get<string>('X_CLIENT_ID', 'x-client-id');
-    this.redirectUri = this.config.get<string>('X_REDIRECT_URI', 'http://localhost:3001/api/social/x/callback');
+    this.redirectUri = this.config.get<string>(
+      'X_REDIRECT_URI',
+      'http://localhost:3001/api/social/x/callback',
+    );
   }
 
   getAuthUrl(state: string, codeChallenge: string): string {

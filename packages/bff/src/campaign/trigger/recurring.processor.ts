@@ -41,7 +41,9 @@ export class RecurringProcessor extends WorkerHost {
 
     const profileIds = memberships.map((m) => m.profileId);
     if (profileIds.length === 0) {
-      this.logger.log(`Campaign ${campaignId} segment has no profiles, skipping`);
+      this.logger.log(
+        `Campaign ${campaignId} segment has no profiles, skipping`,
+      );
       return;
     }
 

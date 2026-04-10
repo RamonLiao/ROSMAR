@@ -36,7 +36,8 @@ export class SegmentDiffJob extends WorkerHost {
     const segmentIds = new Set<string>();
     for (const trigger of triggers) {
       const config = trigger.triggerConfig as Record<string, unknown>;
-      const segmentId = (config.segmentId as string) || trigger.campaign.segmentId;
+      const segmentId =
+        (config.segmentId as string) || trigger.campaign.segmentId;
       if (segmentId) segmentIds.add(segmentId);
     }
 
@@ -47,7 +48,11 @@ export class SegmentDiffJob extends WorkerHost {
 
   private async diffSegment(
     segmentId: string,
-    triggers: Array<{ triggerType: string; triggerConfig: unknown; campaign: { segmentId: string } }>,
+    triggers: Array<{
+      triggerType: string;
+      triggerConfig: unknown;
+      campaign: { segmentId: string };
+    }>,
   ): Promise<void> {
     const memberships = await this.prisma.segmentMembership.findMany({
       where: { segmentId },
@@ -59,11 +64,15 @@ export class SegmentDiffJob extends WorkerHost {
 
     if (!previousSet) {
       this.previousMemberships.set(segmentId, currentSet);
-      this.logger.log(`Baseline established for segment ${segmentId}: ${currentSet.size} members`);
+      this.logger.log(
+        `Baseline established for segment ${segmentId}: ${currentSet.size} members`,
+      );
       return;
     }
 
-    const hasEnteredTrigger = triggers.some((t) => t.triggerType === 'segment_entered');
+    const hasEnteredTrigger = triggers.some(
+      (t) => t.triggerType === 'segment_entered',
+    );
     if (hasEnteredTrigger) {
       for (const profileId of currentSet) {
         if (!previousSet.has(profileId)) {
@@ -77,7 +86,9 @@ export class SegmentDiffJob extends WorkerHost {
       }
     }
 
-    const hasExitedTrigger = triggers.some((t) => t.triggerType === 'segment_exited');
+    const hasExitedTrigger = triggers.some(
+      (t) => t.triggerType === 'segment_exited',
+    );
     if (hasExitedTrigger) {
       for (const profileId of previousSet) {
         if (!currentSet.has(profileId)) {

@@ -185,9 +185,9 @@ describe('UpdateTierAction', () => {
   });
 
   it('should throw if tier is missing', async () => {
-    await expect(
-      action.execute('profile-1', {} as any),
-    ).rejects.toThrow('tier is required');
+    await expect(action.execute('profile-1', {} as any)).rejects.toThrow(
+      'tier is required',
+    );
   });
 });
 
@@ -291,7 +291,11 @@ describe('ConditionAction', () => {
 
   it('should throw if field or operator is missing', async () => {
     await expect(
-      action.execute('profile-1', { field: '', operator: 'eq', value: 1 } as any),
+      action.execute('profile-1', {
+        field: '',
+        operator: 'eq',
+        value: 1,
+      } as any),
     ).rejects.toThrow('field and operator are required');
   });
 

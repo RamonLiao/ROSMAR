@@ -29,7 +29,8 @@ export class SegmentService {
     private readonly txBuilder: TxBuilderService,
     private readonly configService: ConfigService,
   ) {
-    this.isDryRun = this.configService.get<string>('SUI_DRY_RUN', 'false') === 'true';
+    this.isDryRun =
+      this.configService.get<string>('SUI_DRY_RUN', 'false') === 'true';
     this.grpcClient = {
       getSegment: () => Promise.resolve({}),
       listSegments: () => Promise.resolve({}),
@@ -51,7 +52,8 @@ export class SegmentService {
     dto: CreateSegmentDto,
   ): Promise<any> {
     const result = await this.execChainTx(() => {
-      const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
+      const globalConfigId =
+        this.configService.get<string>('GLOBAL_CONFIG_ID')!;
       const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
       return this.txBuilder.buildCreateSegmentTx(
         globalConfigId,
@@ -63,11 +65,12 @@ export class SegmentService {
       );
     });
 
-    const segmentCreatedEvent = result.events?.find(
-      (e: any) => e.type.includes('::segment::SegmentCreated'),
+    const segmentCreatedEvent = result.events?.find((e: any) =>
+      e.type.includes('::segment::SegmentCreated'),
     );
 
-    const segmentId = (segmentCreatedEvent?.parsedJson as any)?.segment_id || randomUUID();
+    const segmentId =
+      segmentCreatedEvent?.parsedJson?.segment_id || randomUUID();
 
     await this.prisma.segment.create({
       data: {
@@ -127,7 +130,8 @@ export class SegmentService {
     dto: UpdateSegmentDto,
   ): Promise<any> {
     const result = await this.execChainTx(() => {
-      const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
+      const globalConfigId =
+        this.configService.get<string>('GLOBAL_CONFIG_ID')!;
       const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
       return this.txBuilder.buildUpdateSegmentTx(
         globalConfigId,

@@ -132,9 +132,7 @@ describe('WalletClusterService', () => {
     service = module.get(WalletClusterService);
 
     // Mock verifySignature to return the expected address by default
-    jest
-      .spyOn(service, 'verifySignature')
-      .mockResolvedValue(ADDRESS);
+    jest.spyOn(service, 'verifySignature').mockResolvedValue(ADDRESS);
   });
 
   // ── claimAddress ────────────────────────────────────────────
@@ -214,9 +212,7 @@ describe('WalletClusterService', () => {
   });
 
   it('should throw BadRequestException when signature address does not match', async () => {
-    jest
-      .spyOn(service, 'verifySignature')
-      .mockResolvedValue('0xdifferent');
+    jest.spyOn(service, 'verifySignature').mockResolvedValue('0xdifferent');
 
     await expect(
       service.claimAddress(
@@ -251,33 +247,36 @@ describe('WalletClusterService', () => {
 
   describe('detectMergeCandidate', () => {
     it('should return null when profile has no wallets', async () => {
-      mockProfileWallet.findMany
-        .mockResolvedValueOnce([]) // myWallets query
-        ;
+      mockProfileWallet.findMany.mockResolvedValueOnce([]); // myWallets query
 
-      const result = await service.detectMergeCandidate(WORKSPACE_ID, PROFILE_ID);
+      const result = await service.detectMergeCandidate(
+        WORKSPACE_ID,
+        PROFILE_ID,
+      );
       expect(result).toBeNull();
     });
 
     it('should return null when no overlapping addresses exist', async () => {
       mockProfileWallet.findMany
         .mockResolvedValueOnce([{ address: ADDRESS }]) // myWallets
-        .mockResolvedValueOnce([]) // overlapping
-        ;
+        .mockResolvedValueOnce([]); // overlapping
 
-      const result = await service.detectMergeCandidate(WORKSPACE_ID, PROFILE_ID);
+      const result = await service.detectMergeCandidate(
+        WORKSPACE_ID,
+        PROFILE_ID,
+      );
       expect(result).toBeNull();
     });
 
     it('should detect duplicate address across profiles', async () => {
       mockProfileWallet.findMany
         .mockResolvedValueOnce([{ address: ADDRESS }, { address: ADDRESS_2 }]) // myWallets
-        .mockResolvedValueOnce([
-          { profileId: PROFILE_ID_2, address: ADDRESS },
-        ]) // overlapping
-        ;
+        .mockResolvedValueOnce([{ profileId: PROFILE_ID_2, address: ADDRESS }]); // overlapping
 
-      const result = await service.detectMergeCandidate(WORKSPACE_ID, PROFILE_ID);
+      const result = await service.detectMergeCandidate(
+        WORKSPACE_ID,
+        PROFILE_ID,
+      );
 
       expect(result).toEqual({
         profileId: PROFILE_ID_2,
@@ -292,10 +291,12 @@ describe('WalletClusterService', () => {
           { profileId: PROFILE_ID_2, address: ADDRESS },
           { profileId: PROFILE_ID_2, address: ADDRESS_2 },
           { profileId: 'profile-3', address: ADDRESS },
-        ])
-        ;
+        ]);
 
-      const result = await service.detectMergeCandidate(WORKSPACE_ID, PROFILE_ID);
+      const result = await service.detectMergeCandidate(
+        WORKSPACE_ID,
+        PROFILE_ID,
+      );
 
       expect(result).toEqual({
         profileId: PROFILE_ID_2,
@@ -307,14 +308,25 @@ describe('WalletClusterService', () => {
   // ── mergeProfiles ──────────────────────────────────────────
 
   describe('mergeProfiles', () => {
-    const targetProfile = { id: PROFILE_ID, workspaceId: WORKSPACE_ID, isArchived: false };
-    const sourceProfile = { id: PROFILE_ID_2, workspaceId: WORKSPACE_ID, isArchived: false };
+    const targetProfile = {
+      id: PROFILE_ID,
+      workspaceId: WORKSPACE_ID,
+      isArchived: false,
+    };
+    const sourceProfile = {
+      id: PROFILE_ID_2,
+      workspaceId: WORKSPACE_ID,
+      isArchived: false,
+    };
 
     beforeEach(() => {
       mockProfile.findFirst
         .mockResolvedValueOnce(targetProfile)
         .mockResolvedValueOnce(sourceProfile);
-      mockProfile.update.mockResolvedValue({ ...sourceProfile, isArchived: true });
+      mockProfile.update.mockResolvedValue({
+        ...sourceProfile,
+        isArchived: true,
+      });
     });
 
     it('should throw when merging profile into itself', async () => {

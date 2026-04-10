@@ -1,15 +1,22 @@
+import { Controller, Post, Body, Param, UseGuards } from '@nestjs/common';
 import {
-  Controller,
-  Post,
-  Body,
-  Param,
-  UseGuards,
-} from '@nestjs/common';
-import { IsInt, IsOptional, IsNumber, IsArray, IsString, IsIn, Min, Max } from 'class-validator';
+  IsInt,
+  IsOptional,
+  IsNumber,
+  IsArray,
+  IsString,
+  IsIn,
+  Min,
+  Max,
+} from 'class-validator';
 import * as LookalikeTypes from './lookalike.service';
 import { LookalikeService } from './lookalike.service';
 import { SessionGuard } from '../../auth/guards/session.guard';
-import { RbacGuard, RequirePermissions, WRITE } from '../../auth/guards/rbac.guard';
+import {
+  RbacGuard,
+  RequirePermissions,
+  WRITE,
+} from '../../auth/guards/rbac.guard';
 import { User } from '../../auth/decorators/user.decorator';
 import * as AuthTypes from '../../auth/auth.service';
 
@@ -61,17 +68,13 @@ export class LookalikeController {
     @Param('id') segmentId: string,
     @Body() dto: FindLookalikeDto,
   ) {
-    return this.lookalikeService.findLookalike(
-      user.workspaceId,
-      segmentId,
-      {
-        topK: dto.topK ?? 20,
-        minSimilarity: dto.minSimilarity,
-        algorithm: dto.algorithm,
-        candidateSource: dto.candidateSource,
-        alpha: dto.alpha,
-      },
-    );
+    return this.lookalikeService.findLookalike(user.workspaceId, segmentId, {
+      topK: dto.topK ?? 20,
+      minSimilarity: dto.minSimilarity,
+      algorithm: dto.algorithm,
+      candidateSource: dto.candidateSource,
+      alpha: dto.alpha,
+    });
   }
 
   @Post(':id/lookalike/create-segment')

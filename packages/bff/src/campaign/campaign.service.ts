@@ -40,7 +40,8 @@ export class CampaignService {
     private readonly notificationService: NotificationService,
     @InjectQueue('campaign-recurring') private readonly recurringQueue: Queue,
   ) {
-    this.isDryRun = this.configService.get<string>('SUI_DRY_RUN', 'false') === 'true';
+    this.isDryRun =
+      this.configService.get<string>('SUI_DRY_RUN', 'false') === 'true';
   }
 
   private async execChainTx(buildTx: () => any): Promise<any> {
@@ -57,7 +58,8 @@ export class CampaignService {
     dto: CreateCampaignDto,
   ): Promise<any> {
     const result = await this.execChainTx(() => {
-      const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
+      const globalConfigId =
+        this.configService.get<string>('GLOBAL_CONFIG_ID')!;
       const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
       return this.txBuilder.buildCreateCampaignTx(
         globalConfigId,
@@ -69,14 +71,16 @@ export class CampaignService {
       );
     });
 
-    const campaignCreatedEvent = result.events?.find(
-      (e: any) => e.type.includes('::campaign::CampaignCreated'),
+    const campaignCreatedEvent = result.events?.find((e: any) =>
+      e.type.includes('::campaign::CampaignCreated'),
     );
 
-    const campaignId = (campaignCreatedEvent?.parsedJson as any)?.campaign_id || randomUUID();
+    const campaignId =
+      campaignCreatedEvent?.parsedJson?.campaign_id || randomUUID();
 
     const scheduledAt = dto.scheduledAt ? new Date(dto.scheduledAt) : null;
-    const status = scheduledAt && scheduledAt > new Date() ? 'scheduled' : 'draft';
+    const status =
+      scheduledAt && scheduledAt > new Date() ? 'scheduled' : 'draft';
 
     await this.prisma.campaign.create({
       data: {
@@ -134,7 +138,8 @@ export class CampaignService {
     dto: UpdateCampaignDto,
   ): Promise<any> {
     const result = await this.execChainTx(() => {
-      const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
+      const globalConfigId =
+        this.configService.get<string>('GLOBAL_CONFIG_ID')!;
       const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
       return this.txBuilder.buildUpdateCampaignTx(
         globalConfigId,
@@ -152,7 +157,8 @@ export class CampaignService {
     if (dto.name !== undefined) updateData.name = dto.name;
     if (dto.description !== undefined) updateData.description = dto.description;
     if (dto.status !== undefined) updateData.status = dto.status;
-    if (dto.workflowSteps !== undefined) updateData.workflowSteps = dto.workflowSteps;
+    if (dto.workflowSteps !== undefined)
+      updateData.workflowSteps = dto.workflowSteps;
     if (dto.scheduledAt !== undefined) {
       const scheduledAt = new Date(dto.scheduledAt);
       updateData.scheduledAt = scheduledAt;
@@ -199,14 +205,16 @@ export class CampaignService {
       data: { status: 'active', startedAt: new Date() },
     });
 
-    this.notificationService.create({
-      workspaceId,
-      userId: callerAddress,
-      type: 'campaign_started',
-      title: `Campaign "${campaign.name}" started`,
-      body: `Targeting ${profileIds.length} profiles`,
-      metadata: { campaignId },
-    }).catch(() => {});
+    this.notificationService
+      .create({
+        workspaceId,
+        userId: callerAddress,
+        type: 'campaign_started',
+        title: `Campaign "${campaign.name}" started`,
+        body: `Targeting ${profileIds.length} profiles`,
+        metadata: { campaignId },
+      })
+      .catch(() => {});
 
     return {
       success: true,
@@ -267,7 +275,10 @@ export class CampaignService {
     return trigger;
   }
 
-  async removeRecurringTrigger(campaignId: string, triggerId: string): Promise<any> {
+  async removeRecurringTrigger(
+    campaignId: string,
+    triggerId: string,
+  ): Promise<any> {
     const trigger = await this.deleteTrigger(campaignId, triggerId);
 
     // Remove BullMQ repeatable job
@@ -286,7 +297,11 @@ export class CampaignService {
 
   async createTrigger(
     campaignId: string,
-    dto: { triggerType: string; triggerConfig: Record<string, unknown>; isEnabled?: boolean },
+    dto: {
+      triggerType: string;
+      triggerConfig: Record<string, unknown>;
+      isEnabled?: boolean;
+    },
   ): Promise<any> {
     // Verify campaign exists
     await this.prisma.campaign.findUniqueOrThrow({ where: { id: campaignId } });

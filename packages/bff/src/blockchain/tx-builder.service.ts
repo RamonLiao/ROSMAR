@@ -57,10 +57,7 @@ export class TxBuilderService {
 
     tx.moveCall({
       target: `${this.crmCorePackageId}::workspace::create`,
-      arguments: [
-        tx.object(globalConfigId),
-        tx.pure.string(name),
-      ],
+      arguments: [tx.object(globalConfigId), tx.pure.string(name)],
     });
 
     return tx;
@@ -138,7 +135,9 @@ export class TxBuilderService {
         tx.object(workspaceId),
         tx.object(adminCapId),
         tx.pure.address(primaryAddress),
-        suinsName ? tx.pure.option('string', suinsName) : tx.pure.option('string', null),
+        suinsName
+          ? tx.pure.option('string', suinsName)
+          : tx.pure.option('string', null),
         tx.pure.vector('string', tags),
       ],
     });
@@ -220,7 +219,9 @@ export class TxBuilderService {
         tx.object(workspaceId),
         tx.object(adminCapId),
         tx.pure.string(name),
-        domain ? tx.pure.option('string', domain) : tx.pure.option('string', null),
+        domain
+          ? tx.pure.option('string', domain)
+          : tx.pure.option('string', null),
         tx.pure.vector('string', tags),
       ],
     });
@@ -252,9 +253,13 @@ export class TxBuilderService {
         tx.object(organizationId),
         name ? tx.pure.option('string', name) : tx.pure.option('string', null),
         domain !== undefined
-          ? (domain ? tx.pure.option('string', domain) : tx.pure.option('string', null))
+          ? domain
+            ? tx.pure.option('string', domain)
+            : tx.pure.option('string', null)
           : tx.pure.option('string', null),
-        tags ? tx.pure.option('vector<string>', tags) : tx.pure.option('vector<string>', null),
+        tags
+          ? tx.pure.option('vector<string>', tags)
+          : tx.pure.option('vector<string>', null),
         tx.pure.u64(expectedVersion ?? 0),
       ],
     });
@@ -427,8 +432,12 @@ export class TxBuilderService {
         tx.object(adminCapId),
         tx.object(segmentId),
         name ? tx.pure.option('string', name) : tx.pure.option('string', null),
-        description ? tx.pure.option('string', description) : tx.pure.option('string', null),
-        rulesJson ? tx.pure.option('string', rulesJson) : tx.pure.option('string', null),
+        description
+          ? tx.pure.option('string', description)
+          : tx.pure.option('string', null),
+        rulesJson
+          ? tx.pure.option('string', rulesJson)
+          : tx.pure.option('string', null),
         tx.pure.u64(expectedVersion ?? 0),
       ],
     });
@@ -576,8 +585,12 @@ export class TxBuilderService {
         tx.object(adminCapId),
         tx.object(campaignId),
         name ? tx.pure.option('string', name) : tx.pure.option('string', null),
-        description ? tx.pure.option('string', description) : tx.pure.option('string', null),
-        status ? tx.pure.option('string', status) : tx.pure.option('string', null),
+        description
+          ? tx.pure.option('string', description)
+          : tx.pure.option('string', null),
+        status
+          ? tx.pure.option('string', status)
+          : tx.pure.option('string', null),
         tx.pure.u64(expectedVersion ?? 0),
       ],
     });

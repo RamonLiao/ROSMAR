@@ -137,12 +137,30 @@ export class AnalystService {
           'Run aggregate queries (_count, _avg, _sum, _min, _max) on a model.',
         inputSchema: z.object({
           model: modelEnum.describe('Model to aggregate'),
-          _count: z.unknown().optional().describe('Count config (true or field map)'),
-          _avg: z.record(z.string(), z.boolean()).optional().describe('Average fields'),
-          _sum: z.record(z.string(), z.boolean()).optional().describe('Sum fields'),
-          _min: z.record(z.string(), z.boolean()).optional().describe('Min fields'),
-          _max: z.record(z.string(), z.boolean()).optional().describe('Max fields'),
-          where: z.record(z.string(), z.unknown()).optional().describe('Prisma where filter'),
+          _count: z
+            .unknown()
+            .optional()
+            .describe('Count config (true or field map)'),
+          _avg: z
+            .record(z.string(), z.boolean())
+            .optional()
+            .describe('Average fields'),
+          _sum: z
+            .record(z.string(), z.boolean())
+            .optional()
+            .describe('Sum fields'),
+          _min: z
+            .record(z.string(), z.boolean())
+            .optional()
+            .describe('Min fields'),
+          _max: z
+            .record(z.string(), z.boolean())
+            .optional()
+            .describe('Max fields'),
+          where: z
+            .record(z.string(), z.unknown())
+            .optional()
+            .describe('Prisma where filter'),
         }),
         execute: async (args) => {
           if (!isAllowedModel(args.model)) {
@@ -151,7 +169,9 @@ export class AnalystService {
 
           const prismaModel = (this.prisma as any)[args.model];
           if (!prismaModel?.aggregate) {
-            return { error: `Model "${args.model}" does not support aggregate` };
+            return {
+              error: `Model "${args.model}" does not support aggregate`,
+            };
           }
 
           const aggregateArgs: any = {
@@ -175,7 +195,10 @@ export class AnalystService {
           _count: z.unknown().optional().describe('Count config'),
           _avg: z.record(z.string(), z.boolean()).optional(),
           _sum: z.record(z.string(), z.boolean()).optional(),
-          where: z.record(z.string(), z.unknown()).optional().describe('Prisma where filter'),
+          where: z
+            .record(z.string(), z.unknown())
+            .optional()
+            .describe('Prisma where filter'),
           orderBy: z.record(z.string(), z.unknown()).optional(),
         }),
         execute: async (args) => {

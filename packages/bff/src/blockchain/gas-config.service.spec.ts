@@ -110,9 +110,13 @@ describe('GasConfigService', () => {
   describe('monkey tests', () => {
     it('should handle zero dailyLimit', async () => {
       prisma.workspaceGasConfig.upsert.mockResolvedValue({
-        id: 'cfg-1', workspaceId: 'ws-1',
-        enabled: true, thresholdMist: BigInt(100000000), dailyLimit: 0,
-        createdAt: new Date(), updatedAt: new Date(),
+        id: 'cfg-1',
+        workspaceId: 'ws-1',
+        enabled: true,
+        thresholdMist: BigInt(100000000),
+        dailyLimit: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       });
 
       const result = await service.upsertConfig('ws-1', { dailyLimit: 0 });
@@ -122,12 +126,18 @@ describe('GasConfigService', () => {
     it('should handle very large thresholdMist (100 SUI)', async () => {
       const largeMist = '100000000000';
       prisma.workspaceGasConfig.upsert.mockResolvedValue({
-        id: 'cfg-1', workspaceId: 'ws-1',
-        enabled: true, thresholdMist: BigInt(largeMist), dailyLimit: 5,
-        createdAt: new Date(), updatedAt: new Date(),
+        id: 'cfg-1',
+        workspaceId: 'ws-1',
+        enabled: true,
+        thresholdMist: BigInt(largeMist),
+        dailyLimit: 5,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       });
 
-      const result = await service.upsertConfig('ws-1', { thresholdMist: largeMist });
+      const result = await service.upsertConfig('ws-1', {
+        thresholdMist: largeMist,
+      });
       expect(result.thresholdMist).toBe(largeMist);
     });
 
@@ -139,9 +149,13 @@ describe('GasConfigService', () => {
 
     it('should handle partial update (only enabled)', async () => {
       prisma.workspaceGasConfig.upsert.mockResolvedValue({
-        id: 'cfg-1', workspaceId: 'ws-1',
-        enabled: false, thresholdMist: BigInt(100000000), dailyLimit: 5,
-        createdAt: new Date(), updatedAt: new Date(),
+        id: 'cfg-1',
+        workspaceId: 'ws-1',
+        enabled: false,
+        thresholdMist: BigInt(100000000),
+        dailyLimit: 5,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       });
 
       await service.upsertConfig('ws-1', { enabled: false });

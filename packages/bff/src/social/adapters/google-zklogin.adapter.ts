@@ -11,7 +11,12 @@ export class GoogleZkLoginAdapter {
    * Decode a JWT without verification (Enoki API handles verification).
    * Returns the payload claims.
    */
-  decodeJwt(jwt: string): { sub: string; email?: string; name?: string; picture?: string } {
+  decodeJwt(jwt: string): {
+    sub: string;
+    email?: string;
+    name?: string;
+    picture?: string;
+  } {
     const parts = jwt.split('.');
     if (parts.length !== 3) throw new Error('Invalid JWT format');
     const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());

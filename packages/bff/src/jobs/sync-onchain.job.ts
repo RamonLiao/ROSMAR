@@ -35,8 +35,13 @@ export class SyncOnchainJob extends WorkerHost {
     }
   }
 
-  private async syncWorkspace(workspaceId: string, onchainId: string): Promise<void> {
-    this.logger.log(`Syncing workspace ${workspaceId} from on-chain object ${onchainId}`);
+  private async syncWorkspace(
+    workspaceId: string,
+    onchainId: string,
+  ): Promise<void> {
+    this.logger.log(
+      `Syncing workspace ${workspaceId} from on-chain object ${onchainId}`,
+    );
 
     const workspaceObj = await this.suiClient.getObject(onchainId);
 
@@ -45,7 +50,9 @@ export class SyncOnchainJob extends WorkerHost {
       return;
     }
 
-    const content = workspaceObj.data.content as { fields?: Record<string, unknown> } | undefined;
+    const content = workspaceObj.data.content as
+      | { fields?: Record<string, unknown> }
+      | undefined;
     const fields = content?.fields;
 
     await this.prisma.workspace.update({

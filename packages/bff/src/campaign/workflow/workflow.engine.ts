@@ -24,7 +24,10 @@ export interface WorkflowStep {
 @Injectable()
 export class WorkflowEngine {
   private readonly logger = new Logger(WorkflowEngine.name);
-  private actions: Map<string, { execute(profileId: string, config: any): Promise<any> }>;
+  private actions: Map<
+    string,
+    { execute(profileId: string, config: any): Promise<any> }
+  >;
 
   constructor(
     @InjectQueue('workflow-delay') private readonly delayQueue: Queue,
@@ -65,7 +68,12 @@ export class WorkflowEngine {
       await this.prisma.workflowExecution.upsert({
         where: { campaignId_profileId: { campaignId, profileId } },
         create: { campaignId, profileId, currentStep: 0, status: 'pending' },
-        update: { currentStep: 0, status: 'pending', error: null, completedAt: null },
+        update: {
+          currentStep: 0,
+          status: 'pending',
+          error: null,
+          completedAt: null,
+        },
       });
     }
 
@@ -153,7 +161,10 @@ export class WorkflowEngine {
         await this.executeNextStep(campaignId, profileId, workflowSteps);
       }
     } catch (error: any) {
-      this.logger.error(`Action execution failed: ${error.message}`, error.stack);
+      this.logger.error(
+        `Action execution failed: ${error.message}`,
+        error.stack,
+      );
 
       await this.prisma.workflowActionLog.create({
         data: {

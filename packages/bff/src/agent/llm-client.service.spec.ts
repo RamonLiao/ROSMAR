@@ -48,7 +48,10 @@ describe('LlmClientService', () => {
           },
         },
         { provide: UsageTrackingService, useValue: usageTracking },
-        { provide: EncryptionService, useValue: { encrypt: jest.fn(), decrypt: jest.fn() } },
+        {
+          provide: EncryptionService,
+          useValue: { encrypt: jest.fn(), decrypt: jest.fn() },
+        },
       ],
     }).compile();
 

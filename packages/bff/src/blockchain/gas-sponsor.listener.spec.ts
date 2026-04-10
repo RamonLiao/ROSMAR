@@ -81,7 +81,9 @@ describe('GasSponsorListener', () => {
     });
     prisma.gasSponsorGrant.count.mockResolvedValue(0);
     prisma.gasSponsorGrant.create.mockResolvedValue({ id: 'g-1' });
-    suiClient.getClient().getBalance.mockResolvedValue({ totalBalance: '100000000' });
+    suiClient
+      .getClient()
+      .getBalance.mockResolvedValue({ totalBalance: '100000000' });
 
     await listener.handleWalletConnected(baseEvent);
 
@@ -102,7 +104,9 @@ describe('GasSponsorListener', () => {
     prisma.workspaceGasConfig.findUnique.mockResolvedValue(null);
     prisma.gasSponsorGrant.count.mockResolvedValue(0);
     prisma.gasSponsorGrant.create.mockResolvedValue({ id: 'g-1' });
-    suiClient.getClient().getBalance.mockResolvedValue({ totalBalance: '50000000' });
+    suiClient
+      .getClient()
+      .getBalance.mockResolvedValue({ totalBalance: '50000000' });
 
     await listener.handleWalletConnected(baseEvent);
 
@@ -116,7 +120,9 @@ describe('GasSponsorListener', () => {
       thresholdMist: BigInt(100000000),
       dailyLimit: 5,
     });
-    suiClient.getClient().getBalance.mockResolvedValue({ totalBalance: '50000000' });
+    suiClient
+      .getClient()
+      .getBalance.mockResolvedValue({ totalBalance: '50000000' });
 
     await listener.handleWalletConnected(baseEvent);
 
@@ -125,7 +131,9 @@ describe('GasSponsorListener', () => {
 
   it('should NOT flag wallet with sufficient balance', async () => {
     prisma.workspaceGasConfig.findUnique.mockResolvedValue(null);
-    suiClient.getClient().getBalance.mockResolvedValue({ totalBalance: '500000000' });
+    suiClient
+      .getClient()
+      .getBalance.mockResolvedValue({ totalBalance: '500000000' });
 
     await listener.handleWalletConnected(baseEvent);
 
@@ -143,7 +151,9 @@ describe('GasSponsorListener', () => {
   it('should enforce DB-based rate limit', async () => {
     prisma.workspaceGasConfig.findUnique.mockResolvedValue(null);
     prisma.gasSponsorGrant.count.mockResolvedValue(5); // at limit
-    suiClient.getClient().getBalance.mockResolvedValue({ totalBalance: '50000000' });
+    suiClient
+      .getClient()
+      .getBalance.mockResolvedValue({ totalBalance: '50000000' });
 
     await listener.handleWalletConnected(baseEvent);
 
@@ -167,7 +177,9 @@ describe('GasSponsorListener', () => {
 
     it('should handle balance exactly at threshold', async () => {
       prisma.workspaceGasConfig.findUnique.mockResolvedValue(null);
-      suiClient.getClient().getBalance.mockResolvedValue({ totalBalance: '100000000' });
+      suiClient
+        .getClient()
+        .getBalance.mockResolvedValue({ totalBalance: '100000000' });
 
       await listener.handleWalletConnected(baseEvent);
 
@@ -186,7 +198,9 @@ describe('GasSponsorListener', () => {
 
     it('should handle SUI RPC error gracefully', async () => {
       prisma.workspaceGasConfig.findUnique.mockResolvedValue(null);
-      suiClient.getClient().getBalance.mockRejectedValue(new Error('RPC timeout'));
+      suiClient
+        .getClient()
+        .getBalance.mockRejectedValue(new Error('RPC timeout'));
 
       // Should not throw
       await listener.handleWalletConnected(baseEvent);
@@ -201,7 +215,9 @@ describe('GasSponsorListener', () => {
         dailyLimit: 0,
       });
       prisma.gasSponsorGrant.count.mockResolvedValue(0);
-      suiClient.getClient().getBalance.mockResolvedValue({ totalBalance: '50000000' });
+      suiClient
+        .getClient()
+        .getBalance.mockResolvedValue({ totalBalance: '50000000' });
 
       await listener.handleWalletConnected(baseEvent);
 

@@ -13,10 +13,25 @@ describe('AnalystService', () => {
     prisma = {
       profile: {
         findMany: jest.fn().mockResolvedValue([
-          { id: 'p1', primaryAddress: '0xabc', tags: ['whale'], tier: 3, engagementScore: 85 },
-          { id: 'p2', primaryAddress: '0xdef', tags: ['defi'], tier: 1, engagementScore: 42 },
+          {
+            id: 'p1',
+            primaryAddress: '0xabc',
+            tags: ['whale'],
+            tier: 3,
+            engagementScore: 85,
+          },
+          {
+            id: 'p2',
+            primaryAddress: '0xdef',
+            tags: ['defi'],
+            tier: 1,
+            engagementScore: 42,
+          },
         ]),
-        aggregate: jest.fn().mockResolvedValue({ _count: { id: 100 }, _avg: { engagementScore: 55 } }),
+        aggregate: jest.fn().mockResolvedValue({
+          _count: { id: 100 },
+          _avg: { engagementScore: 55 },
+        }),
         groupBy: jest.fn().mockResolvedValue([
           { tier: 1, _count: { id: 40 } },
           { tier: 2, _count: { id: 35 } },
@@ -68,8 +83,20 @@ describe('AnalystService', () => {
         {
           toolName: 'query_profiles',
           result: [
-            { id: 'p1', primaryAddress: '0xabc', tags: ['whale'], tier: 3, engagementScore: 85 },
-            { id: 'p2', primaryAddress: '0xdef', tags: ['defi'], tier: 1, engagementScore: 42 },
+            {
+              id: 'p1',
+              primaryAddress: '0xabc',
+              tags: ['whale'],
+              tier: 3,
+              engagementScore: 85,
+            },
+            {
+              id: 'p2',
+              primaryAddress: '0xdef',
+              tags: ['defi'],
+              tier: 1,
+              engagementScore: 42,
+            },
           ],
         },
       ],
@@ -131,22 +158,29 @@ describe('AnalystService', () => {
 
   it('should execute query_profiles tool against Prisma', async () => {
     // Simulate the tool execution directly
-    llmClient.generate.mockImplementation(async (_wsId: string, params: any) => {
-      // Execute the tool function to verify it calls Prisma
-      const queryProfilesTool = params.tools.query_profiles;
-      const toolResult = await queryProfilesTool.execute(
-        { where: { tier: 3 }, take: 5 },
-        { toolCallId: 'test-call' },
-      );
+    llmClient.generate.mockImplementation(
+      async (_wsId: string, params: any) => {
+        // Execute the tool function to verify it calls Prisma
+        const queryProfilesTool = params.tools.query_profiles;
+        const toolResult = await queryProfilesTool.execute(
+          { where: { tier: 3 }, take: 5 },
+          { toolCallId: 'test-call' },
+        );
 
-      return {
-        toolCalls: [{ toolName: 'query_profiles', args: { where: { tier: 3 }, take: 5 } }],
-        toolResults: [{ toolName: 'query_profiles', result: toolResult }],
-        text: 'Found profiles',
-        usage: { promptTokens: 100, completionTokens: 50 },
-        response: { modelId: 'claude-sonnet-4-20250514' },
-      };
-    });
+        return {
+          toolCalls: [
+            {
+              toolName: 'query_profiles',
+              args: { where: { tier: 3 }, take: 5 },
+            },
+          ],
+          toolResults: [{ toolName: 'query_profiles', result: toolResult }],
+          text: 'Found profiles',
+          usage: { promptTokens: 100, completionTokens: 50 },
+          response: { modelId: 'claude-sonnet-4-20250514' },
+        };
+      },
+    );
 
     await service.query({
       workspaceId: 'ws-1',
@@ -166,21 +200,23 @@ describe('AnalystService', () => {
   });
 
   it('should execute aggregate_data tool against Prisma', async () => {
-    llmClient.generate.mockImplementation(async (_wsId: string, params: any) => {
-      const aggregateTool = params.tools.aggregate_data;
-      const toolResult = await aggregateTool.execute(
-        { model: 'profile', _count: true, _avg: { engagementScore: true } },
-        { toolCallId: 'test-call' },
-      );
+    llmClient.generate.mockImplementation(
+      async (_wsId: string, params: any) => {
+        const aggregateTool = params.tools.aggregate_data;
+        const toolResult = await aggregateTool.execute(
+          { model: 'profile', _count: true, _avg: { engagementScore: true } },
+          { toolCallId: 'test-call' },
+        );
 
-      return {
-        toolCalls: [],
-        toolResults: [{ toolName: 'aggregate_data', result: toolResult }],
-        text: 'Aggregated',
-        usage: { promptTokens: 100, completionTokens: 50 },
-        response: { modelId: 'claude-sonnet-4-20250514' },
-      };
-    });
+        return {
+          toolCalls: [],
+          toolResults: [{ toolName: 'aggregate_data', result: toolResult }],
+          text: 'Aggregated',
+          usage: { promptTokens: 100, completionTokens: 50 },
+          response: { modelId: 'claude-sonnet-4-20250514' },
+        };
+      },
+    );
 
     await service.query({
       workspaceId: 'ws-1',
@@ -192,21 +228,23 @@ describe('AnalystService', () => {
   });
 
   it('should reject disallowed models in aggregate_data', async () => {
-    llmClient.generate.mockImplementation(async (_wsId: string, params: any) => {
-      const aggregateTool = params.tools.aggregate_data;
-      const toolResult = await aggregateTool.execute(
-        { model: 'workspace', _count: true },
-        { toolCallId: 'test-call' },
-      );
+    llmClient.generate.mockImplementation(
+      async (_wsId: string, params: any) => {
+        const aggregateTool = params.tools.aggregate_data;
+        const toolResult = await aggregateTool.execute(
+          { model: 'workspace', _count: true },
+          { toolCallId: 'test-call' },
+        );
 
-      return {
-        toolCalls: [],
-        toolResults: [{ toolName: 'aggregate_data', result: toolResult }],
-        text: 'Error',
-        usage: { promptTokens: 100, completionTokens: 50 },
-        response: { modelId: 'claude-sonnet-4-20250514' },
-      };
-    });
+        return {
+          toolCalls: [],
+          toolResults: [{ toolName: 'aggregate_data', result: toolResult }],
+          text: 'Error',
+          usage: { promptTokens: 100, completionTokens: 50 },
+          response: { modelId: 'claude-sonnet-4-20250514' },
+        };
+      },
+    );
 
     const result = await service.query({
       workspaceId: 'ws-1',

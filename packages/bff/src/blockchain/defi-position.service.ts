@@ -53,9 +53,7 @@ export class DefiPositionService {
             validatorAddress: delegation.validatorAddress,
             stakeAmount: stake.principal,
             estimatedReward:
-              stake.status === 'Active'
-                ? stake.estimatedReward ?? '0'
-                : '0',
+              stake.status === 'Active' ? (stake.estimatedReward ?? '0') : '0',
             stakeActivationEpoch: stake.stakeActiveEpoch,
             status: stake.status === 'Active' ? 'active' : 'pending',
           });
@@ -95,10 +93,7 @@ export class DefiPositionService {
         }
 
         // Detect Aftermath LP tokens
-        if (
-          type.includes('::lp_coin::LpCoin') ||
-          type.includes('::pool::LP')
-        ) {
+        if (type.includes('::lp_coin::LpCoin') || type.includes('::pool::LP')) {
           const fields = (obj.data.content as any)?.fields ?? {};
           positions.push({
             protocol: 'Aftermath',

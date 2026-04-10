@@ -38,7 +38,11 @@ export class CampaignSchedulerJob extends WorkerHost {
     this.logger.log(`Found ${campaigns.length} campaigns ready to activate`);
 
     for (const campaign of campaigns) {
-      await this.startCampaign(campaign.id, campaign.workflowSteps, campaign.segmentId);
+      await this.startCampaign(
+        campaign.id,
+        campaign.workflowSteps,
+        campaign.segmentId,
+      );
     }
   }
 
@@ -76,7 +80,9 @@ export class CampaignSchedulerJob extends WorkerHost {
             `Campaign ${campaignId} started with ${profileIds.length} profiles`,
           );
         } else {
-          this.logger.log(`Campaign ${campaignId} started with 0 profiles (empty segment)`);
+          this.logger.log(
+            `Campaign ${campaignId} started with 0 profiles (empty segment)`,
+          );
         }
       } else {
         this.logger.log(`Campaign ${campaignId} activated (no segment)`);

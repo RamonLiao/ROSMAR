@@ -8,9 +8,19 @@ import {
   Body,
   UseGuards,
 } from '@nestjs/common';
-import { TicketService, CreateTicketDto, UpdateTicketDto } from './ticket.service';
+import {
+  TicketService,
+  CreateTicketDto,
+  UpdateTicketDto,
+} from './ticket.service';
 import { SessionGuard } from '../auth/guards/session.guard';
-import { RbacGuard, RequirePermissions, WRITE, READ, DELETE } from '../auth/guards/rbac.guard';
+import {
+  RbacGuard,
+  RequirePermissions,
+  WRITE,
+  READ,
+  DELETE,
+} from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
 import type { UserPayload } from '../auth/auth.service';
 

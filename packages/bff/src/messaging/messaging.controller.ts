@@ -1,7 +1,12 @@
 import { Controller, Post, Get, Body, Param, UseGuards } from '@nestjs/common';
 import { MessagingService } from './messaging.service';
 import { SessionGuard } from '../auth/guards/session.guard';
-import { RbacGuard, RequirePermissions, WRITE, READ } from '../auth/guards/rbac.guard';
+import {
+  RbacGuard,
+  RequirePermissions,
+  WRITE,
+  READ,
+} from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
 import type { UserPayload } from '../auth/auth.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -16,10 +21,7 @@ export class MessagingController {
 
   @Post('send')
   @RequirePermissions(WRITE)
-  async sendMessage(
-    @User() user: UserPayload,
-    @Body() body: any,
-  ) {
+  async sendMessage(@User() user: UserPayload, @Body() body: any) {
     return this.messagingService.sendMessage(user.workspaceId, body);
   }
 

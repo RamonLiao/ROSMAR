@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalrusClient } from './walrus.client';
@@ -99,7 +104,11 @@ export class VaultService {
       );
     }
 
-    await this.verifyPolicyAccess(workspaceId, callerAddress, secret.sealPolicyId);
+    await this.verifyPolicyAccess(
+      workspaceId,
+      callerAddress,
+      secret.sealPolicyId,
+    );
     await this.logAccess(workspaceId, secret.id, callerAddress, 'read');
 
     return {
@@ -151,7 +160,11 @@ export class VaultService {
 
     if (!existing) throw new Error('Secret not found');
 
-    await this.verifyPolicyAccess(workspaceId, callerAddress, existing.sealPolicyId);
+    await this.verifyPolicyAccess(
+      workspaceId,
+      callerAddress,
+      existing.sealPolicyId,
+    );
 
     const uploadResult = await this.walrusClient.uploadBlob(dto.encryptedData);
 
@@ -196,7 +209,11 @@ export class VaultService {
 
     if (!existing) throw new Error('Secret not found');
 
-    await this.verifyPolicyAccess(workspaceId, callerAddress, existing.sealPolicyId);
+    await this.verifyPolicyAccess(
+      workspaceId,
+      callerAddress,
+      existing.sealPolicyId,
+    );
 
     const deleted = await this.prisma.vaultSecret.deleteMany({
       where: {
@@ -219,7 +236,11 @@ export class VaultService {
     };
   }
 
-  async releaseSecret(workspaceId: string, profileId: string, key: string): Promise<void> {
+  async releaseSecret(
+    workspaceId: string,
+    profileId: string,
+    key: string,
+  ): Promise<void> {
     const secret = await this.prisma.vaultSecret.findUnique({
       where: { workspaceId_profileId_key: { workspaceId, profileId, key } },
     });

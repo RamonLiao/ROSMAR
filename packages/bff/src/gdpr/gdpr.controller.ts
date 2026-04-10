@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { GdprService } from './gdpr.service';
@@ -16,7 +24,8 @@ export class GdprController {
   @Throttle({ gdpr: { limit: 3, ttl: 600000 } })
   async initiateDeletion(
     @Param('id') profileId: string,
-    @Body() body: { legalBasis: string; requestedBy: string; workspaceId: string },
+    @Body()
+    body: { legalBasis: string; requestedBy: string; workspaceId: string },
   ) {
     await this.gdprService.initiateDeletion(
       body.workspaceId,

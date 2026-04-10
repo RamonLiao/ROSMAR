@@ -91,8 +91,20 @@ describe('QuestService', () => {
 
   it('listQuests — returns active quests for workspace', async () => {
     const quests = [
-      { id: 'q1', name: 'Quest 1', isActive: true, steps: [], _count: { completions: 3 } },
-      { id: 'q2', name: 'Quest 2', isActive: true, steps: [], _count: { completions: 0 } },
+      {
+        id: 'q1',
+        name: 'Quest 1',
+        isActive: true,
+        steps: [],
+        _count: { completions: 3 },
+      },
+      {
+        id: 'q2',
+        name: 'Quest 2',
+        isActive: true,
+        steps: [],
+        _count: { completions: 0 },
+      },
     ];
     prisma.quest.findMany.mockResolvedValue(quests);
 
@@ -134,7 +146,10 @@ describe('QuestService', () => {
     const updated = { id: 'q1', name: 'Updated', isActive: false };
     prisma.quest.update.mockResolvedValue(updated);
 
-    const result = await service.updateQuest('q1', { name: 'Updated', isActive: false });
+    const result = await service.updateQuest('q1', {
+      name: 'Updated',
+      isActive: false,
+    });
 
     expect(result).toEqual(updated);
     expect(prisma.quest.update).toHaveBeenCalledWith({
@@ -148,7 +163,12 @@ describe('QuestService', () => {
     prisma.quest.findUnique.mockResolvedValue({
       id: 'q1',
       steps: [
-        { id: 's1', title: 'Step 1', orderIndex: 0, stepCompletions: [{ completedAt: now }] },
+        {
+          id: 's1',
+          title: 'Step 1',
+          orderIndex: 0,
+          stepCompletions: [{ completedAt: now }],
+        },
         { id: 's2', title: 'Step 2', orderIndex: 1, stepCompletions: [] },
       ],
     });
@@ -162,14 +182,31 @@ describe('QuestService', () => {
       completed: false,
       completedAt: null,
       steps: [
-        { id: 's1', title: 'Step 1', orderIndex: 0, completed: true, completedAt: now },
-        { id: 's2', title: 'Step 2', orderIndex: 1, completed: false, completedAt: null },
+        {
+          id: 's1',
+          title: 'Step 1',
+          orderIndex: 0,
+          completed: true,
+          completedAt: now,
+        },
+        {
+          id: 's2',
+          title: 'Step 2',
+          orderIndex: 1,
+          completed: false,
+          completedAt: null,
+        },
       ],
     });
   });
 
   it('completeQuest — marks quest done, creates QuestCompletion record', async () => {
-    const completion = { id: 'c1', questId: 'q1', profileId: 'p1', badgeSuiId: '0xbadge' };
+    const completion = {
+      id: 'c1',
+      questId: 'q1',
+      profileId: 'p1',
+      badgeSuiId: '0xbadge',
+    };
     prisma.questCompletion.upsert.mockResolvedValue(completion);
 
     const result = await service.completeQuest('q1', 'p1', '0xbadge');

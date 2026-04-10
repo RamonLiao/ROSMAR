@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { EngagementService, ScoreResult } from '../engagement/engagement.service';
+import {
+  EngagementService,
+  ScoreResult,
+} from '../engagement/engagement.service';
 
 export interface ScoreBucket {
   range: string;

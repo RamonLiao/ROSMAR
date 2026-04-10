@@ -40,7 +40,9 @@ export class AuditTrailService {
         ...(actor && { actor }),
         ...(action && { action }),
         ...(from || to
-          ? { createdAt: { ...(from && { gte: from }), ...(to && { lte: to }) } }
+          ? {
+              createdAt: { ...(from && { gte: from }), ...(to && { lte: to }) },
+            }
           : {}),
       },
       orderBy: { createdAt: 'desc' },

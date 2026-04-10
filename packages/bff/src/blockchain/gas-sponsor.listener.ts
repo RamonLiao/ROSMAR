@@ -65,7 +65,8 @@ export class GasSponsorListener {
       const enabled = wsConfig?.enabled ?? true; // env-var already checked above
       if (wsConfig && !enabled) return;
 
-      const thresholdMist = wsConfig?.thresholdMist ?? this.fallbackThresholdMist;
+      const thresholdMist =
+        wsConfig?.thresholdMist ?? this.fallbackThresholdMist;
       const maxPerDay = wsConfig?.dailyLimit ?? this.fallbackMaxPerDay;
 
       // 2. Check balance
@@ -97,8 +98,11 @@ export class GasSponsorListener {
           `Gas sponsor rate limit reached for ${address} (${grantsToday}/${maxPerDay} today)`,
         );
         await this.createNotification(
-          workspaceId, profile_id, address,
-          'gas_sponsor_rate_limited', 'Daily gas sponsor limit reached',
+          workspaceId,
+          profile_id,
+          address,
+          'gas_sponsor_rate_limited',
+          'Daily gas sponsor limit reached',
         );
         return;
       }
@@ -113,8 +117,11 @@ export class GasSponsorListener {
       );
 
       await this.createNotification(
-        workspaceId, profile_id, address,
-        'gas_sponsor_activated', 'Gas sponsorship activated for next transaction',
+        workspaceId,
+        profile_id,
+        address,
+        'gas_sponsor_activated',
+        'Gas sponsorship activated for next transaction',
       );
     } catch (error: any) {
       this.logger.error(

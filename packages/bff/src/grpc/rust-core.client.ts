@@ -68,13 +68,16 @@ export class RustCoreClient implements OnModuleInit {
    */
   async getProfile(profileId: string): Promise<any> {
     return new Promise((resolve, reject) => {
-      this.profileService.GetProfile({ id: profileId }, (error: any, response: any) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(response);
-        }
-      });
+      this.profileService.GetProfile(
+        { id: profileId },
+        (error: any, response: any) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(response);
+          }
+        },
+      );
     });
   }
 
@@ -88,7 +91,11 @@ export class RustCoreClient implements OnModuleInit {
   /**
    * Search profiles and organizations
    */
-  async search(workspaceId: string, query: string, limit: number): Promise<any> {
+  async search(
+    workspaceId: string,
+    query: string,
+    limit: number,
+  ): Promise<any> {
     return new Promise((resolve, reject) => {
       this.profileService.Search(
         { workspace_id: workspaceId, query, limit },
@@ -124,7 +131,11 @@ export class RustCoreClient implements OnModuleInit {
   /**
    * Get segment members
    */
-  async getSegmentMembers(segmentId: string, page: number, pageSize: number): Promise<any> {
+  async getSegmentMembers(
+    segmentId: string,
+    page: number,
+    pageSize: number,
+  ): Promise<any> {
     return new Promise((resolve, reject) => {
       this.segmentService.GetSegmentMembers(
         { segment_id: segmentId, page, page_size: pageSize },

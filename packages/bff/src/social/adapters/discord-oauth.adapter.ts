@@ -14,9 +14,18 @@ export class DiscordOAuthAdapter {
   private readonly redirectUri: string;
 
   constructor(private config: ConfigService) {
-    this.clientId = this.config.get<string>('DISCORD_CLIENT_ID', 'discord-client-id');
-    this.clientSecret = this.config.get<string>('DISCORD_CLIENT_SECRET', 'discord-secret');
-    this.redirectUri = this.config.get<string>('DISCORD_REDIRECT_URI', 'http://localhost:3001/api/social/discord/callback');
+    this.clientId = this.config.get<string>(
+      'DISCORD_CLIENT_ID',
+      'discord-client-id',
+    );
+    this.clientSecret = this.config.get<string>(
+      'DISCORD_CLIENT_SECRET',
+      'discord-secret',
+    );
+    this.redirectUri = this.config.get<string>(
+      'DISCORD_REDIRECT_URI',
+      'http://localhost:3001/api/social/discord/callback',
+    );
   }
 
   getAuthUrl(state: string): string {

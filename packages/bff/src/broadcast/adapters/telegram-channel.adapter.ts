@@ -9,7 +9,10 @@ export class TelegramChannelAdapter implements ChannelAdapter {
 
   constructor(private readonly config: ConfigService) {}
 
-  async send(content: string, cfg: Record<string, any>): Promise<{ messageId: string }> {
+  async send(
+    content: string,
+    cfg: Record<string, any>,
+  ): Promise<{ messageId: string }> {
     const token = this.config.get<string>('TELEGRAM_BOT_TOKEN');
     if (!token) throw new Error('TELEGRAM_BOT_TOKEN not configured');
 
@@ -20,7 +23,11 @@ export class TelegramChannelAdapter implements ChannelAdapter {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: content, parse_mode: 'HTML' }),
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: content,
+        parse_mode: 'HTML',
+      }),
     });
 
     if (!res.ok) {

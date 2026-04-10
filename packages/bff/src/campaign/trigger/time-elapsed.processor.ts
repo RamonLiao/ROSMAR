@@ -35,7 +35,9 @@ export class TimeElapsedProcessor extends WorkerHost {
       const config = trigger.triggerConfig as unknown as TimeElapsedConfig;
       const durationMs = TimeElapsedProcessor.parseDuration(config.value);
       if (durationMs <= 0) {
-        this.logger.warn(`Invalid duration "${config.value}" for trigger ${trigger.id}`);
+        this.logger.warn(
+          `Invalid duration "${config.value}" for trigger ${trigger.id}`,
+        );
         continue;
       }
 

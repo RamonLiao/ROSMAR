@@ -61,12 +61,12 @@ export class WhaleAlertListener {
     if (thresholds.length === 0) return;
 
     const match = thresholds.find(
-      (t) => t.token.toUpperCase() === token.toUpperCase() && amount >= t.amount,
+      (t) =>
+        t.token.toUpperCase() === token.toUpperCase() && amount >= t.amount,
     );
     if (!match) return;
 
-    const txType =
-      (event.data as Record<string, unknown>).tx_type as string | undefined;
+    const txType = event.data.tx_type as string | undefined;
 
     this.logger.warn(
       `Threshold whale alert: ${event.address} — ${amount} ${token} (threshold: ${match.amount})`,
@@ -120,9 +120,7 @@ export class WhaleAlertListener {
     });
   }
 
-  private async resolveWorkspaceId(
-    profileId?: string,
-  ): Promise<string> {
+  private async resolveWorkspaceId(profileId?: string): Promise<string> {
     if (!profileId) return '';
     const profile = await this.prisma.profile.findUnique({
       where: { id: profileId },

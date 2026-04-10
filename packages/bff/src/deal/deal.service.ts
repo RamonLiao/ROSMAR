@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { randomUUID } from 'crypto';
@@ -50,18 +54,15 @@ export class DealService {
   }
 
   /** Parse AuditEventV1 from chain result and write to audit_logs */
-  private async indexAuditEvent(
-    result: any,
-    txDigest: string,
-  ): Promise<void> {
+  private async indexAuditEvent(result: any, txDigest: string): Promise<void> {
     if (this.isDryRun) return;
 
-    const auditEvent = result.events?.find(
-      (e: any) => e.type.includes('::deal::AuditEventV1'),
+    const auditEvent = result.events?.find((e: any) =>
+      e.type.includes('::deal::AuditEventV1'),
     );
     if (!auditEvent?.parsedJson) return;
 
-    const ev = auditEvent.parsedJson as any;
+    const ev = auditEvent.parsedJson;
     await this.prisma.auditLog.create({
       data: {
         workspaceId: ev.workspace_id,
@@ -96,10 +97,10 @@ export class DealService {
     );
 
     // Parse object_id from AuditEventV1 (more reliable than DealCreated)
-    const auditEvent = result.events?.find(
-      (e: any) => e.type.includes('::deal::AuditEventV1'),
+    const auditEvent = result.events?.find((e: any) =>
+      e.type.includes('::deal::AuditEventV1'),
     );
-    const suiObjectId = (auditEvent?.parsedJson as any)?.object_id ?? null;
+    const suiObjectId = auditEvent?.parsedJson?.object_id ?? null;
     const dealId = suiObjectId || randomUUID();
 
     await this.prisma.deal.create({
@@ -260,7 +261,11 @@ export class DealService {
       })
       .catch(() => {});
 
-    this.eventEmitter.emit('deal.stage_changed', { dealId, stage, workspaceId });
+    this.eventEmitter.emit('deal.stage_changed', {
+      dealId,
+      stage,
+      workspaceId,
+    });
 
     return { success: true, txDigest: result.digest };
   }

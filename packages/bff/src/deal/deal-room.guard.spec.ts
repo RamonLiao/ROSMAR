@@ -7,7 +7,10 @@ import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { DealRoomGuard } from './deal-room.guard';
 import { PrismaService } from '../prisma/prisma.service';
 
-function mockContext(params: Record<string, string>, user: any): ExecutionContext {
+function mockContext(
+  params: Record<string, string>,
+  user: any,
+): ExecutionContext {
   const request = { params, user };
   return {
     switchToHttp: () => ({
@@ -36,10 +39,7 @@ describe('DealRoomGuard', () => {
     };
 
     const module = await Test.createTestingModule({
-      providers: [
-        DealRoomGuard,
-        { provide: PrismaService, useValue: prisma },
-      ],
+      providers: [DealRoomGuard, { provide: PrismaService, useValue: prisma }],
     }).compile();
 
     guard = module.get(DealRoomGuard);
@@ -54,7 +54,12 @@ describe('DealRoomGuard', () => {
 
     const ctx = mockContext(
       { id: DEAL_ID },
-      { address: '0xbuyer', workspaceId: WORKSPACE_ID, role: 1, permissions: 1 },
+      {
+        address: '0xbuyer',
+        workspaceId: WORKSPACE_ID,
+        role: 1,
+        permissions: 1,
+      },
     );
 
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
@@ -69,7 +74,12 @@ describe('DealRoomGuard', () => {
 
     const ctx = mockContext(
       { id: DEAL_ID },
-      { address: '0xseller', workspaceId: WORKSPACE_ID, role: 1, permissions: 1 },
+      {
+        address: '0xseller',
+        workspaceId: WORKSPACE_ID,
+        role: 1,
+        permissions: 1,
+      },
     );
 
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
@@ -84,7 +94,12 @@ describe('DealRoomGuard', () => {
 
     const ctx = mockContext(
       { id: DEAL_ID },
-      { address: '0xpayer', workspaceId: WORKSPACE_ID, role: 1, permissions: 1 },
+      {
+        address: '0xpayer',
+        workspaceId: WORKSPACE_ID,
+        role: 1,
+        permissions: 1,
+      },
     );
 
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
@@ -116,7 +131,12 @@ describe('DealRoomGuard', () => {
     // No need for prisma call — admin short-circuits
     const ctx = mockContext(
       { id: DEAL_ID },
-      { address: '0xadmin', workspaceId: WORKSPACE_ID, role: 3, permissions: 31 },
+      {
+        address: '0xadmin',
+        workspaceId: WORKSPACE_ID,
+        role: 3,
+        permissions: 31,
+      },
     );
 
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
@@ -133,7 +153,12 @@ describe('DealRoomGuard', () => {
 
     const ctx = mockContext(
       { id: DEAL_ID },
-      { address: '0xrandom', workspaceId: WORKSPACE_ID, role: 1, permissions: 1 },
+      {
+        address: '0xrandom',
+        workspaceId: WORKSPACE_ID,
+        role: 1,
+        permissions: 1,
+      },
     );
 
     await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
@@ -149,7 +174,12 @@ describe('DealRoomGuard', () => {
 
     const ctx = mockContext(
       { id: DEAL_ID },
-      { address: '0xnotbuyer', workspaceId: WORKSPACE_ID, role: 1, permissions: 1 },
+      {
+        address: '0xnotbuyer',
+        workspaceId: WORKSPACE_ID,
+        role: 1,
+        permissions: 1,
+      },
     );
 
     await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);

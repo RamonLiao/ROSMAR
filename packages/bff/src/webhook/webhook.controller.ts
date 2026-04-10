@@ -22,7 +22,9 @@ export class WebhookController {
   @Post('indexer-event')
   @UseGuards(WebhookSignatureGuard)
   @HttpCode(HttpStatus.OK)
-  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: false }))
+  @UsePipes(
+    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: false }),
+  )
   async handleIndexerEvent(@Body() dto: IndexerEventDto) {
     this.logger.debug(`POST /webhooks/indexer-event: ${dto.event_type}`);
     await this.webhookService.handleIndexerEvent(dto);

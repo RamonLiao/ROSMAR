@@ -9,10 +9,21 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { IsString, IsOptional, IsInt, IsNotEmpty, Allow } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsInt,
+  IsNotEmpty,
+  Allow,
+} from 'class-validator';
 import { SegmentService } from './segment.service';
 import { SessionGuard } from '../auth/guards/session.guard';
-import { RbacGuard, RequirePermissions, WRITE, DELETE as DELETE_PERM } from '../auth/guards/rbac.guard';
+import {
+  RbacGuard,
+  RequirePermissions,
+  WRITE,
+  DELETE as DELETE_PERM,
+} from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
 
 export class CreateSegmentDto {
@@ -56,11 +67,7 @@ export class SegmentController {
     @User() user: import('../auth/auth.service').UserPayload,
     @Body() dto: CreateSegmentDto,
   ) {
-    return this.segmentService.create(
-      user.workspaceId,
-      user.address,
-      dto,
-    );
+    return this.segmentService.create(user.workspaceId, user.address, dto);
   }
 
   @Get(':id')
@@ -74,11 +81,7 @@ export class SegmentController {
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
   ) {
-    return this.segmentService.evaluateSegment(
-      id,
-      limit || 100,
-      offset || 0,
-    );
+    return this.segmentService.evaluateSegment(id, limit || 100, offset || 0);
   }
 
   @Get()
@@ -103,19 +106,12 @@ export class SegmentController {
     @Param('id') id: string,
     @Body() dto: UpdateSegmentDto,
   ) {
-    return this.segmentService.update(
-      user.workspaceId,
-      user.address,
-      id,
-      dto,
-    );
+    return this.segmentService.update(user.workspaceId, user.address, id, dto);
   }
 
   @Delete(':id')
   @RequirePermissions(DELETE_PERM)
-  async remove(
-    @Param('id') id: string,
-  ) {
+  async remove(@Param('id') id: string) {
     return this.segmentService.delete(id);
   }
 

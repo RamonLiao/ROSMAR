@@ -9,7 +9,11 @@ import {
 } from '@nestjs/common';
 import { SaftTemplateService } from './saft-template.service';
 import { SessionGuard } from '../auth/guards/session.guard';
-import { RbacGuard, RequirePermissions, WRITE } from '../auth/guards/rbac.guard';
+import {
+  RbacGuard,
+  RequirePermissions,
+  WRITE,
+} from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
 import {
   CreateSaftTemplateDto,
@@ -32,27 +36,19 @@ export class SaftTemplateController {
   }
 
   @Get()
-  async list(
-    @User() user: import('../auth/auth.service').UserPayload,
-  ) {
+  async list(@User() user: import('../auth/auth.service').UserPayload) {
     return this.saftService.list(user.workspaceId);
   }
 
   @Put(':id/attach')
   @RequirePermissions(WRITE)
-  async attach(
-    @Param('id') id: string,
-    @Body() dto: AttachSaftDto,
-  ) {
+  async attach(@Param('id') id: string, @Body() dto: AttachSaftDto) {
     return this.saftService.attachToEscrow(id, dto.escrowId);
   }
 
   @Put(':id/upload')
   @RequirePermissions(WRITE)
-  async upload(
-    @Param('id') id: string,
-    @Body() dto: UploadSignedSaftDto,
-  ) {
+  async upload(@Param('id') id: string, @Body() dto: UploadSignedSaftDto) {
     return this.saftService.uploadSigned(id, dto.walrusBlobId);
   }
 }

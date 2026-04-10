@@ -14,10 +14,7 @@ describe('AutoTagService', () => {
     };
 
     const module = await Test.createTestingModule({
-      providers: [
-        AutoTagService,
-        { provide: PrismaService, useValue: prisma },
-      ],
+      providers: [AutoTagService, { provide: PrismaService, useValue: prisma }],
     }).compile();
 
     service = module.get(AutoTagService);
@@ -25,9 +22,7 @@ describe('AutoTagService', () => {
 
   it('should add NFT_Collector tag when >= 5 NFT events', async () => {
     prisma.$queryRaw
-      .mockResolvedValueOnce([
-        { cnt: 6n },
-      ])
+      .mockResolvedValueOnce([{ cnt: 6n }])
       .mockResolvedValueOnce([{ cnt: 0n }])
       .mockResolvedValueOnce([{ cnt: 0n }])
       .mockResolvedValueOnce([{ total: 0 }])

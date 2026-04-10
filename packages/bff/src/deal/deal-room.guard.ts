@@ -44,9 +44,7 @@ export class DealRoomGuard implements CanActivate {
       return true;
     }
 
-    throw new ForbiddenException(
-      'You are not a participant in this deal room',
-    );
+    throw new ForbiddenException('You are not a participant in this deal room');
   }
 
   /**

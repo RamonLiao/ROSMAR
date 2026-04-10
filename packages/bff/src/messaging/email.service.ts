@@ -20,7 +20,10 @@ export class EmailService {
     private readonly prisma: PrismaService,
   ) {
     this.apiKey = this.configService.get<string>('RESEND_API_KEY', '');
-    this.fromEmail = this.configService.get<string>('FROM_EMAIL', 'noreply@rosmar.io');
+    this.fromEmail = this.configService.get<string>(
+      'FROM_EMAIL',
+      'noreply@rosmar.io',
+    );
   }
 
   async sendMessage(workspaceId: string, dto: SendEmailDto): Promise<any> {

@@ -51,7 +51,10 @@ describe('SegmentDiffJob', () => {
     await job.process({} as any);
 
     // First run establishes baseline, no events emitted
-    expect(emitSpy).not.toHaveBeenCalledWith('segment.entered', expect.anything());
+    expect(emitSpy).not.toHaveBeenCalledWith(
+      'segment.entered',
+      expect.anything(),
+    );
 
     // Second run: add a new member
     prisma.segmentMembership.findMany.mockResolvedValue([

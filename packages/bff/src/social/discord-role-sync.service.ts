@@ -26,14 +26,18 @@ export class DiscordRoleSyncService {
   }
 
   /** Sync Discord roles for all profiles in a workspace */
-  async syncWorkspace(workspaceId: string): Promise<{ synced: number; skipped: number }> {
+  async syncWorkspace(
+    workspaceId: string,
+  ): Promise<{ synced: number; skipped: number }> {
     const workspace = await this.prisma.workspace.findUnique({
       where: { id: workspaceId },
       select: { discordGuildId: true },
     });
 
     if (!workspace?.discordGuildId) {
-      this.logger.debug(`Workspace ${workspaceId} has no discordGuildId, skipping`);
+      this.logger.debug(
+        `Workspace ${workspaceId} has no discordGuildId, skipping`,
+      );
       return { synced: 0, skipped: 0 };
     }
 
@@ -70,9 +74,16 @@ export class DiscordRoleSyncService {
 
       const results = await Promise.allSettled(
         batch.map(async (link) => {
-          const member = await this.fetchGuildMember(guildId, link.platformUserId);
+          const member = await this.fetchGuildMember(
+            guildId,
+            link.platformUserId,
+          );
           const metadata = member
-            ? { roles: member.roles, roleNames, syncedAt: new Date().toISOString() }
+            ? {
+                roles: member.roles,
+                roleNames,
+                syncedAt: new Date().toISOString(),
+              }
             : { roles: [], roleNames: {}, syncedAt: new Date().toISOString() };
 
           await this.prisma.socialLink.update({
@@ -99,12 +110,17 @@ export class DiscordRoleSyncService {
       }
     }
 
-    this.logger.log(`Guild ${guildId}: ${synced} synced, ${skipped} not found in guild`);
+    this.logger.log(
+      `Guild ${guildId}: ${synced} synced, ${skipped} not found in guild`,
+    );
     return { synced, skipped };
   }
 
   /** Fetch a single guild member by user ID. Returns null if not found (404). */
-  private async fetchGuildMember(guildId: string, userId: string): Promise<DiscordMember | null> {
+  private async fetchGuildMember(
+    guildId: string,
+    userId: string,
+  ): Promise<DiscordMember | null> {
     const url = `https://discord.com/api/v10/guilds/${guildId}/members/${userId}`;
     const res = await this.discordFetch(url);
 
@@ -143,6 +159,6 @@ export class DiscordRoleSyncService {
   }
 
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

@@ -30,6 +30,8 @@ export class AddToSegmentAction {
       update: {}, // already a member — no-op
     });
 
-    this.logger.log(`Profile ${profileId} added to segment ${config.segmentId}`);
+    this.logger.log(
+      `Profile ${profileId} added to segment ${config.segmentId}`,
+    );
   }
 }

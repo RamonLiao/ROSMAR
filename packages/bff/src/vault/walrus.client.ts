@@ -22,7 +22,8 @@ export class WalrusClient {
       'WALRUS_AGGREGATOR_URL',
       'https://aggregator.walrus-testnet.walrus.space',
     );
-    this.isMock = this.configService.get<string>('WALRUS_MOCK', 'false') === 'true';
+    this.isMock =
+      this.configService.get<string>('WALRUS_MOCK', 'false') === 'true';
   }
 
   private static readonly MAX_RETRIES = 3;
@@ -31,7 +32,9 @@ export class WalrusClient {
   async uploadBlob(data: Buffer): Promise<WalrusUploadResponse> {
     if (this.isMock) {
       const mockBlobId = `blob_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-      this.logger.log(`[MOCK] Uploaded blob (${data.length} bytes) → ${mockBlobId}`);
+      this.logger.log(
+        `[MOCK] Uploaded blob (${data.length} bytes) → ${mockBlobId}`,
+      );
       return {
         blobId: mockBlobId,
         url: `${this.aggregatorUrl}/v1/${mockBlobId}`,
@@ -49,7 +52,9 @@ export class WalrusClient {
         });
 
         if (!response.ok) {
-          throw new Error(`Walrus upload failed: ${response.status} ${response.statusText}`);
+          throw new Error(
+            `Walrus upload failed: ${response.status} ${response.statusText}`,
+          );
         }
 
         const result = await response.json();
@@ -89,7 +94,9 @@ export class WalrusClient {
       signal: AbortSignal.timeout(WalrusClient.TIMEOUT_MS),
     });
     if (!response.ok) {
-      throw new Error(`Walrus download failed: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `Walrus download failed: ${response.status} ${response.statusText}`,
+      );
     }
 
     const arrayBuffer = await response.arrayBuffer();

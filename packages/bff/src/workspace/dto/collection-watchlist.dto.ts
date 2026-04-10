@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, IsArray, ValidateNested, IsIn } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsArray,
+  ValidateNested,
+  IsIn,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CollectionEntryDto {

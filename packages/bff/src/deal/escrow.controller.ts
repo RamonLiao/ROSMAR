@@ -9,7 +9,11 @@ import {
 } from '@nestjs/common';
 import { EscrowService } from './escrow.service';
 import { SessionGuard } from '../auth/guards/session.guard';
-import { RbacGuard, RequirePermissions, WRITE } from '../auth/guards/rbac.guard';
+import {
+  RbacGuard,
+  RequirePermissions,
+  WRITE,
+} from '../auth/guards/rbac.guard';
 import { DealRoomGuard } from './deal-room.guard';
 import { User } from '../auth/decorators/user.decorator';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
@@ -42,10 +46,7 @@ export class EscrowController {
 
   @Post('release')
   @RequirePermissions(WRITE)
-  async release(
-    @Param('dealId') dealId: string,
-    @Body() dto: ReleaseDto,
-  ) {
+  async release(@Param('dealId') dealId: string, @Body() dto: ReleaseDto) {
     const escrow = await this.escrowService.getEscrowByDealId(dealId);
     return this.escrowService.release(escrow!.id, dto.amount);
   }

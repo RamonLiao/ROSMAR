@@ -98,7 +98,9 @@ describe('TimeElapsedProcessor', () => {
 
     it('should skip inactive campaigns', async () => {
       prisma.campaignTrigger.findMany.mockResolvedValue([
-        makeTrigger({ campaign: { ...makeTrigger().campaign, status: 'draft' } }),
+        makeTrigger({
+          campaign: { ...makeTrigger().campaign, status: 'draft' },
+        }),
       ]);
 
       await processor.process({} as any);

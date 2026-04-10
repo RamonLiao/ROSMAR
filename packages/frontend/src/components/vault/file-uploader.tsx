@@ -4,16 +4,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 import { Lock, Upload } from "lucide-react";
 import { useVaultCrypto } from "@/lib/hooks/use-vault-crypto";
+import { useCreatePolicy } from "@/lib/hooks/use-create-policy";
+import { PolicySelector, type PolicyValue } from "./policy-selector";
 
 interface FileUploaderProps {
   profileId?: string;
@@ -27,13 +21,12 @@ export function FileUploader({
   onUploaded,
 }: FileUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
-  const [policyType, setPolicyType] = useState<string>("workspace");
+  const [policy, setPolicy] = useState<PolicyValue>({ ruleType: 0 });
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { encryptAndStore, isInitializing } = useVaultCrypto();
-
-  const policyObjectId = defaultPolicyId ?? "0x0";
+  const { createPolicy } = useCreatePolicy();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -48,6 +41,18 @@ export function FileUploader({
     setError(null);
 
     try {
+      const { policyId } = defaultPolicyId
+        ? { policyId: defaultPolicyId }
+        : await createPolicy({
+            name: `file:${file.name}`,
+            ruleType: policy.ruleType,
+            allowedAddresses: policy.allowedAddresses,
+            minRoleLevel: policy.minRoleLevel,
+            expiresAtMs: policy.expiresAtMs
+              ? String(policy.expiresAtMs)
+              : undefined,
+          });
+
       const buffer = await file.arrayBuffer();
       const plaintext = new Uint8Array(buffer);
 
@@ -55,7 +60,7 @@ export function FileUploader({
         profileId,
         key: `file:${file.name}`,
         plaintext,
-        sealPolicyId: policyObjectId,
+        sealPolicyId: policyId,
       });
 
       setFile(null);
@@ -94,19 +99,9 @@ export function FileUploader({
           </div>
         )}
 
-        <div className="space-y-2">
-          <Label htmlFor="file-policy-type">Access Policy</Label>
-          <Select value={policyType} onValueChange={setPolicyType}>
-            <SelectTrigger id="file-policy-type">
-              <SelectValue placeholder="Select policy" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="workspace">Workspace Members</SelectItem>
-              <SelectItem value="address">Specific Addresses</SelectItem>
-              <SelectItem value="role">Role-Based</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {!defaultPolicyId && (
+          <PolicySelector value={policy} onChange={setPolicy} />
+        )}
 
         <div className="rounded-md bg-muted p-3 text-sm">
           <p className="text-muted-foreground">

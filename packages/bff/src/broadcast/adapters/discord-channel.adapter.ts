@@ -9,11 +9,15 @@ export class DiscordChannelAdapter implements ChannelAdapter {
 
   constructor(private readonly config: ConfigService) {}
 
-  async send(content: string, cfg: Record<string, any>): Promise<{ messageId: string }> {
+  async send(
+    content: string,
+    cfg: Record<string, any>,
+  ): Promise<{ messageId: string }> {
     const token = this.config.get<string>('DISCORD_BOT_TOKEN');
     if (!token) throw new Error('DISCORD_BOT_TOKEN not configured');
 
-    const channelId = cfg.channelId || this.config.get<string>('DISCORD_CHANNEL_ID');
+    const channelId =
+      cfg.channelId || this.config.get<string>('DISCORD_CHANNEL_ID');
     if (!channelId) throw new Error('Discord channelId not provided');
 
     const url = `https://discord.com/api/v10/channels/${channelId}/messages`;

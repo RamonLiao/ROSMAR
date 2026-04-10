@@ -1,4 +1,15 @@
-import { Controller, Post, Get, Body, Req, Res, HttpCode, HttpStatus, UseGuards, UnauthorizedException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Req,
+  Res,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
@@ -110,8 +121,10 @@ export class AuthController {
     @Body() dto: ZkLoginDto,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const { accessToken, refreshToken, user } =
-      await this.authService.zkLogin(dto.jwt, dto.salt);
+    const { accessToken, refreshToken, user } = await this.authService.zkLogin(
+      dto.jwt,
+      dto.salt,
+    );
 
     response.cookie('access_token', accessToken, {
       httpOnly: true,
@@ -146,10 +159,7 @@ export class AuthController {
   @Post('passkey/register/verify')
   @UseGuards(SessionGuard)
   @HttpCode(HttpStatus.OK)
-  async passkeyRegisterVerify(
-    @Req() request: Request,
-    @Body() body: any,
-  ) {
+  async passkeyRegisterVerify(@Req() request: Request, @Body() body: any) {
     const user = (request as any).user;
     return this.authService.verifyPasskeyRegistration(user.address, body);
   }
@@ -200,7 +210,8 @@ export class AuthController {
       throw new UnauthorizedException('No refresh token');
     }
 
-    const { accessToken, refreshToken, user } = await this.authService.refresh(token);
+    const { accessToken, refreshToken, user } =
+      await this.authService.refresh(token);
 
     response.cookie('access_token', accessToken, {
       httpOnly: true,
@@ -231,8 +242,11 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const user = (request as any).user;
-    const { accessToken, refreshToken, user: updatedUser } =
-      await this.authService.switchWorkspace(user.address, dto.workspaceId);
+    const {
+      accessToken,
+      refreshToken,
+      user: updatedUser,
+    } = await this.authService.switchWorkspace(user.address, dto.workspaceId);
 
     response.cookie('access_token', accessToken, {
       httpOnly: true,

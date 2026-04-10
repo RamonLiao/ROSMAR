@@ -35,14 +35,18 @@ export class BroadcastSendJob extends WorkerHost {
 
     if (broadcasts.length === 0) return;
 
-    this.logger.log(`Found ${broadcasts.length} scheduled broadcast(s) to send`);
+    this.logger.log(
+      `Found ${broadcasts.length} scheduled broadcast(s) to send`,
+    );
 
     for (const broadcast of broadcasts) {
       try {
         await this.broadcastService.send(broadcast.id);
         this.logger.log(`Broadcast ${broadcast.id} sent successfully`);
       } catch (err: any) {
-        this.logger.error(`Failed to send broadcast ${broadcast.id}: ${err.message}`);
+        this.logger.error(
+          `Failed to send broadcast ${broadcast.id}: ${err.message}`,
+        );
         await this.prisma.broadcast.update({
           where: { id: broadcast.id },
           data: { status: 'failed' },

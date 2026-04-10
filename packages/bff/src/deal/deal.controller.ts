@@ -12,7 +12,12 @@ import {
 import { DealService } from './deal.service';
 import { DealDocumentService } from './deal-document.service';
 import { SessionGuard } from '../auth/guards/session.guard';
-import { RbacGuard, RequirePermissions, WRITE, DELETE } from '../auth/guards/rbac.guard';
+import {
+  RbacGuard,
+  RequirePermissions,
+  WRITE,
+  DELETE,
+} from '../auth/guards/rbac.guard';
 import { DealRoomGuard } from './deal-room.guard';
 import { User } from '../auth/decorators/user.decorator';
 // UserPayload used inline as import() type in decorated params to avoid isolatedModules error
@@ -63,11 +68,7 @@ export class DealController {
     @User() user: import('../auth/auth.service').UserPayload,
     @Body() dto: import('./deal.controller').CreateDealDto,
   ) {
-    return this.dealService.create(
-      user.workspaceId,
-      user.address,
-      dto,
-    );
+    return this.dealService.create(user.workspaceId, user.address, dto);
   }
 
   @Get(':id')
@@ -102,12 +103,7 @@ export class DealController {
     @Param('id') id: string,
     @Body() dto: import('./deal.controller').UpdateDealDto,
   ) {
-    return this.dealService.update(
-      user.workspaceId,
-      user.address,
-      id,
-      dto,
-    );
+    return this.dealService.update(user.workspaceId, user.address, id, dto);
   }
 
   @Put(':id/stage')

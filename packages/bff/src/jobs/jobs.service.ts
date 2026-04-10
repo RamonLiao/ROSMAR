@@ -13,21 +13,27 @@ export class JobsService implements OnModuleInit {
     @InjectQueue('segment-eval') private readonly segmentEvalQueue: Queue,
     @InjectQueue('segment-refresh') private readonly segmentRefreshQueue: Queue,
     @InjectQueue('segment-diff') private readonly segmentDiffQueue: Queue,
-    @InjectQueue('campaign-scheduler') private readonly campaignSchedulerQueue: Queue,
+    @InjectQueue('campaign-scheduler')
+    private readonly campaignSchedulerQueue: Queue,
     @InjectQueue('sla-checker') private readonly slaCheckerQueue: Queue,
     @InjectQueue('sync-onchain') private readonly syncOnchainQueue: Queue,
     @InjectQueue('vault-expiry') private readonly vaultExpiryQueue: Queue,
     @InjectQueue('score-recalc') private readonly scoreRecalcQueue: Queue,
     @InjectQueue('broadcast-send') private readonly broadcastSendQueue: Queue,
-    @InjectQueue('time-elapsed-trigger') private readonly timeElapsedQueue: Queue,
+    @InjectQueue('time-elapsed-trigger')
+    private readonly timeElapsedQueue: Queue,
     @InjectQueue('balance-sync') private readonly balanceSyncQueue: Queue,
-    @InjectQueue('discord-role-sync') private readonly discordRoleSyncQueue: Queue,
-    @InjectQueue('campaign-recurring') private readonly campaignRecurringQueue: Queue,
+    @InjectQueue('discord-role-sync')
+    private readonly discordRoleSyncQueue: Queue,
+    @InjectQueue('campaign-recurring')
+    private readonly campaignRecurringQueue: Queue,
     @InjectQueue('vault-release') private readonly vaultReleaseQueue: Queue,
   ) {}
 
   async onModuleInit() {
-    this.logger.log('JobsService initializing — registering cron schedulers...');
+    this.logger.log(
+      'JobsService initializing — registering cron schedulers...',
+    );
     await this.registerCronJobs();
     this.logger.log('BullMQ cron jobs registered');
   }
@@ -108,18 +114,24 @@ export class JobsService implements OnModuleInit {
   }
 
   async scheduleSegmentEval(segmentId: string): Promise<void> {
-    await this.segmentEvalQueue.add('evaluate', { segmentId } satisfies SegmentEvalJobData);
+    await this.segmentEvalQueue.add('evaluate', {
+      segmentId,
+    } satisfies SegmentEvalJobData);
   }
 
   async scheduleSegmentDiff(segmentId: string): Promise<void> {
-    await this.segmentDiffQueue.add('diff', { segmentId } satisfies SegmentDiffJobData);
+    await this.segmentDiffQueue.add('diff', {
+      segmentId,
+    } satisfies SegmentDiffJobData);
   }
 
   async scheduleBroadcastSend(data: BroadcastSendJobData): Promise<void> {
     await this.broadcastSendQueue.add('send', data);
   }
 
-  async getHealth(): Promise<Record<string, { waiting: number; active: number; failed: number }>> {
+  async getHealth(): Promise<
+    Record<string, { waiting: number; active: number; failed: number }>
+  > {
     const queues: Array<[string, Queue]> = [
       ['segment-eval', this.segmentEvalQueue],
       ['segment-refresh', this.segmentRefreshQueue],
@@ -137,7 +149,10 @@ export class JobsService implements OnModuleInit {
       ['vault-release', this.vaultReleaseQueue],
     ];
 
-    const result: Record<string, { waiting: number; active: number; failed: number }> = {};
+    const result: Record<
+      string,
+      { waiting: number; active: number; failed: number }
+    > = {};
 
     for (const [name, queue] of queues) {
       const [waiting, active, failed] = await Promise.all([

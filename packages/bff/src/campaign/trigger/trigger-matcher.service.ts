@@ -37,7 +37,13 @@ export class TriggerMatcherService {
 
     for (const trigger of triggers) {
       if (trigger.campaign.status !== 'active') continue;
-      if (!this.matchesConfig(trigger.triggerConfig as Record<string, unknown>, event.data)) continue;
+      if (
+        !this.matchesConfig(
+          trigger.triggerConfig as Record<string, unknown>,
+          event.data,
+        )
+      )
+        continue;
 
       const profileIds = event.profile_id ? [event.profile_id] : [];
       if (profileIds.length === 0) continue;
@@ -92,7 +98,10 @@ export class TriggerMatcherService {
   }
 
   @OnEvent('quest.completed')
-  async handleQuestCompleted(event: { questId: string; profileId: string }): Promise<void> {
+  async handleQuestCompleted(event: {
+    questId: string;
+    profileId: string;
+  }): Promise<void> {
     const triggers = await this.prisma.campaignTrigger.findMany({
       where: { triggerType: 'quest_completed', isEnabled: true },
       include: { campaign: true },

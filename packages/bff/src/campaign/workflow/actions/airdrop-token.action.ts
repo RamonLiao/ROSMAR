@@ -19,7 +19,8 @@ export class AirdropTokenAction {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    this.isDryRun = this.configService.get<string>('SUI_DRY_RUN', 'true') === 'true';
+    this.isDryRun =
+      this.configService.get<string>('SUI_DRY_RUN', 'true') === 'true';
   }
 
   async execute(profileId: string, config: AirdropTokenConfig): Promise<void> {

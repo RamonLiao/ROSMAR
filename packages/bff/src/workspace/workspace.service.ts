@@ -3,7 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { SuiClientService } from '../blockchain/sui.client';
 import { TxBuilderService } from '../blockchain/tx-builder.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { DEFAULT_WEIGHTS, EngagementWeights } from '../engagement/engagement.constants';
+import {
+  DEFAULT_WEIGHTS,
+  EngagementWeights,
+} from '../engagement/engagement.constants';
 import type { CollectionEntryDto } from './dto/collection-watchlist.dto';
 
 export interface WhaleThreshold {
@@ -21,7 +24,8 @@ export class WorkspaceService {
     private readonly txBuilder: TxBuilderService,
     private readonly configService: ConfigService,
   ) {
-    this.isDryRun = this.configService.get<string>('SUI_DRY_RUN', 'false') === 'true';
+    this.isDryRun =
+      this.configService.get<string>('SUI_DRY_RUN', 'false') === 'true';
   }
 
   private async execChainTx(buildTx: () => any): Promise<any> {
@@ -34,14 +38,15 @@ export class WorkspaceService {
 
   async createWorkspace(name: string, ownerAddress: string) {
     const result = await this.execChainTx(() => {
-      const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
+      const globalConfigId =
+        this.configService.get<string>('GLOBAL_CONFIG_ID')!;
       return this.txBuilder.buildCreateWorkspaceTx(name, globalConfigId);
     });
 
-    const wsEvent = result.events?.find(
-      (e: any) => e.type.includes('::workspace::WorkspaceCreated'),
+    const wsEvent = result.events?.find((e: any) =>
+      e.type.includes('::workspace::WorkspaceCreated'),
     );
-    const suiObjectId = (wsEvent?.parsedJson as any)?.workspace_id ?? null;
+    const suiObjectId = wsEvent?.parsedJson?.workspace_id ?? null;
 
     const workspace = await this.prisma.workspace.create({
       data: { suiObjectId, name, ownerAddress },
@@ -133,7 +138,8 @@ export class WorkspaceService {
     permissions: number,
   ) {
     const result = await this.execChainTx(() => {
-      const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
+      const globalConfigId =
+        this.configService.get<string>('GLOBAL_CONFIG_ID')!;
       const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
       return this.txBuilder.buildAddMemberTx(
         globalConfigId,
@@ -154,7 +160,8 @@ export class WorkspaceService {
 
   async removeMember(workspaceId: string, memberAddress: string) {
     const result = await this.execChainTx(() => {
-      const globalConfigId = this.configService.get<string>('GLOBAL_CONFIG_ID')!;
+      const globalConfigId =
+        this.configService.get<string>('GLOBAL_CONFIG_ID')!;
       const adminCapId = this.configService.get<string>('ADMIN_CAP_ID')!;
       return this.txBuilder.buildRemoveMemberTx(
         globalConfigId,
@@ -178,7 +185,11 @@ export class WorkspaceService {
       where: { id: workspaceId },
       select: { engagementWeights: true },
     });
-    return (ws.engagementWeights as EngagementWeights | null) ?? { ...DEFAULT_WEIGHTS };
+    return (
+      (ws.engagementWeights as EngagementWeights | null) ?? {
+        ...DEFAULT_WEIGHTS,
+      }
+    );
   }
 
   async setEngagementWeights(
@@ -206,7 +217,9 @@ export class WorkspaceService {
     return weights;
   }
 
-  async getCollectionWatchlist(workspaceId: string): Promise<CollectionEntryDto[]> {
+  async getCollectionWatchlist(
+    workspaceId: string,
+  ): Promise<CollectionEntryDto[]> {
     const ws = await this.prisma.workspace.findUniqueOrThrow({
       where: { id: workspaceId },
       select: { collectionWatchlist: true },
@@ -253,7 +266,10 @@ export class WorkspaceService {
     // Deduplicate by token (last wins)
     const map = new Map<string, WhaleThreshold>();
     for (const t of thresholds) {
-      map.set(t.token.toUpperCase(), { token: t.token.toUpperCase(), amount: t.amount });
+      map.set(t.token.toUpperCase(), {
+        token: t.token.toUpperCase(),
+        amount: t.amount,
+      });
     }
     const deduped = Array.from(map.values());
 

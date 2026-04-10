@@ -11,7 +11,12 @@ import {
 import { VaultService } from './vault.service';
 import { VaultPolicyService } from './vault-policy.service';
 import { SessionGuard } from '../auth/guards/session.guard';
-import { RbacGuard, RequirePermissions, WRITE, DELETE } from '../auth/guards/rbac.guard';
+import {
+  RbacGuard,
+  RequirePermissions,
+  WRITE,
+  DELETE,
+} from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
 // UserPayload used inline as import() type in decorated params to avoid isolatedModules error
 
@@ -59,18 +64,14 @@ export class VaultController {
     @User() user: import('../auth/auth.service').UserPayload,
     @Body() dto: StoreSecretBodyDto,
   ) {
-    return this.vaultService.storeSecret(
-      user.workspaceId,
-      user.address,
-      {
-        profileId: dto.profileId,
-        key: dto.key,
-        encryptedData: Buffer.from(dto.encryptedData, 'base64'),
-        sealPolicyId: dto.sealPolicyId,
-        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
-        releaseAt: dto.releaseAt ? new Date(dto.releaseAt) : undefined,
-      },
-    );
+    return this.vaultService.storeSecret(user.workspaceId, user.address, {
+      profileId: dto.profileId,
+      key: dto.key,
+      encryptedData: Buffer.from(dto.encryptedData, 'base64'),
+      sealPolicyId: dto.sealPolicyId,
+      expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
+      releaseAt: dto.releaseAt ? new Date(dto.releaseAt) : undefined,
+    });
   }
 
   @Get('secrets/:profileId/:key')
@@ -153,10 +154,6 @@ export class VaultController {
     @Param('profileId') profileId: string,
     @Param('key') key: string,
   ) {
-    return this.vaultService.getAccessLog(
-      user.workspaceId,
-      profileId,
-      key,
-    );
+    return this.vaultService.getAccessLog(user.workspaceId, profileId, key);
   }
 }

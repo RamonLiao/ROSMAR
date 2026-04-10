@@ -57,7 +57,9 @@ export class TelegramService {
         externalId = String(result.result?.message_id);
       }
     } else {
-      this.logger.warn('TELEGRAM_BOT_TOKEN not set — message logged but not sent');
+      this.logger.warn(
+        'TELEGRAM_BOT_TOKEN not set — message logged but not sent',
+      );
     }
 
     // Log to database

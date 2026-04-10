@@ -6,15 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Lock, Save } from "lucide-react";
 import { useVaultCrypto } from "@/lib/hooks/use-vault-crypto";
+import { useCreatePolicy } from "@/lib/hooks/use-create-policy";
+import { PolicySelector, type PolicyValue } from "./policy-selector";
 
 interface EncryptedNoteEditorProps {
   profileId?: string;
@@ -29,15 +24,12 @@ export function EncryptedNoteEditor({
 }: EncryptedNoteEditorProps) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [policyType, setPolicyType] = useState<string>("workspace");
+  const [policy, setPolicy] = useState<PolicyValue>({ ruleType: 0 });
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { encryptAndStore, isInitializing } = useVaultCrypto();
-
-  // In production, different policy types map to different on-chain policy objects.
-  // For now we use the provided default or a placeholder.
-  const policyObjectId = defaultPolicyId ?? "0x0";
+  const { createPolicy } = useCreatePolicy();
 
   const handleSave = async () => {
     if (!profileId) {
@@ -49,6 +41,18 @@ export function EncryptedNoteEditor({
     setError(null);
 
     try {
+      const { policyId } = defaultPolicyId
+        ? { policyId: defaultPolicyId }
+        : await createPolicy({
+            name: `note:${title}`,
+            ruleType: policy.ruleType,
+            allowedAddresses: policy.allowedAddresses,
+            minRoleLevel: policy.minRoleLevel,
+            expiresAtMs: policy.expiresAtMs
+              ? String(policy.expiresAtMs)
+              : undefined,
+          });
+
       const plaintext = new TextEncoder().encode(
         JSON.stringify({ title, content }),
       );
@@ -57,7 +61,7 @@ export function EncryptedNoteEditor({
         profileId,
         key: `note:${title}`,
         plaintext,
-        sealPolicyId: policyObjectId,
+        sealPolicyId: policyId,
       });
 
       setTitle("");
@@ -102,19 +106,9 @@ export function EncryptedNoteEditor({
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="policy-type">Access Policy</Label>
-          <Select value={policyType} onValueChange={setPolicyType}>
-            <SelectTrigger id="policy-type">
-              <SelectValue placeholder="Select policy" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="workspace">Workspace Members</SelectItem>
-              <SelectItem value="address">Specific Addresses</SelectItem>
-              <SelectItem value="role">Role-Based</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {!defaultPolicyId && (
+          <PolicySelector value={policy} onChange={setPolicy} />
+        )}
 
         <div className="rounded-md bg-muted p-3 text-sm">
           <p className="text-muted-foreground">

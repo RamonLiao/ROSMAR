@@ -45,7 +45,9 @@ export class SuinsService {
       this.cacheSet(cacheKey, address);
       return address;
     } catch (error) {
-      this.logger.warn(`Failed to resolve SuiNS name "${name}": ${(error as Error).message}`);
+      this.logger.warn(
+        `Failed to resolve SuiNS name "${name}": ${(error as Error).message}`,
+      );
       return null;
     }
   }
@@ -107,7 +109,9 @@ export class SuinsService {
       this.cacheSet(cacheKey, avatarUrl);
       return avatarUrl;
     } catch (error) {
-      this.logger.warn(`Failed to resolve SuiNS avatar for "${name}": ${(error as Error).message}`);
+      this.logger.warn(
+        `Failed to resolve SuiNS avatar for "${name}": ${(error as Error).message}`,
+      );
       return null;
     }
   }

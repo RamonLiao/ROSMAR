@@ -82,7 +82,9 @@ export class GraphBasedStrategy implements SimilarityStrategy {
       // Each unique txDigest and contractAddress is a "neighbor" in the interaction graph
       neighborMap[profileId].add(`tx:${evt.txDigest}`);
       if (evt.contractAddress) {
-        neighborMap[profileId].add(`contract:${evt.contractAddress.toLowerCase()}`);
+        neighborMap[profileId].add(
+          `contract:${evt.contractAddress.toLowerCase()}`,
+        );
       }
     }
 
@@ -122,9 +124,13 @@ export class GraphBasedStrategy implements SimilarityStrategy {
     const scored: ScoredProfile[] = candidates.map((c) => {
       const cosScore = cosineSimilarity(c.vector, centroid);
       const candidateNeighborSet = candidateNeighbors[c.profileId] ?? new Set();
-      const jacScore = jaccardSimilarity(seedNeighborUnion, candidateNeighborSet);
+      const jacScore = jaccardSimilarity(
+        seedNeighborUnion,
+        candidateNeighborSet,
+      );
 
-      const hasGraphData = seedNeighborUnion.size > 0 || candidateNeighborSet.size > 0;
+      const hasGraphData =
+        seedNeighborUnion.size > 0 || candidateNeighborSet.size > 0;
       const similarity = hasGraphData
         ? alpha * cosScore + (1 - alpha) * jacScore
         : cosScore;
@@ -147,6 +153,14 @@ export class GraphBasedStrategy implements SimilarityStrategy {
     topK: number,
     minSimilarity?: number,
   ): ScoredProfile[] {
-    return this.findSimilarWithGraph(seeds, candidates, {}, {}, topK, minSimilarity, 1.0);
+    return this.findSimilarWithGraph(
+      seeds,
+      candidates,
+      {},
+      {},
+      topK,
+      minSimilarity,
+      1.0,
+    );
   }
 }

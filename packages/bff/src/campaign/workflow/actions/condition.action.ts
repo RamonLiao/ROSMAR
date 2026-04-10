@@ -1,10 +1,24 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 
-const ALLOWED_FIELDS = ['tier', 'engagementScore', 'tags', 'primaryAddress', 'isArchived'] as const;
+const ALLOWED_FIELDS = [
+  'tier',
+  'engagementScore',
+  'tags',
+  'primaryAddress',
+  'isArchived',
+] as const;
 type AllowedField = (typeof ALLOWED_FIELDS)[number];
 
-export type ConditionOperator = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'in';
+export type ConditionOperator =
+  | 'eq'
+  | 'neq'
+  | 'gt'
+  | 'gte'
+  | 'lt'
+  | 'lte'
+  | 'contains'
+  | 'in';
 
 export interface ConditionConfig {
   field: AllowedField;
@@ -22,12 +36,15 @@ export class ConditionAction {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async execute(profileId: string, config: ConditionConfig): Promise<ConditionResult> {
+  async execute(
+    profileId: string,
+    config: ConditionConfig,
+  ): Promise<ConditionResult> {
     if (!config.field || !config.operator) {
       throw new Error('field and operator are required for condition action');
     }
 
-    if (!ALLOWED_FIELDS.includes(config.field as AllowedField)) {
+    if (!ALLOWED_FIELDS.includes(config.field)) {
       throw new Error(
         `Field "${config.field}" not allowed. Allowed: ${ALLOWED_FIELDS.join(', ')}`,
       );
@@ -44,7 +61,7 @@ export class ConditionAction {
       },
     });
 
-    const fieldValue = profile[config.field as keyof typeof profile];
+    const fieldValue = profile[config.field];
     const match = this.evaluate(fieldValue, config.operator, config.value);
 
     this.logger.log(
@@ -54,7 +71,11 @@ export class ConditionAction {
     return { branch: match ? 'yes' : 'no' };
   }
 
-  private evaluate(fieldValue: any, operator: ConditionOperator, targetValue: any): boolean {
+  private evaluate(
+    fieldValue: any,
+    operator: ConditionOperator,
+    targetValue: any,
+  ): boolean {
     switch (operator) {
       case 'eq':
         return fieldValue === targetValue;

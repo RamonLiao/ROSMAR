@@ -9,7 +9,12 @@ import { GdprCleanupJob } from './gdpr-cleanup.job';
 @Module({
   imports: [AuthModule],
   controllers: [GdprController],
-  providers: [GdprService, GdprExecutorService, GdprExportService, GdprCleanupJob],
+  providers: [
+    GdprService,
+    GdprExecutorService,
+    GdprExportService,
+    GdprCleanupJob,
+  ],
   exports: [GdprService],
 })
 export class GdprModule {}

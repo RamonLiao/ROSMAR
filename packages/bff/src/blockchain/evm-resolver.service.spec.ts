@@ -52,7 +52,9 @@ describe('EvmResolverService', () => {
 
   describe('resolveEns', () => {
     it('should resolve ENS name to address', async () => {
-      mockResolveName.mockResolvedValue('0x1234567890abcdef1234567890abcdef12345678');
+      mockResolveName.mockResolvedValue(
+        '0x1234567890abcdef1234567890abcdef12345678',
+      );
       const result = await service.resolveEns('vitalik.eth');
       expect(result).toBe('0x1234567890abcdef1234567890abcdef12345678');
       expect(mockResolveName).toHaveBeenCalledWith('vitalik.eth');
@@ -74,20 +76,28 @@ describe('EvmResolverService', () => {
   describe('lookupAddress', () => {
     it('should reverse-resolve address to ENS name', async () => {
       mockLookupAddress.mockResolvedValue('vitalik.eth');
-      const result = await service.lookupAddress('0x1234567890abcdef1234567890abcdef12345678');
+      const result = await service.lookupAddress(
+        '0x1234567890abcdef1234567890abcdef12345678',
+      );
       expect(result).toBe('vitalik.eth');
-      expect(mockLookupAddress).toHaveBeenCalledWith('0x1234567890abcdef1234567890abcdef12345678');
+      expect(mockLookupAddress).toHaveBeenCalledWith(
+        '0x1234567890abcdef1234567890abcdef12345678',
+      );
     });
 
     it('should return null for address without reverse record', async () => {
       mockLookupAddress.mockResolvedValue(null);
-      const result = await service.lookupAddress('0xdeadbeef00000000000000000000000000000000');
+      const result = await service.lookupAddress(
+        '0xdeadbeef00000000000000000000000000000000',
+      );
       expect(result).toBeNull();
     });
 
     it('should return null on provider error', async () => {
       mockLookupAddress.mockRejectedValue(new Error('network error'));
-      const result = await service.lookupAddress('0xdeadbeef00000000000000000000000000000000');
+      const result = await service.lookupAddress(
+        '0xdeadbeef00000000000000000000000000000000',
+      );
       expect(result).toBeNull();
     });
   });

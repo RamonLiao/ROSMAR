@@ -55,11 +55,12 @@ export class OrganizationService {
 
     const result = await this.suiClient.executeTransaction(tx);
 
-    const orgCreatedEvent = result.events?.find(
-      (e: any) => e.type.includes('::organization::OrganizationCreated'),
+    const orgCreatedEvent = result.events?.find((e: any) =>
+      e.type.includes('::organization::OrganizationCreated'),
     );
 
-    const organizationId = (orgCreatedEvent?.parsedJson as any)?.organization_id || randomUUID();
+    const organizationId =
+      (orgCreatedEvent?.parsedJson as any)?.organization_id || randomUUID();
 
     // Write to PostgreSQL
     await this.prisma.organization.create({
@@ -79,7 +80,10 @@ export class OrganizationService {
     };
   }
 
-  async getOrganization(workspaceId: string, organizationId: string): Promise<any> {
+  async getOrganization(
+    workspaceId: string,
+    organizationId: string,
+  ): Promise<any> {
     return this.prisma.organization.findFirstOrThrow({
       where: { id: organizationId, workspaceId },
       include: { _count: { select: { profiles: true } } },
@@ -114,7 +118,10 @@ export class OrganizationService {
     return { organizations, total };
   }
 
-  async getOrganizationProfiles(workspaceId: string, organizationId: string): Promise<any> {
+  async getOrganizationProfiles(
+    workspaceId: string,
+    organizationId: string,
+  ): Promise<any> {
     await this.prisma.organization.findFirstOrThrow({
       where: { id: organizationId, workspaceId },
       select: { id: true },
@@ -126,7 +133,11 @@ export class OrganizationService {
     return links.map((l) => l.profile);
   }
 
-  async unlinkProfile(workspaceId: string, organizationId: string, profileId: string): Promise<any> {
+  async unlinkProfile(
+    workspaceId: string,
+    organizationId: string,
+    profileId: string,
+  ): Promise<any> {
     await this.prisma.organization.findFirstOrThrow({
       where: { id: organizationId, workspaceId },
       select: { id: true },

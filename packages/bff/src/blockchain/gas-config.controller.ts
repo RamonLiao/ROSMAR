@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Put,
-  Param,
-  Body,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Put, Param, Body, UseGuards } from '@nestjs/common';
 import { GasConfigService, GasConfigDto } from './gas-config.service';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { IsBoolean, IsOptional, IsString, IsInt, Min } from 'class-validator';

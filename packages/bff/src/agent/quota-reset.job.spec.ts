@@ -13,10 +13,7 @@ describe('QuotaResetJob', () => {
       },
     };
     const module = await Test.createTestingModule({
-      providers: [
-        QuotaResetJob,
-        { provide: PrismaService, useValue: prisma },
-      ],
+      providers: [QuotaResetJob, { provide: PrismaService, useValue: prisma }],
     }).compile();
     job = module.get(QuotaResetJob);
   });

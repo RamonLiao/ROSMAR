@@ -24,7 +24,11 @@ export interface MergeResult {
 export interface FundingCluster {
   funderAddress: string;
   ownWallets: string[];
-  relatedProfiles: { id: string; primaryAddress: string; suinsName: string | null }[];
+  relatedProfiles: {
+    id: string;
+    primaryAddress: string;
+    suinsName: string | null;
+  }[];
   confidence: number; // 0-1
 }
 
@@ -517,9 +521,8 @@ export class WalletClusterService {
 
   /** Wrapper around @mysten/sui verify — easy to mock in tests. */
   async verifySignature(message: string, signature: string): Promise<string> {
-    const { verifyPersonalMessageSignature } = await import(
-      '@mysten/sui/verify'
-    );
+    const { verifyPersonalMessageSignature } =
+      await import('@mysten/sui/verify');
     const messageBytes = new TextEncoder().encode(message);
     const publicKey = await verifyPersonalMessageSignature(
       messageBytes,

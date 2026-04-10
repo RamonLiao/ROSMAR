@@ -22,7 +22,8 @@ describe('DiscordOAuthAdapter', () => {
               const map: Record<string, string> = {
                 DISCORD_CLIENT_ID: 'test-client-id',
                 DISCORD_CLIENT_SECRET: 'test-secret',
-                DISCORD_REDIRECT_URI: 'http://localhost:3001/api/social/discord/callback',
+                DISCORD_REDIRECT_URI:
+                  'http://localhost:3001/api/social/discord/callback',
               };
               return map[key] ?? fallback;
             },
@@ -66,7 +67,9 @@ describe('DiscordOAuthAdapter', () => {
         text: async () => 'invalid_grant',
       });
 
-      await expect(adapter.exchangeCode('bad-code')).rejects.toThrow('Discord token exchange failed');
+      await expect(adapter.exchangeCode('bad-code')).rejects.toThrow(
+        'Discord token exchange failed',
+      );
     });
   });
 
@@ -74,16 +77,26 @@ describe('DiscordOAuthAdapter', () => {
     it('should return user info from Discord API', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ id: '123456', username: 'testuser', avatar: 'abc123' }),
+        json: async () => ({
+          id: '123456',
+          username: 'testuser',
+          avatar: 'abc123',
+        }),
       });
 
       const user = await adapter.getUserInfo('token-abc');
-      expect(user).toEqual({ id: '123456', username: 'testuser', avatar: 'abc123' });
+      expect(user).toEqual({
+        id: '123456',
+        username: 'testuser',
+        avatar: 'abc123',
+      });
     });
 
     it('should throw on failed user info fetch', async () => {
       mockFetch.mockResolvedValueOnce({ ok: false });
-      await expect(adapter.getUserInfo('bad-token')).rejects.toThrow('Failed to fetch Discord user info');
+      await expect(adapter.getUserInfo('bad-token')).rejects.toThrow(
+        'Failed to fetch Discord user info',
+      );
     });
   });
 });

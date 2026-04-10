@@ -2,7 +2,11 @@ import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { IsString, IsIn, IsNotEmpty } from 'class-validator';
 import { ContentService, type ContentChannel } from './content.service';
 import { SessionGuard } from '../../auth/guards/session.guard';
-import { RbacGuard, RequirePermissions, WRITE } from '../../auth/guards/rbac.guard';
+import {
+  RbacGuard,
+  RequirePermissions,
+  WRITE,
+} from '../../auth/guards/rbac.guard';
 import { AiRateLimitGuard } from '../guards/ai-rate-limit.guard';
 import { User } from '../../auth/decorators/user.decorator';
 import type { UserPayload } from '../../auth/auth.service';
@@ -28,10 +32,7 @@ export class ContentController {
 
   @Post('generate')
   @RequirePermissions(WRITE)
-  async generate(
-    @User() user: UserPayload,
-    @Body() dto: GenerateContentDto,
-  ) {
+  async generate(@User() user: UserPayload, @Body() dto: GenerateContentDto) {
     return this.contentService.generateContent({
       workspaceId: user.workspaceId,
       userId: user.address,

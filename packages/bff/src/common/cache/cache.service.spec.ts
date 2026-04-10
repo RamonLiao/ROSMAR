@@ -15,12 +15,14 @@ function createRedisMock() {
       }
       return entry.value;
     }),
-    set: jest.fn(async (key: string, value: string, _ex?: string, ttl?: number) => {
-      store.set(key, {
-        value,
-        expiresAt: ttl ? Date.now() + ttl * 1000 : undefined,
-      });
-    }),
+    set: jest.fn(
+      async (key: string, value: string, _ex?: string, ttl?: number) => {
+        store.set(key, {
+          value,
+          expiresAt: ttl ? Date.now() + ttl * 1000 : undefined,
+        });
+      },
+    ),
     del: jest.fn(async (key: string) => {
       store.delete(key);
     }),

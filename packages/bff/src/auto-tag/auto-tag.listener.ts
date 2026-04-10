@@ -35,12 +35,16 @@ export class AutoTagListener {
       const merged = this.autoTagService.mergeTags(profile.tags, autoTags);
 
       // Only update if tags actually changed
-      if (JSON.stringify(merged.sort()) !== JSON.stringify(profile.tags.sort())) {
+      if (
+        JSON.stringify(merged.sort()) !== JSON.stringify(profile.tags.sort())
+      ) {
         await this.prisma.profile.update({
           where: { id: profile.id },
           data: { tags: merged },
         });
-        this.logger.log(`Updated auto-tags for profile ${profile.id}: ${autoTags.join(', ')}`);
+        this.logger.log(
+          `Updated auto-tags for profile ${profile.id}: ${autoTags.join(', ')}`,
+        );
       }
     } catch (err) {
       this.logger.error(`Auto-tag failed for profile ${event.profile_id}`, err);

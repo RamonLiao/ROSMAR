@@ -12,7 +12,10 @@ export class GrantDiscordRoleAction {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async execute(profileId: string, config: GrantDiscordRoleConfig): Promise<void> {
+  async execute(
+    profileId: string,
+    config: GrantDiscordRoleConfig,
+  ): Promise<void> {
     // Lookup Discord social link for profile
     const link = await this.prisma.socialLink.findUnique({
       where: { profileId_platform: { profileId, platform: 'discord' } },

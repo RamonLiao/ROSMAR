@@ -25,7 +25,17 @@ import { SocialModule } from '../social/social.module';
 import { BroadcastModule } from '../broadcast/broadcast.module';
 
 @Module({
-  imports: [BullQueueModule, AutoTagModule, EngagementModule, BlockchainModule, SegmentModule, CampaignModule, NotificationModule, SocialModule, BroadcastModule],
+  imports: [
+    BullQueueModule,
+    AutoTagModule,
+    EngagementModule,
+    BlockchainModule,
+    SegmentModule,
+    CampaignModule,
+    NotificationModule,
+    SocialModule,
+    BroadcastModule,
+  ],
   providers: [
     JobsService,
     SegmentEvalJob,

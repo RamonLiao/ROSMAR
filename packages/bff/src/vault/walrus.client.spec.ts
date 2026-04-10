@@ -16,7 +16,9 @@ const mockConfigGet = (overrides: Record<string, string> = {}) => {
 };
 
 const buildClient = (overrides: Record<string, string> = {}) => {
-  const cfg = { get: jest.fn(mockConfigGet(overrides)) } as unknown as ConfigService;
+  const cfg = {
+    get: jest.fn(mockConfigGet(overrides)),
+  } as unknown as ConfigService;
   return new WalrusClient(cfg);
 };
 
@@ -79,7 +81,9 @@ describe('WalrusClient (real mode)', () => {
     const defaultClient = new WalrusClient(cfg);
 
     fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({ newlyCreated: { blobObject: { blobId: 'abc' } } })),
+      new Response(
+        JSON.stringify({ newlyCreated: { blobObject: { blobId: 'abc' } } }),
+      ),
     );
     await defaultClient.uploadBlob(Buffer.from('x'));
     // If mock were true, fetch would not be called
@@ -90,7 +94,9 @@ describe('WalrusClient (real mode)', () => {
     it('parses newlyCreated blobId', async () => {
       fetchSpy.mockResolvedValueOnce(
         new Response(
-          JSON.stringify({ newlyCreated: { blobObject: { blobId: 'new-blob-123' } } }),
+          JSON.stringify({
+            newlyCreated: { blobObject: { blobId: 'new-blob-123' } },
+          }),
         ),
       );
 
@@ -102,7 +108,9 @@ describe('WalrusClient (real mode)', () => {
 
     it('parses alreadyCertified blobId', async () => {
       fetchSpy.mockResolvedValueOnce(
-        new Response(JSON.stringify({ alreadyCertified: { blobId: 'certified-456' } })),
+        new Response(
+          JSON.stringify({ alreadyCertified: { blobId: 'certified-456' } }),
+        ),
       );
 
       const res = await client.uploadBlob(Buffer.from('data'));
@@ -126,7 +134,9 @@ describe('WalrusClient (real mode)', () => {
         .mockRejectedValueOnce(new Error('network down'))
         .mockResolvedValueOnce(
           new Response(
-            JSON.stringify({ newlyCreated: { blobObject: { blobId: 'retry-ok' } } }),
+            JSON.stringify({
+              newlyCreated: { blobObject: { blobId: 'retry-ok' } },
+            }),
           ),
         );
 
@@ -137,7 +147,12 @@ describe('WalrusClient (real mode)', () => {
 
     it('retries on HTTP error and throws after 3 failures', async () => {
       fetchSpy.mockImplementation(() =>
-        Promise.resolve(new Response('bad', { status: 500, statusText: 'Internal Server Error' })),
+        Promise.resolve(
+          new Response('bad', {
+            status: 500,
+            statusText: 'Internal Server Error',
+          }),
+        ),
       );
 
       await expect(client.uploadBlob(Buffer.from('data'))).rejects.toThrow(

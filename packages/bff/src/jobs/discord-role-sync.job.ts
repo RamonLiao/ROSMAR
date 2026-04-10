@@ -30,14 +30,16 @@ export class DiscordRoleSyncJob extends WorkerHost {
         where: { discordGuildId: { not: null } },
         select: { id: true },
       });
-      workspaceIds = workspaces.map(w => w.id);
+      workspaceIds = workspaces.map((w) => w.id);
     }
 
     for (const wsId of workspaceIds) {
       try {
         await this.discordRoleSyncService.syncWorkspace(wsId);
       } catch (err) {
-        this.logger.error(`Discord role sync failed for workspace ${wsId}: ${err}`);
+        this.logger.error(
+          `Discord role sync failed for workspace ${wsId}: ${err}`,
+        );
       }
     }
   }

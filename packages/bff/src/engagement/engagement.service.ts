@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { DEFAULT_CAPS, DEFAULT_WEIGHTS, EngagementWeights } from './engagement.constants';
+import {
+  DEFAULT_CAPS,
+  DEFAULT_WEIGHTS,
+  EngagementWeights,
+} from './engagement.constants';
 
 export interface ScoreResult {
   score: number; // 0-100
@@ -42,7 +46,13 @@ export class EngagementService {
       WHERE we.profile_id = ${profileId}
     `;
 
-    const raw = rows[0] ?? { hold_days: 0, tx_count: 0n, tx_value: 0, vote_count: 0n, nft_count: 0n };
+    const raw = rows[0] ?? {
+      hold_days: 0,
+      tx_count: 0n,
+      tx_value: 0,
+      vote_count: 0n,
+      nft_count: 0n,
+    };
 
     const factors = {
       holdTime: Math.min(Number(raw.hold_days) / DEFAULT_CAPS.holdTimeDays, 1),
@@ -73,7 +83,10 @@ export class EngagementService {
     };
   }
 
-  async recalculateAndPersist(profileId: string, workspaceId: string): Promise<number> {
+  async recalculateAndPersist(
+    profileId: string,
+    workspaceId: string,
+  ): Promise<number> {
     // Load per-workspace custom weights (falls back to DEFAULT_WEIGHTS)
     const ws = await this.prisma.workspace.findUnique({
       where: { id: workspaceId },

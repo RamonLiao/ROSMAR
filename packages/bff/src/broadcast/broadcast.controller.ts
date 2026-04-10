@@ -9,10 +9,18 @@ import {
 } from '@nestjs/common';
 import { BroadcastService } from './broadcast.service';
 import { SessionGuard } from '../auth/guards/session.guard';
-import { RbacGuard, RequirePermissions, WRITE } from '../auth/guards/rbac.guard';
+import {
+  RbacGuard,
+  RequirePermissions,
+  WRITE,
+} from '../auth/guards/rbac.guard';
 import { User } from '../auth/decorators/user.decorator';
 import type { UserPayload } from '../auth/auth.service';
-import { CreateBroadcastDto, UpdateBroadcastDto, ScheduleBroadcastDto } from './dto/broadcast.dto';
+import {
+  CreateBroadcastDto,
+  UpdateBroadcastDto,
+  ScheduleBroadcastDto,
+} from './dto/broadcast.dto';
 
 @Controller('broadcasts')
 @UseGuards(SessionGuard, RbacGuard)
@@ -21,19 +29,13 @@ export class BroadcastController {
 
   @Post()
   @RequirePermissions(WRITE)
-  async create(
-    @User() user: UserPayload,
-    @Body() dto: CreateBroadcastDto,
-  ) {
+  async create(@User() user: UserPayload, @Body() dto: CreateBroadcastDto) {
     return this.broadcastService.create(user.workspaceId, dto);
   }
 
   @Patch(':id')
   @RequirePermissions(WRITE)
-  async update(
-    @Param('id') id: string,
-    @Body() dto: UpdateBroadcastDto,
-  ) {
+  async update(@Param('id') id: string, @Body() dto: UpdateBroadcastDto) {
     return this.broadcastService.update(id, dto);
   }
 
@@ -46,10 +48,7 @@ export class BroadcastController {
 
   @Post(':id/schedule')
   @RequirePermissions(WRITE)
-  async schedule(
-    @Param('id') id: string,
-    @Body() dto: ScheduleBroadcastDto,
-  ) {
+  async schedule(@Param('id') id: string, @Body() dto: ScheduleBroadcastDto) {
     return this.broadcastService.schedule(id, new Date(dto.scheduledAt));
   }
 

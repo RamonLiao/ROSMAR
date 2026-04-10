@@ -17,8 +17,5 @@ export interface SimilarityStrategy {
 
 export interface CandidateSource {
   readonly name: string;
-  getCandidates(
-    workspaceId: string,
-    excludeIds: string[],
-  ): Promise<string[]>;
+  getCandidates(workspaceId: string, excludeIds: string[]): Promise<string[]>;
 }

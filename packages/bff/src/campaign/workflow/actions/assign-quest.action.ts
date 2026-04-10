@@ -10,12 +10,19 @@ export class AssignQuestAction {
   async execute(profileId: string, config: { questId: string }): Promise<void> {
     try {
       // Check if profile already completed this quest
-      const progress = await this.questService.getProgress(config.questId, profileId);
+      const progress = await this.questService.getProgress(
+        config.questId,
+        profileId,
+      );
       if (progress.completed) {
-        this.logger.log(`Profile ${profileId} already completed quest ${config.questId}`);
+        this.logger.log(
+          `Profile ${profileId} already completed quest ${config.questId}`,
+        );
         return;
       }
-      this.logger.log(`Quest ${config.questId} assigned to profile ${profileId}`);
+      this.logger.log(
+        `Quest ${config.questId} assigned to profile ${profileId}`,
+      );
     } catch (error: any) {
       this.logger.error(`Failed to assign quest: ${error.message}`);
       throw error;
