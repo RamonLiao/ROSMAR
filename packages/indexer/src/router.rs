@@ -9,6 +9,7 @@ use serde_json::Value;
 use sqlx::PgPool;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use uuid::Uuid;
 
 pub struct EventRouter {
     pool: PgPool,
@@ -53,7 +54,7 @@ impl EventRouter {
 
         tracing::debug!("Routing event type: {}", event_type);
 
-        // Step 1: Handler -> WalletEvent
+        // Step 1: Handler → WalletEvent
         let wallet_event = match event_type {
             t if t.contains("AuditEventV1") => {
                 audit::handle_audit_event(&self.pool, event).await?
@@ -89,10 +90,26 @@ impl EventRouter {
             }
         };
 
-        // Step 2: Queue to BatchWriter
         let address = wallet_event.address.clone();
         let tx_digest = wallet_event.tx_digest.clone();
+        let amount = wallet_event.amount;
+        let token = wallet_event.token.clone();
+        let we_event_type = wallet_event.event_type.clone();
 
+        // Step 2: Enrich (BEFORE batch write so we have profile_id/workspace_id)
+        let (profile_id, workspace_id) = match self.enricher.resolve_full(&address).await {
+            Ok(Some((pid, wid))) => {
+                tracing::debug!("Enriched {} -> profile={}, workspace={}", address, pid, wid);
+                (Some(pid), Some(wid))
+            }
+            Ok(None) => (None, None),
+            Err(e) => {
+                tracing::warn!("Enrichment failed for {}: {}", address, e);
+                (None, None)
+            }
+        };
+
+        // Step 3: Queue to BatchWriter (now with enrichment)
         let batch_event = BatchEvent {
             time: chrono::Utc::now(),
             address: wallet_event.address,
@@ -103,36 +120,34 @@ impl EventRouter {
             amount: wallet_event.amount,
             tx_digest: wallet_event.tx_digest,
             raw_data: wallet_event.raw_data,
+            profile_id,
+            workspace_id,
         };
 
         if let Err(e) = self.batch_tx.send(batch_event).await {
             return Err(format!("BatchWriter channel closed: {}", e).into());
         }
 
-        // Step 3: AlertEngine check
+        // Step 4: AlertEngine check (pure logic, receives enrichment)
         {
-            let data = event.get("parsedJson").unwrap_or(event);
-            let amount = data
-                .get("amount")
-                .or_else(|| data.get("value"))
-                .and_then(|a| a.as_str().and_then(|s| s.parse::<i64>().ok()).or_else(|| a.as_i64()))
-                .unwrap_or(0);
-            let token = data
-                .get("coinType")
-                .or_else(|| data.get("token"))
-                .and_then(|t| t.as_str());
+            let whale_alert = self.alert_engine.check(
+                &we_event_type,
+                &address,
+                amount,
+                token.as_deref(),
+                &tx_digest,
+                profile_id,
+                workspace_id,
+            );
 
-            if let Ok(Some(whale_alert)) = self
-                .alert_engine
-                .check_and_alert(&address, event_type, amount, token, &tx_digest)
-                .await
-            {
+            if let Some(alert) = whale_alert {
                 if let Some(ref webhook) = self.webhook {
                     let alert_event = WebhookDispatcher::build_event(
                         event,
-                        "whale_alert",
-                        &whale_alert.address,
-                        whale_alert.profile_id,
+                        "WhaleAlert",
+                        &alert.address,
+                        alert.profile_id,
+                        alert.workspace_id,
                     );
                     if let Err(e) = webhook
                         .dispatch_with_retry(&alert_event, &self.retry, &self.pool, "alert_webhook")
@@ -144,23 +159,10 @@ impl EventRouter {
             }
         }
 
-        // Step 4: Enrich
-        let profile_id = match self.enricher.resolve_address(&address).await {
-            Ok(Some(pid)) => {
-                tracing::debug!("Enriched {} -> {}", address, pid);
-                Some(pid)
-            }
-            Ok(None) => None,
-            Err(e) => {
-                tracing::warn!("Enrichment failed for {}: {}", address, e);
-                None
-            }
-        };
-
-        // Step 5: General webhook with retry
+        // Step 5: General webhook with enrichment
         if let Some(ref webhook) = self.webhook {
             let indexer_event = WebhookDispatcher::build_event(
-                event, event_type, &address, profile_id,
+                event, event_type, &address, profile_id, workspace_id,
             );
             if let Err(e) = webhook
                 .dispatch_with_retry(&indexer_event, &self.retry, &self.pool, "webhook")
@@ -203,10 +205,12 @@ mod tests {
     async fn test_route_event() {
         let database_url = std::env::var("DATABASE_URL").unwrap();
         let pool = crate::db::create_pool(&database_url).await.unwrap();
-        let cache = crate::cache::AddressCache::new();
+        let cache = crate::cache::AddressCache::new(300);
         let enricher = Arc::new(crate::enricher::Enricher::new(cache, pool.clone()));
         let config = crate::config::Config::from_env().unwrap();
-        let alert_engine = Arc::new(crate::alerts::AlertEngine::new(config.clone(), pool.clone()));
+        let alert_engine = Arc::new(crate::alerts::AlertEngine::new(
+            config.whale_alert_threshold_sui,
+        ));
         let (batch_tx, _batch_rx) = mpsc::channel(1000);
         let router = EventRouter::new(pool, config, enricher, alert_engine, batch_tx);
 

@@ -25,7 +25,10 @@ export class WebhookSignatureGuard implements CanActivate {
       throw new UnauthorizedException('Invalid signature format');
     }
 
-    const body = JSON.stringify(req.body);
+    // Use rawBody for HMAC verification to avoid JSON re-serialization mismatches.
+    // rawBody contains the exact bytes the sender signed; JSON.stringify(req.body)
+    // may reorder keys or differ in whitespace.
+    const body = req.rawBody ?? Buffer.from(JSON.stringify(req.body));
     const expected = createHmac('sha256', secret).update(body).digest('hex');
 
     if (hash.length !== expected.length) {

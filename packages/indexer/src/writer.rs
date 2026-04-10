@@ -4,6 +4,7 @@ use sqlx::PgPool;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::interval;
+use uuid::Uuid;
 
 pub struct BatchEvent {
     pub time: chrono::DateTime<chrono::Utc>,
@@ -15,6 +16,8 @@ pub struct BatchEvent {
     pub amount: i64,
     pub tx_digest: String,
     pub raw_data: Value,
+    pub profile_id: Option<Uuid>,
+    pub workspace_id: Option<Uuid>,
 }
 
 pub struct BatchWriter {
@@ -89,7 +92,7 @@ impl BatchWriter {
 
     async fn multi_row_insert(&self, batch: &[BatchEvent]) -> Result<(), sqlx::Error> {
         let mut qb = sqlx::QueryBuilder::new(
-            "INSERT INTO wallet_events (time, address, event_type, contract_address, collection, token, amount, tx_digest, raw_data) "
+            "INSERT INTO wallet_events (time, address, event_type, contract_address, collection, token, amount, tx_digest, raw_data, profile_id, workspace_id) "
         );
 
         qb.push_values(batch.iter(), |mut b, event| {
@@ -101,7 +104,9 @@ impl BatchWriter {
                 .push_bind(&event.token)
                 .push_bind(event.amount)
                 .push_bind(&event.tx_digest)
-                .push_bind(&event.raw_data);
+                .push_bind(&event.raw_data)
+                .push_bind(&event.profile_id)
+                .push_bind(&event.workspace_id);
         });
 
         qb.push(" ON CONFLICT (time, tx_digest, address) DO NOTHING");
@@ -113,8 +118,8 @@ impl BatchWriter {
         for event in batch {
             let result = sqlx::query(
                 "INSERT INTO wallet_events
-                 (time, address, event_type, contract_address, collection, token, amount, tx_digest, raw_data)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                 (time, address, event_type, contract_address, collection, token, amount, tx_digest, raw_data, profile_id, workspace_id)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                  ON CONFLICT (time, tx_digest, address) DO NOTHING"
             )
             .bind(&event.time)
@@ -126,6 +131,8 @@ impl BatchWriter {
             .bind(event.amount)
             .bind(&event.tx_digest)
             .bind(&event.raw_data)
+            .bind(&event.profile_id)
+            .bind(&event.workspace_id)
             .execute(&self.pool)
             .await;
 

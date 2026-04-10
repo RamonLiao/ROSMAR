@@ -27,10 +27,8 @@ enum Commands {
     Run,
     /// Replay dead-letter events
     Replay {
-        /// Filter by source (batch_writer, webhook, alert_webhook)
         #[arg(short, long)]
         source: Option<String>,
-        /// Hours to look back (default: 24)
         #[arg(short = 'H', long, default_value = "24")]
         hours: i64,
     },
@@ -38,7 +36,6 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize tracing
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -58,49 +55,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn run_indexer() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Starting CRM Indexer");
 
-    // Load configuration
     let config = config::Config::from_env()?;
-    tracing::info!("Loaded configuration for network: {}", config.sui_network);
+    tracing::info!("Network: {}, Store: {}", config.sui_network, config.checkpoint_store_url);
 
-    // Create database connection pool
     let pool = db::create_pool(&config.database_url).await?;
     tracing::info!("Connected to database");
 
-    // Initialize address cache
-    let cache = cache::AddressCache::new();
-
-    // Create enricher and preload cache
+    // Initialize components
+    let cache = cache::AddressCache::new(config.enricher_cache_ttl_secs);
     let enricher = Arc::new(enricher::Enricher::new(cache.clone(), pool.clone()));
     let preloaded = enricher.preload_cache().await?;
     tracing::info!("Preloaded {} profiles into cache", preloaded);
 
-    // Initialize alert engine
-    let alert_engine = Arc::new(alerts::AlertEngine::new(config.clone(), pool.clone()));
-    tracing::info!("Alert engine initialized");
-
-    // Create webhook dispatcher
+    let alert_engine = Arc::new(alerts::AlertEngine::new(config.whale_alert_threshold_sui));
     let webhook_dispatcher = Arc::new(webhook::WebhookDispatcher::new(
         config.bff_webhook_url.clone(),
+        config.webhook_hmac_secret.clone(),
     ));
-    tracing::info!("Webhook dispatcher initialized");
 
-    // Create BatchWriter channel
+    // BatchWriter
     let (batch_tx, batch_rx) = tokio::sync::mpsc::channel(1000);
     let batch_writer = writer::BatchWriter::new(
         pool.clone(),
         config.batch_size,
         config.batch_timeout_ms,
     );
-
-    // Spawn BatchWriter as background task
     tokio::spawn(async move {
         if let Err(e) = batch_writer.start(batch_rx).await {
             tracing::error!("BatchWriter error: {}", e);
         }
     });
-    tracing::info!("BatchWriter started");
 
-    // Create event router
+    // Router
     let router = Arc::new(
         router::EventRouter::new(
             pool.clone(),
@@ -111,18 +97,25 @@ async fn run_indexer() -> Result<(), Box<dyn std::error::Error>> {
         )
         .with_webhook(webhook_dispatcher),
     );
-    tracing::info!("Event router initialized");
 
-    // Create checkpoint consumer
-    let consumer = consumer::CheckpointConsumer::new(config.clone(), pool.clone(), router);
+    let worker = consumer::CrmWorker::new(router);
 
-    // Get starting checkpoint
+    // Get starting checkpoint from DB
     let start_checkpoint = db::get_last_checkpoint(&pool).await?;
     tracing::info!("Starting from checkpoint: {}", start_checkpoint);
 
-    // Start consumer (this runs forever)
-    tracing::info!("Starting checkpoint consumer...");
-    consumer.start().await?;
+    // Start the ingestion workflow using checkpoint store
+    let (executor, _exit_sender) = sui_data_ingestion_core::setup_single_workflow(
+        worker,
+        config.checkpoint_store_url.clone(),
+        start_checkpoint,
+        5, // concurrency
+        None,
+    )
+    .await?;
+
+    tracing::info!("Indexer started (checkpoint store: {})", config.checkpoint_store_url);
+    executor.await?;
 
     Ok(())
 }
@@ -136,12 +129,7 @@ async fn replay_dead_letters(
     let config = config::Config::from_env()?;
     let pool = db::create_pool(&config.database_url).await?;
 
-    let dead_letters = db::list_dead_letters(
-        &pool,
-        hours,
-        source.as_deref(),
-    )
-    .await?;
+    let dead_letters = db::list_dead_letters(&pool, hours, source.as_deref()).await?;
 
     if dead_letters.is_empty() {
         tracing::info!("No dead-letter events found");
@@ -150,12 +138,12 @@ async fn replay_dead_letters(
 
     tracing::info!("Found {} dead-letter events to replay", dead_letters.len());
 
-    // Set up router for replay
-    let cache = cache::AddressCache::new();
+    let cache = cache::AddressCache::new(config.enricher_cache_ttl_secs);
     let enricher = Arc::new(enricher::Enricher::new(cache, pool.clone()));
-    let alert_engine = Arc::new(alerts::AlertEngine::new(config.clone(), pool.clone()));
+    let alert_engine = Arc::new(alerts::AlertEngine::new(config.whale_alert_threshold_sui));
     let webhook_dispatcher = Arc::new(webhook::WebhookDispatcher::new(
         config.bff_webhook_url.clone(),
+        config.webhook_hmac_secret.clone(),
     ));
     let (batch_tx, batch_rx) = tokio::sync::mpsc::channel(1000);
     let batch_writer = writer::BatchWriter::new(
@@ -189,7 +177,6 @@ async fn replay_dead_letters(
             Ok(()) => {
                 db::mark_replayed(&pool, *id).await?;
                 replayed += 1;
-                tracing::info!("Successfully replayed {}", id);
             }
             Err(e) => {
                 failed += 1;

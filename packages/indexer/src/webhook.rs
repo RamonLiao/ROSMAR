@@ -1,7 +1,9 @@
 use crate::retry::RetryManager;
+use hmac::{Hmac, Mac};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::Sha256;
 use uuid::Uuid;
 
 /// Unified event payload sent to BFF via webhook
@@ -10,6 +12,7 @@ pub struct IndexerEvent {
     pub event_id: String,
     pub event_type: String,
     pub profile_id: Option<Uuid>,
+    pub workspace_id: Option<Uuid>,
     pub address: String,
     pub data: Value,
     pub tx_digest: String,
@@ -20,14 +23,25 @@ pub struct IndexerEvent {
 pub struct WebhookDispatcher {
     client: Client,
     webhook_url: String,
+    hmac_secret: String,
 }
 
 impl WebhookDispatcher {
-    pub fn new(webhook_url: String) -> Self {
+    pub fn new(webhook_url: String, hmac_secret: String) -> Self {
         Self {
             client: Client::new(),
             webhook_url,
+            hmac_secret,
         }
+    }
+
+    fn sign_payload(&self, payload: &[u8]) -> String {
+        type HmacSha256 = Hmac<Sha256>;
+        let mut mac = HmacSha256::new_from_slice(self.hmac_secret.as_bytes())
+            .expect("HMAC can take key of any size");
+        mac.update(payload);
+        let result = mac.finalize();
+        format!("sha256={}", hex::encode(result.into_bytes()))
     }
 
     /// Build an IndexerEvent from raw event data + enrichment results
@@ -36,6 +50,7 @@ impl WebhookDispatcher {
         event_type: &str,
         address: &str,
         profile_id: Option<Uuid>,
+        workspace_id: Option<Uuid>,
     ) -> IndexerEvent {
         let tx_digest = event
             .get("id")
@@ -54,6 +69,7 @@ impl WebhookDispatcher {
             event_id: Uuid::new_v4().to_string(),
             event_type: event_type.to_string(),
             profile_id,
+            workspace_id,
             address: address.to_string(),
             data: event.clone(),
             tx_digest,
@@ -70,15 +86,23 @@ impl WebhookDispatcher {
         source: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let event_clone = event.clone();
+        let body_bytes = serde_json::to_vec(&event_clone)
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
+                format!("Serialize error: {}", e).into()
+            })?;
+        let signature = self.sign_payload(&body_bytes);
         let result = retry
             .execute(|| {
-                let e = event_clone.clone();
+                let body = body_bytes.clone();
+                let sig = signature.clone();
                 let url = format!("{}/webhooks/indexer-event", self.webhook_url);
                 let client = self.client.clone();
                 async move {
                     let response = client
                         .post(&url)
-                        .json(&e)
+                        .header("content-type", "application/json")
+                        .header("x-webhook-signature", sig)
+                        .body(body)
                         .timeout(std::time::Duration::from_secs(10))
                         .send()
                         .await
@@ -131,11 +155,13 @@ mod tests {
         });
 
         let profile_id = Uuid::new_v4();
+        let workspace_id = Uuid::new_v4();
         let event = WebhookDispatcher::build_event(
             &raw_event,
             "swap",
             "0xuser1",
             Some(profile_id),
+            Some(workspace_id),
         );
 
         assert_eq!(event.event_type, "swap");
@@ -157,6 +183,7 @@ mod tests {
             &raw_event,
             "mint",
             "0x0",
+            None,
             None,
         );
 

@@ -1,5 +1,51 @@
 # ROSMAR CRM — Lessons Learned
 
+## 2026-04-10
+
+### sui-indexer-alt-framework ≠ 通用 checkpoint processor
+- **錯誤**: Plan 和 spec 寫「用 sui-indexer-alt-framework 的 Processor trait + Service::builder()」，但實際 API 是 `Handler` trait（要求 diesel Store + Batch + commit），完全不適合已有 sqlx pipeline 的 custom indexer。
+- **正確做法**: `sui-data-ingestion-core` 提供更簡單的 `Worker` trait（`process_checkpoint(&self, &CheckpointData) -> Result<()>`）和 `setup_single_workflow`，適合自帶 storage pipeline 的場景。`sui-indexer-alt-framework` 適合直接寫入 Postgres 的標準 indexer。
+- **要點**: SUI 有多個 indexer crate，選擇前先讀 trait 定義確認 API surface。「framework」聽起來通用，但其實很 opinionated。
+
+### SUI repo 的 git branch name 不穩定
+- **錯誤**: Lessons 記錄 branch 從 `main` 改為 `mainline`，但實際 `git ls-remote` 確認 branch 仍然是 `main`。可能是某個短暫的更名或 skill context 的錯誤。
+- **正確做法**: Cargo.toml 加 SUI git dependency 時，先跑 `git ls-remote --heads` 確認 branch 名。
+- **要點**: 不要信任 memory/plan 裡的 branch name，以 `git ls-remote` 為準。
+
+### SUI SDK crate 名稱和 API 要用 skill 查證，不能靠文件或記憶
+- **錯誤**: 從舊文件和 skill context 拿到 `sui-data-ingestion-core` + `Worker` trait + `setup_single_workflow`，寫進 spec 和 plan。但 Protocol 119 已改為 `sui-indexer-alt-framework` + `Processor` trait + `Service::builder()` + `CheckpointEnvelope`，git branch 也從 `main` 改為 `mainline`。
+- **正確做法**: 寫涉及 SUI SDK 的 plan 前，一律用 `sui-indexer` / `sui-docs-query` skill 查當前 API。Spec 裡標註 Protocol 版本和確認日期。
+- **要點**: SUI 的 Rust crate API 變動頻繁（Protocol 117→119 就改了 trait name、return type、concurrency model）。Skill 文件比 training data 更新，但也可能落後 — 最終以 `cargo doc` 為準。
+
+### Roadmap 描述的「未完成」可能已經被做完了 → 先 explore 再規劃
+- **錯誤**: Roadmap 寫 P2-6 Seal SDK「未開始」，但實際探索發現 seal-crypto.ts、use-seal-session.ts、BFF vault、Move crm_vault 全部已完成，只剩 UI wiring gap。差點把它當完整 plan track 任務。
+- **正確做法**: Plan track 任務開始前，先 explore 現有 code 狀態，再決定 scope。Roadmap 是規劃時的快照，不是 source of truth。
+- **要點**: `explore agent` 的結果比 roadmap 更可信。
+
+## 2026-04-09
+
+### Subagent 產出的 code 不能信任 Prisma schema 欄位名 → 最後必跑 tsc
+- **錯誤**: Plan 裡寫 `workspace.ownerId`、`segmentMember`、`profile.name`，但 Prisma schema 是 `ownerAddress`、`segmentMembership`、`suinsName`。Subagent 照 plan 寫，type check 才抓到 5 個 schema mismatch。
+- **正確做法**: Subagent 完成後，controller 層必須跑 `tsc --noEmit` 做 integration check，比對 pre-existing errors 後修 delta。Plan 裡的欄位名視為「意圖」不是「事實」。
+- **要點**: Plan 是寫給人/agent 的 spec，不是 schema source of truth。跨檔案整合的 type errors 只有 tsc 能抓。
+
+### getAuthUrl 變 async 要同步更新 controller
+- **錯誤**: T3 把 `getAuthUrl` 改成 async（Redis 操作），但 controller 沒加 `await` → `const { url } = promise` 拿到的是 Promise 不是值。
+- **正確做法**: Service method signature 變 async 時，grep 所有 caller（controller、test）同步更新。
+- **要點**: NestJS controller 不會自動 await service return。改 sync→async 是 breaking change。
+
+## 2026-04-08
+
+### CI lint 失敗但本地無法重現 → 先用 `gh run view` 抓實際 error
+- **錯誤**: 本地 Node 24 + 已有 Prisma client → 0 errors。盲猜是 prettier/Node 版本差異，連推 2 個 commit 都沒修到。
+- **正確做法**: 第一步就該用 `gh run view <run-id> --log | grep " error "` 拿到 CI 的實際 error message（`IntFilter` is an error type → `no-redundant-type-constituents`），立刻定位到 Prisma client 未生成。
+- **要點**: CI 跟本地環境不同時，不要猜。直接讀 CI log 找 exact error。`gh run view --log` 是最快的路。
+
+### CI 步驟順序：code generator 必須在 lint/typecheck 之前
+- **錯誤**: `prisma generate` 放在 `eslint` 之後 → Prisma types 全部 unresolved → `IntFilter` 變成 error type → `no-redundant-type-constituents` error。同時也導致 CI 有 3975 warnings（本地只有 1649），因為所有 Prisma field access 都變成 `any`。
+- **正確做法**: CI workflow 中 `prisma generate`（及所有 codegen）必須在 lint/typecheck step 之前執行。
+- **要點**: `recommendedTypeChecked` 需要所有 types 完全 resolved。任何 codegen（Prisma, GraphQL, protobuf）都要先跑。
+
 ## 2026-03-20 (Session 19)
 
 ### NestJS DI 是 module-scoped，新增 service/guard 要同步更新 module

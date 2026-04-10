@@ -1,48 +1,69 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-/// In-memory cache for address → profile_id mapping
+#[derive(Clone, Debug)]
+struct CacheEntry {
+    profile_id: Uuid,
+    workspace_id: Uuid,
+    cached_at: Instant,
+}
+
+/// In-memory cache for address → (profile_id, workspace_id) with TTL
 #[derive(Clone)]
 pub struct AddressCache {
-    cache: Arc<RwLock<HashMap<String, Uuid>>>,
+    cache: Arc<RwLock<HashMap<String, CacheEntry>>>,
+    ttl: Duration,
 }
 
 impl AddressCache {
-    pub fn new() -> Self {
+    pub fn new(ttl_secs: u64) -> Self {
         Self {
             cache: Arc::new(RwLock::new(HashMap::new())),
+            ttl: Duration::from_secs(ttl_secs),
         }
     }
 
-    /// Get profile_id for an address from cache
-    pub async fn get(&self, address: &str) -> Option<Uuid> {
-        let cache = self.cache.read().await;
-        cache.get(address).copied()
+    pub async fn get(&self, address: &str) -> Option<(Uuid, Uuid)> {
+        let mut cache = self.cache.write().await;
+        if let Some(entry) = cache.get(address) {
+            if entry.cached_at.elapsed() < self.ttl {
+                return Some((entry.profile_id, entry.workspace_id));
+            }
+            cache.remove(address);
+        }
+        None
     }
 
-    /// Insert or update address → profile_id mapping
-    pub async fn insert(&self, address: String, profile_id: Uuid) {
+    pub async fn insert(&self, address: String, profile_id: Uuid, workspace_id: Uuid) {
         let mut cache = self.cache.write().await;
-        cache.insert(address, profile_id);
+        cache.insert(
+            address,
+            CacheEntry {
+                profile_id,
+                workspace_id,
+                cached_at: Instant::now(),
+            },
+        );
     }
 
-    /// Batch insert multiple mappings
-    pub async fn insert_batch(&self, mappings: Vec<(String, Uuid)>) {
+    pub async fn insert_batch(&self, mappings: Vec<(String, Uuid, Uuid)>) {
         let mut cache = self.cache.write().await;
-        for (address, profile_id) in mappings {
-            cache.insert(address, profile_id);
+        let now = Instant::now();
+        for (address, profile_id, workspace_id) in mappings {
+            cache.insert(
+                address,
+                CacheEntry {
+                    profile_id,
+                    workspace_id,
+                    cached_at: now,
+                },
+            );
         }
     }
 
-    /// Clear the cache (useful for testing or memory management)
-    pub async fn clear(&self) {
-        let mut cache = self.cache.write().await;
-        cache.clear();
-    }
-
-    /// Get cache size
     pub async fn len(&self) -> usize {
         let cache = self.cache.read().await;
         cache.len()
@@ -51,7 +72,7 @@ impl AddressCache {
 
 impl Default for AddressCache {
     fn default() -> Self {
-        Self::new()
+        Self::new(300)
     }
 }
 
@@ -60,30 +81,38 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_cache_operations() {
-        let cache = AddressCache::new();
-        let profile_id = Uuid::new_v4();
-        let address = "0x1234".to_string();
+    async fn test_cache_insert_and_get() {
+        let cache = AddressCache::new(300);
+        let pid = Uuid::new_v4();
+        let wid = Uuid::new_v4();
 
-        // Initially empty
-        assert_eq!(cache.len().await, 0);
-        assert!(cache.get(&address).await.is_none());
+        assert!(cache.get("0x1234").await.is_none());
 
-        // Insert
-        cache.insert(address.clone(), profile_id).await;
-        assert_eq!(cache.len().await, 1);
-        assert_eq!(cache.get(&address).await, Some(profile_id));
+        cache.insert("0x1234".to_string(), pid, wid).await;
+        let result = cache.get("0x1234").await;
+        assert_eq!(result, Some((pid, wid)));
+    }
 
-        // Batch insert
+    #[tokio::test]
+    async fn test_cache_ttl_expiry() {
+        let cache = AddressCache::new(0);
+        let pid = Uuid::new_v4();
+        let wid = Uuid::new_v4();
+
+        cache.insert("0x1234".to_string(), pid, wid).await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert!(cache.get("0x1234").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_cache_batch_insert() {
+        let cache = AddressCache::new(300);
         let batch = vec![
-            ("0xabc".to_string(), Uuid::new_v4()),
-            ("0xdef".to_string(), Uuid::new_v4()),
+            ("0xabc".to_string(), Uuid::new_v4(), Uuid::new_v4()),
+            ("0xdef".to_string(), Uuid::new_v4(), Uuid::new_v4()),
         ];
         cache.insert_batch(batch).await;
-        assert_eq!(cache.len().await, 3);
-
-        // Clear
-        cache.clear().await;
-        assert_eq!(cache.len().await, 0);
+        assert_eq!(cache.len().await, 2);
+        assert!(cache.get("0xabc").await.is_some());
     }
 }

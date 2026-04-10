@@ -181,6 +181,8 @@ async fn test_batch_writer_flushes_on_threshold() {
                 amount: 0,
                 tx_digest: format!("pipeline_test_batch_{}", i),
                 raw_data: json!({}),
+                profile_id: None,
+                workspace_id: None,
             })
             .await
             .unwrap();
@@ -220,7 +222,7 @@ async fn test_dead_letter_on_webhook_failure() {
     cleanup(&pool).await;
 
     // Webhook pointing to non-existent server
-    let webhook_disp = webhook::WebhookDispatcher::new("http://localhost:19999".to_string());
+    let webhook_disp = webhook::WebhookDispatcher::new("http://localhost:19999".to_string(), "test-secret-that-is-at-least-32-chars-long".to_string());
     let retry_mgr = retry::RetryManager::new(1, 10); // 1 retry, 10ms base for fast test
 
     let event = webhook::IndexerEvent {
